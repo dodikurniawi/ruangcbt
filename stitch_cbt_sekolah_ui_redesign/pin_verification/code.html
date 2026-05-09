@@ -1,0 +1,291 @@
+<!doctype html>
+
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>PIN Verification Gate - Mathematics Final Exam</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 48;
+      }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-container": "#bc4800",
+              "surface-dim": "#cbdbf5",
+              "on-primary-fixed-variant": "#003ea8",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "secondary-container": "#645efb",
+              "on-tertiary-fixed": "#360f00",
+              "tertiary-fixed": "#ffdbcd",
+              "surface-container-highest": "#d3e4fe",
+              "on-error": "#ffffff",
+              "primary-fixed": "#dbe1ff",
+              "on-primary-container": "#eeefff",
+              "on-secondary-container": "#fffbff",
+              background: "#f8f9ff",
+              "secondary-fixed": "#e2dfff",
+              outline: "#737686",
+              "on-secondary-fixed-variant": "#3323cc",
+              "inverse-on-surface": "#eaf1ff",
+              secondary: "#4b41e1",
+              "on-tertiary": "#ffffff",
+              "on-primary-fixed": "#00174b",
+              error: "#ba1a1a",
+              "on-surface": "#0b1c30",
+              "surface-tint": "#0053db",
+              surface: "#f8f9ff",
+              "surface-container": "#e5eeff",
+              "primary-fixed-dim": "#b4c5ff",
+              "secondary-fixed-dim": "#c3c0ff",
+              "on-secondary-fixed": "#0f0069",
+              "outline-variant": "#c3c6d7",
+              "on-error-container": "#93000a",
+              "on-background": "#0b1c30",
+              primary: "#004ac6",
+              "surface-container-high": "#dce9ff",
+              "surface-container-low": "#eff4ff",
+              "surface-bright": "#f8f9ff",
+              "on-primary": "#ffffff",
+              tertiary: "#943700",
+              "tertiary-fixed-dim": "#ffb596",
+              "inverse-surface": "#213145",
+              "surface-variant": "#d3e4fe",
+              "on-tertiary-container": "#ffede6",
+              "error-container": "#ffdad6",
+              "on-tertiary-fixed-variant": "#7d2d00",
+              "primary-container": "#2563eb",
+              "on-surface-variant": "#434655",
+              "inverse-primary": "#b4c5ff",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              md: "16px",
+              "admin-gap": "16px",
+              sm: "8px",
+              xl: "32px",
+              "2xl": "48px",
+              "container-max-width": "1280px",
+              "student-gap": "24px",
+              lg: "24px",
+              xs: "4px",
+              unit: "4px",
+            },
+            fontFamily: {
+              "body-student": ["Inter"],
+              "headline-student": ["Inter"],
+              "body-admin": ["Inter"],
+              "display-exam": ["Inter"],
+              "headline-admin": ["Inter"],
+              "label-bold": ["Inter"],
+              "label-sm": ["Inter"],
+              caption: ["Inter"],
+            },
+            fontSize: {
+              "body-student": [
+                "18px",
+                { lineHeight: "28px", fontWeight: "400" },
+              ],
+              "headline-student": [
+                "24px",
+                { lineHeight: "32px", fontWeight: "600" },
+              ],
+              "body-admin": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+              "display-exam": [
+                "30px",
+                {
+                  lineHeight: "38px",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "headline-admin": [
+                "20px",
+                { lineHeight: "28px", fontWeight: "600" },
+              ],
+              "label-bold": [
+                "14px",
+                {
+                  lineHeight: "20px",
+                  letterSpacing: "0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "label-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+              caption: ["12px", { lineHeight: "16px", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background text-on-background font-body-student min-h-screen flex flex-col items-center justify-center p-lg"
+  >
+    <!-- Top Navigation Anchor (Simulated Shell for Identity) -->
+    <header
+      class="fixed top-0 left-0 w-full flex justify-between items-center px-lg py-sm max-w-container-max-width mx-auto bg-surface z-50 border-b border-outline-variant shadow-sm"
+    >
+      <div class="flex items-center gap-sm">
+        <span
+          class="material-symbols-outlined text-primary text-[28px]"
+          data-icon="school"
+          >school</span
+        >
+        <span
+          class="font-headline-student text-headline-student font-extrabold text-primary"
+          >CBT Admin</span
+        >
+      </div>
+      <div class="flex items-center gap-md">
+        <span class="font-label-bold text-label-bold text-on-surface-variant"
+          >Institutional Portal</span
+        >
+        <span
+          class="material-symbols-outlined text-on-surface-variant"
+          data-icon="person"
+          >person</span
+        >
+      </div>
+    </header>
+    <!-- Main Verification Canvas -->
+    <main
+      class="w-full max-w-[440px] flex flex-col items-center text-center mt-xl"
+    >
+      <!-- Instructional Illustration Area -->
+      <div
+        class="mb-xl w-full aspect-square max-w-[280px] relative rounded-full overflow-hidden bg-surface-container-low shadow-sm flex items-center justify-center"
+      >
+        <img
+          alt="Instructional Context"
+          class="w-full h-full object-cover mix-blend-multiply opacity-80"
+          data-alt="A clean, minimalist workspace featuring a tablet displaying educational software on a white desk. The lighting is bright and high-key, creating a professional and calm institutional atmosphere. Soft blue and slate tones dominate the composition, reflecting a focused and modern academic environment. The scene is uncluttered and serene, perfect for an exam preparation context."
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2PpmTfl6e2J_j9hJGMqV-kvpQydJFYYuhCsBcAVi3rc62rO4iuOsf69ltZNPYj9_atJyu48DeyIbyVRveEsZ7dZEpCqPLHCKnyUR0U3e2LerWubFy_ELRu5zcMC93eLh2WcitrDDCSuNbvDSZPCjmelanSCVAY9AGmytzJh4CmQFLyD5NaFa4RLvcq48Q6G7Yje22hSAMUNEFhumwjNDdolccku5XWrnonST6_3eLhk7s_zGc-rPUlrR2h-2Uvz0l9rzSqdRvqARR"
+        />
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-surface-container-low via-transparent to-transparent"
+        ></div>
+        <div
+          class="absolute flex flex-col items-center justify-center text-primary"
+        >
+          <span
+            class="material-symbols-outlined text-[64px]"
+            data-icon="lock_open"
+            >lock_open</span
+          >
+        </div>
+      </div>
+      <!-- Typography & Instructions -->
+      <div class="space-y-sm mb-2xl">
+        <h1 class="font-headline-student text-headline-student text-on-surface">
+          Verifikasi PIN
+        </h1>
+        <p
+          class="font-body-student text-body-student text-on-surface-variant px-md"
+        >
+          Masukkan PIN Ujian dari Pengawas untuk memulai pengerjaan Mathematics
+          Final Exam.
+        </p>
+      </div>
+      <!-- PIN Input Cluster -->
+      <form class="w-full space-y-xl">
+        <div class="flex justify-center gap-md">
+          <input
+            class="w-16 h-20 text-center text-display-exam font-display-exam bg-surface border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all text-on-surface"
+            maxlength="1"
+            placeholder="0"
+            type="text"
+          />
+          <input
+            class="w-16 h-20 text-center text-display-exam font-display-exam bg-surface border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all text-on-surface"
+            maxlength="1"
+            placeholder="0"
+            type="text"
+          />
+          <input
+            class="w-16 h-20 text-center text-display-exam font-display-exam bg-surface border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all text-on-surface"
+            maxlength="1"
+            placeholder="0"
+            type="text"
+          />
+          <input
+            class="w-16 h-20 text-center text-display-exam font-display-exam bg-surface border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all text-on-surface"
+            maxlength="1"
+            placeholder="0"
+            type="text"
+          />
+        </div>
+        <!-- Primary Action -->
+        <button
+          class="w-full h-14 bg-primary text-on-primary font-label-bold text-label-bold rounded-xl shadow-md hover:bg-primary-container transition-all active:scale-95 flex items-center justify-center gap-sm"
+          type="submit"
+        >
+          Masuk Ujian
+          <span class="material-symbols-outlined" data-icon="arrow_forward"
+            >arrow_forward</span
+          >
+        </button>
+      </form>
+      <!-- Secondary Navigation -->
+      <div class="mt-2xl">
+        <button
+          class="flex items-center gap-xs font-label-bold text-label-bold text-on-surface-variant hover:text-error transition-colors px-lg py-sm"
+        >
+          <span class="material-symbols-outlined text-[18px]" data-icon="logout"
+            >logout</span
+          >
+          Keluar
+        </button>
+      </div>
+    </main>
+    <!-- Footer Security Notice -->
+    <footer class="fixed bottom-lg text-center w-full px-lg">
+      <p class="font-caption text-caption text-outline">
+        Sistem Ujian Terintegrasi • SMK Informatika Mandiri <br />
+        © 2026Institutional Portal. All rights reserved.
+      </p>
+    </footer>
+    <!-- Verification Toast (Hidden by default) -->
+    <div
+      class="hidden fixed top-2xl left-1/2 -translate-x-1/2 bg-error-container text-on-error-container px-lg py-md rounded-xl shadow-lg border border-outline-variant flex items-center gap-md"
+    >
+      <span class="material-symbols-outlined" data-icon="error">error</span>
+      <span class="font-label-bold text-label-bold"
+        >PIN yang Kamu masukkan salah. Silakan coba lagi.</span
+      >
+    </div>
+  </body>
+</html>

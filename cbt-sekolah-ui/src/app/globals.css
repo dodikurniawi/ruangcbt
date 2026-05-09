@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+@theme {
+  --color-tertiary-container: #bc4800;
+  --color-surface-dim: #cbdbf5;
+  --color-on-primary-fixed-variant: #003ea8;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #645efb;
+  --color-on-tertiary-fixed: #360f00;
+  --color-tertiary-fixed: #ffdbcd;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-error: #ffffff;
+  --color-primary-fixed: #dbe1ff;
+  --color-on-primary-container: #eeefff;
+  --color-on-secondary-container: #fffbff;
+  --color-background: #f8f9ff;
+  --color-secondary-fixed: #e2dfff;
+  --color-outline: #737686;
+  --color-on-secondary-fixed-variant: #3323cc;
+  --color-inverse-on-surface: #eaf1ff;
+  --color-secondary: #4b41e1;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary-fixed: #00174b;
+  --color-error: #ba1a1a;
+  --color-on-surface: #0b1c30;
+  --color-surface-tint: #0053db;
+  --color-surface: #f8f9ff;
+  --color-surface-container: #e5eeff;
+  --color-primary-fixed-dim: #b4c5ff;
+  --color-secondary-fixed-dim: #c3c0ff;
+  --color-on-secondary-fixed: #0f0069;
+  --color-outline-variant: #c3c6d7;
+  --color-on-error-container: #93000a;
+  --color-on-background: #0b1c30;
+  --color-primary: #004ac6;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-bright: #f8f9ff;
+  --color-on-primary: #ffffff;
+  --color-tertiary: #943700;
+  --color-tertiary-fixed-dim: #ffb596;
+  --color-inverse-surface: #213145;
+  --color-surface-variant: #d3e4fe;
+  --color-on-tertiary-container: #ffede6;
+  --color-error-container: #ffdad6;
+  --color-on-tertiary-fixed-variant: #7d2d00;
+  --color-primary-container: #2563eb;
+  --color-on-surface-variant: #434655;
+  --color-inverse-primary: #b4c5ff;
+
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
+
+/* Custom Tailwind CSS v4 Utility Directives */
+@utility px-lg { padding-left: 24px; padding-right: 24px; }
+@utility py-sm { padding-top: 8px; padding-bottom: 8px; }
+@utility py-xs { padding-top: 4px; padding-bottom: 4px; }
+@utility px-md { padding-left: 16px; padding-right: 16px; }
+@utility px-xl { padding-left: 32px; padding-right: 32px; }
+@utility py-4 { padding-top: 16px; padding-bottom: 16px; }
+@utility p-lg { padding: 24px; }
+@utility p-xl { padding: 32px; }
+@utility p-md { padding: 16px; }
+@utility p-sm { padding: 8px; }
+@utility mb-xs { margin-bottom: 4px; }
+@utility mb-sm { margin-bottom: 8px; }
+@utility mb-md { margin-bottom: 16px; }
+@utility mb-lg { margin-bottom: 24px; }
+@utility mb-xl { margin-bottom: 32px; }
+@utility mt-xs { margin-top: 4px; }
+@utility mt-sm { margin-top: 8px; }
+@utility mt-md { margin-top: 16px; }
+@utility mt-lg { margin-top: 24px; }
+@utility mt-xl { margin-top: 32px; }
+@utility pt-xs { padding-top: 4px; }
+@utility pt-sm { padding-top: 8px; }
+@utility pt-md { padding-top: 16px; }
+@utility pt-lg { padding-top: 24px; }
+@utility pt-2xl { padding-top: 48px; }
+@utility pb-xs { padding-bottom: 4px; }
+@utility pb-sm { padding-bottom: 8px; }
+@utility pb-md { padding-bottom: 16px; }
+@utility pb-lg { padding-bottom: 24px; }
+@utility pb-xl { padding-bottom: 32px; }
+@utility pb-32 { padding-bottom: 128px; }
+@utility py-2xl { padding-top: 48px; padding-bottom: 48px; }
+
+@utility gap-xs { gap: 4px; }
+@utility gap-sm { gap: 8px; }
+@utility gap-md { gap: 16px; }
+@utility gap-lg { gap: 24px; }
+@utility gap-xl { gap: 32px; }
+@utility gap-2xl { gap: 48px; }
+
+@utility max-w-container-max-width { max-width: 1280px; }
+
+@utility space-y-lg {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 24px;
+  }
+}
+@utility space-y-md {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 16px;
+  }
+}
+@utility space-y-sm {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 8px;
+  }
+}
+
+/* Base style mappings to fix typography and stKamurd utility behaviors */
+.font-body-student { font-family: 'Inter', sans-serif; }
+.font-headline-student { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-body-admin { font-family: 'Inter', sans-serif; }
+.font-display-exam { font-family: 'Inter', sans-serif; font-weight: 700; }
+.font-headline-admin { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-label-bold { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-label-sm { font-family: 'Inter', sans-serif; font-weight: 500; }
+.font-caption { font-family: 'Inter', sans-serif; }
+
+.text-body-student { font-size: 18px; line-height: 28px; font-weight: 400; }
+.text-headline-student { font-size: 24px; line-height: 32px; font-weight: 600; }
+.text-body-admin { font-size: 14px; line-height: 20px; font-weight: 400; }
+.text-display-exam { font-size: 30px; line-height: 38px; letter-spacing: -0.02em; font-weight: 700; }
+.text-headline-admin { font-size: 20px; line-height: 28px; font-weight: 600; }
+.text-label-bold { font-size: 14px; line-height: 20px; letter-spacing: 0.01em; font-weight: 600; }
+.text-label-sm { font-size: 12px; line-height: 16px; font-weight: 500; }
+.text-caption { font-size: 12px; line-height: 16px; font-weight: 400; }
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    font-family: 'Inter', sans-serif;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    display: inline-block;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: normal;
+    word-wrap: normal;
+    white-space: nowrap;
+    direction: ltr;
+  }
+  .pattern-bg {
+    background-color: var(--color-background);
+    background-image: radial-gradient(var(--color-surface-container-highest) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}

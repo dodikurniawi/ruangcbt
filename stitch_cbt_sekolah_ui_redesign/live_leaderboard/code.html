@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Live Score Leaderboard | Mathematics Final Exam</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#bc4800",
+                    "surface-dim": "#cbdbf5",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "secondary-container": "#645efb",
+                    "on-tertiary-fixed": "#360f00",
+                    "tertiary-fixed": "#ffdbcd",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-error": "#ffffff",
+                    "primary-fixed": "#dbe1ff",
+                    "on-primary-container": "#eeefff",
+                    "on-secondary-container": "#fffbff",
+                    "background": "#f8f9ff",
+                    "secondary-fixed": "#e2dfff",
+                    "outline": "#737686",
+                    "on-secondary-fixed-variant": "#3323cc",
+                    "inverse-on-surface": "#eaf1ff",
+                    "secondary": "#4b41e1",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed": "#00174b",
+                    "error": "#ba1a1a",
+                    "on-surface": "#0b1c30",
+                    "surface-tint": "#0053db",
+                    "surface": "#f8f9ff",
+                    "surface-container": "#e5eeff",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "secondary-fixed-dim": "#c3c0ff",
+                    "on-secondary-fixed": "#0f0069",
+                    "outline-variant": "#c3c6d7",
+                    "on-error-container": "#93000a",
+                    "on-background": "#0b1c30",
+                    "primary": "#004ac6",
+                    "surface-container-high": "#dce9ff",
+                    "surface-container-low": "#eff4ff",
+                    "surface-bright": "#f8f9ff",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#943700",
+                    "tertiary-fixed-dim": "#ffb596",
+                    "inverse-surface": "#213145",
+                    "surface-variant": "#d3e4fe",
+                    "on-tertiary-container": "#ffede6",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#7d2d00",
+                    "primary-container": "#2563eb",
+                    "on-surface-variant": "#434655",
+                    "inverse-primary": "#b4c5ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "md": "16px",
+                    "admin-gap": "16px",
+                    "sm": "8px",
+                    "xl": "32px",
+                    "2xl": "48px",
+                    "container-max-width": "1280px",
+                    "student-gap": "24px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "body-student": ["Inter"],
+                    "headline-student": ["Inter"],
+                    "body-admin": ["Inter"],
+                    "display-exam": ["Inter"],
+                    "headline-admin": ["Inter"],
+                    "label-bold": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "caption": ["Inter"]
+            },
+            "fontSize": {
+                    "body-student": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "headline-student": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-admin": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-exam": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-admin": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-bold": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+        }
+        .blur-backdrop {
+            backdrop-filter: blur(8px);
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-admin min-h-screen">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 flex justify-between items-center w-full px-lg py-sm max-w-container-max-width mx-auto bg-surface dark:bg-surface-dim border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="school">school</span>
+<h1 class="font-headline-student text-headline-student font-extrabold text-primary dark:text-inverse-primary">Mathematics Final Exam</h1>
+</div>
+<div class="flex items-center gap-xl">
+<div class="flex items-center gap-sm bg-surface-container-high px-md py-xs rounded-full">
+<span class="material-symbols-outlined text-tertiary" data-icon="timer">timer</span>
+<span class="font-label-bold text-label-bold text-on-surface">Live Leaderboard</span>
+</div>
+<div class="flex items-center gap-md">
+<button class="material-symbols-outlined p-xs hover:text-primary transition-all" data-icon="help">help</button>
+<button class="material-symbols-outlined p-xs hover:text-primary transition-all" data-icon="person">person</button>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-lg py-2xl">
+<!-- Dashboard PIN Access Section (Minimal) -->
+<section class="mb-2xl text-center flex flex-col items-center justify-center space-y-xl" id="pin-gate">
+<div class="max-w-md w-full p-xl bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant">
+<h2 class="font-headline-admin text-headline-admin mb-md">Enter Access PIN</h2>
+<p class="font-body-admin text-on-surface-variant mb-xl">Projection mode requires a secure session PIN.</p>
+<div class="flex justify-center gap-md mb-xl">
+<input class="w-16 h-20 text-center text-display-exam font-bold border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all" maxlength="1" placeholder="•" type="text"/>
+<input class="w-16 h-20 text-center text-display-exam font-bold border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all" maxlength="1" placeholder="•" type="text"/>
+<input class="w-16 h-20 text-center text-display-exam font-bold border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all" maxlength="1" placeholder="•" type="text"/>
+<input class="w-16 h-20 text-center text-display-exam font-bold border-2 border-outline-variant rounded-xl focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all" maxlength="1" placeholder="•" type="text"/>
+</div>
+<button class="w-full bg-primary text-on-primary font-label-bold py-md rounded-lg shadow-sm hover:opacity-90 transition-all">Unlock Projection Mode</button>
+</div>
+</section>
+<!-- Leaderboard Grid -->
+<section class="space-y-xl" id="live-leaderboard">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-display-exam text-display-exam text-on-surface">Top Performers</h2>
+<p class="text-on-surface-variant text-body-student">Real-time examination progress and results.</p>
+</div>
+<div class="flex gap-md">
+<div class="flex items-center gap-xs px-md py-sm bg-emerald-100 text-emerald-800 rounded-full font-label-bold">
+<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        LIVE DATA
+                    </div>
+</div>
+</div>
+<!-- Podium View (High Contrast) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-xl items-end mb-2xl">
+<!-- Silver (2nd) -->
+<div class="order-2 md:order-1 bg-surface-container-low border border-outline-variant rounded-2xl p-xl flex flex-col items-center text-center shadow-sm relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-2 bg-slate-400"></div>
+<div class="w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center mb-md border-4 border-slate-300">
+<span class="material-symbols-outlined text-4xl text-slate-500" data-icon="person">person</span>
+</div>
+<span class="text-slate-600 font-display-exam text-display-exam mb-xs">2</span>
+<h3 class="font-headline-student text-headline-student text-on-surface">Aditya Pratama</h3>
+<p class="font-body-admin text-on-surface-variant mb-md">Class XII-A</p>
+<div class="text-4xl font-extrabold text-primary">94.5</div>
+<div class="mt-md px-md py-xs bg-emerald-100 text-emerald-800 rounded-full font-label-sm">Selesai</div>
+</div>
+<!-- Gold (1st) -->
+<div class="order-1 md:order-2 bg-surface-container-lowest border-4 border-yellow-400 rounded-3xl p-2xl flex flex-col items-center text-center shadow-xl relative overflow-hidden transform scale-110 z-10">
+<div class="absolute top-0 left-0 w-full h-4 bg-yellow-400"></div>
+<div class="w-32 h-32 rounded-full bg-yellow-50 flex items-center justify-center mb-md border-4 border-yellow-200">
+<span class="material-symbols-outlined text-5xl text-yellow-600" data-icon="workspace_premium" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+<span class="text-yellow-600 font-display-exam text-4xl mb-xs">1</span>
+<h3 class="text-3xl font-extrabold text-on-surface">Siti Aminah</h3>
+<p class="font-headline-admin text-on-surface-variant mb-md">Class XII-B</p>
+<div class="text-6xl font-black text-primary">98.2</div>
+<div class="mt-md px-lg py-sm bg-emerald-100 text-emerald-800 rounded-full font-label-bold text-lg">Selesai</div>
+</div>
+<!-- Bronze (3rd) -->
+<div class="order-3 md:order-3 bg-surface-container-low border border-outline-variant rounded-2xl p-xl flex flex-col items-center text-center shadow-sm relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-2 bg-orange-400"></div>
+<div class="w-24 h-24 rounded-full bg-orange-50 flex items-center justify-center mb-md border-4 border-orange-200">
+<span class="material-symbols-outlined text-4xl text-orange-600" data-icon="person">person</span>
+</div>
+<span class="text-orange-700 font-display-exam text-display-exam mb-xs">3</span>
+<h3 class="font-headline-student text-headline-student text-on-surface">Budi Santoso</h3>
+<p class="font-body-admin text-on-surface-variant mb-md">Class XII-A</p>
+<div class="text-4xl font-extrabold text-primary">91.8</div>
+<div class="mt-md px-md py-xs bg-amber-100 text-amber-800 rounded-full font-label-sm">Sedang Mengerjakan</div>
+</div>
+</div>
+<!-- Table List (Large Screen Visibility) -->
+<div class="bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high border-b border-outline-variant">
+<th class="px-xl py-lg font-headline-admin text-on-surface-variant w-24">Rank</th>
+<th class="px-xl py-lg font-headline-admin text-on-surface-variant">Student Name</th>
+<th class="px-xl py-lg font-headline-admin text-on-surface-variant">Class</th>
+<th class="px-xl py-lg font-headline-admin text-on-surface-variant">Status</th>
+<th class="px-xl py-lg font-headline-admin text-on-surface text-right">Score</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-lg font-display-exam text-2xl text-on-surface-variant">4</td>
+<td class="px-xl py-lg font-headline-student text-on-surface">Dian Sastrowardoyo</td>
+<td class="px-xl py-lg font-body-student text-on-surface-variant">XII-C</td>
+<td class="px-xl py-lg">
+<span class="px-md py-sm bg-emerald-100 text-emerald-800 rounded-full font-label-bold uppercase tracking-wider">Selesai</span>
+</td>
+<td class="px-xl py-lg font-display-exam text-3xl text-primary text-right font-bold">89.4</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-lg font-display-exam text-2xl text-on-surface-variant">5</td>
+<td class="px-xl py-lg font-headline-student text-on-surface">Eko Wijaya</td>
+<td class="px-xl py-lg font-body-student text-on-surface-variant">XII-B</td>
+<td class="px-xl py-lg">
+<span class="px-md py-sm bg-amber-100 text-amber-800 rounded-full font-label-bold uppercase tracking-wider">Sedang Mengerjakan</span>
+</td>
+<td class="px-xl py-lg font-display-exam text-3xl text-primary text-right font-bold">87.1</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-lg font-display-exam text-2xl text-on-surface-variant">6</td>
+<td class="px-xl py-lg font-headline-student text-on-surface">Farah Quinn</td>
+<td class="px-xl py-lg font-body-student text-on-surface-variant">XII-A</td>
+<td class="px-xl py-lg">
+<span class="px-md py-sm bg-emerald-100 text-emerald-800 rounded-full font-label-bold uppercase tracking-wider">Selesai</span>
+</td>
+<td class="px-xl py-lg font-display-exam text-3xl text-primary text-right font-bold">85.9</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-lg font-display-exam text-2xl text-on-surface-variant">7</td>
+<td class="px-xl py-lg font-headline-student text-on-surface">Guntur Bumi</td>
+<td class="px-xl py-lg font-body-student text-on-surface-variant">XII-C</td>
+<td class="px-xl py-lg">
+<span class="px-md py-sm bg-amber-100 text-amber-800 rounded-full font-label-bold uppercase tracking-wider">Sedang Mengerjakan</span>
+</td>
+<td class="px-xl py-lg font-display-exam text-3xl text-primary text-right font-bold">84.2</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-lg font-display-exam text-2xl text-on-surface-variant">8</td>
+<td class="px-xl py-lg font-headline-student text-on-surface">Hani Safitri</td>
+<td class="px-xl py-lg font-body-student text-on-surface-variant">XII-B</td>
+<td class="px-xl py-lg">
+<span class="px-md py-sm bg-emerald-100 text-emerald-800 rounded-full font-label-bold uppercase tracking-wider">Selesai</span>
+</td>
+<td class="px-xl py-lg font-display-exam text-3xl text-primary text-right font-bold">82.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+<!-- Side Navigation Bar (Admin Structure - Suppressed by Relevance Check but structure maintained as per JSON) -->
+<div class="hidden md:flex fixed left-0 top-0 h-full w-64 bg-inverse-surface dark:bg-inverse-surface flex-col border-r border-outline-variant dark:border-outline shadow-sm z-40 transform -translate-x-full lg:translate-x-0">
+<div class="p-lg flex items-center gap-md">
+<span class="font-headline-admin text-headline-admin font-bold text-on-primary-fixed-variant">CBT Admin</span>
+</div>
+<nav class="flex-1 px-md py-md space-y-xs">
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-bold">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-bold">Student Management</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 bg-primary-container text-on-primary-container rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span class="font-label-bold">Live Monitoring</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-bold">Configuration</span>
+</a>
+</nav>
+<div class="p-lg border-t border-outline/20">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="person">person</span>
+</div>
+<div>
+<p class="font-label-bold text-white">Administrator</p>
+<p class="text-xs text-on-surface-variant">Principal View</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar (Mobile) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 md:hidden bg-surface-container-low dark:bg-surface-container-lowest border-t border-outline-variant shadow-lg rounded-t-xl">
+<button class="flex flex-col items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+<span class="font-label-sm">List</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-4 py-1">
+<span class="material-symbols-outlined" data-icon="leaderboard" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+<span class="font-label-sm">Leaderboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="flag">flag</span>
+<span class="font-label-sm">Flagged</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm">Admin</span>
+</button>
+</nav>
+</body></html>

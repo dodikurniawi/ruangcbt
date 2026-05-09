@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CBT Admin - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#bc4800",
+                        "surface-dim": "#cbdbf5",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#645efb",
+                        "on-tertiary-fixed": "#360f00",
+                        "tertiary-fixed": "#ffdbcd",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-error": "#ffffff",
+                        "primary-fixed": "#dbe1ff",
+                        "on-primary-container": "#eeefff",
+                        "on-secondary-container": "#fffbff",
+                        "background": "#f8f9ff",
+                        "secondary-fixed": "#e2dfff",
+                        "outline": "#737686",
+                        "on-secondary-fixed-variant": "#3323cc",
+                        "inverse-on-surface": "#eaf1ff",
+                        "secondary": "#4b41e1",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#00174b",
+                        "error": "#ba1a1a",
+                        "on-surface": "#0b1c30",
+                        "surface-tint": "#0053db",
+                        "surface": "#f8f9ff",
+                        "surface-container": "#e5eeff",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "on-secondary-fixed": "#0f0069",
+                        "outline-variant": "#c3c6d7",
+                        "on-error-container": "#93000a",
+                        "on-background": "#0b1c30",
+                        "primary": "#004ac6",
+                        "surface-container-high": "#dce9ff",
+                        "surface-container-low": "#eff4ff",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#943700",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "inverse-surface": "#213145",
+                        "surface-variant": "#d3e4fe",
+                        "on-tertiary-container": "#ffede6",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "primary-container": "#2563eb",
+                        "on-surface-variant": "#434655",
+                        "inverse-primary": "#b4c5ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "admin-gap": "16px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "2xl": "48px",
+                        "container-max-width": "1280px",
+                        "student-gap": "24px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-student": ["Inter"],
+                        "headline-student": ["Inter"],
+                        "body-admin": ["Inter"],
+                        "display-exam": ["Inter"],
+                        "headline-admin": ["Inter"],
+                        "label-bold": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "caption": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-student": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-student": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-admin": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "display-exam": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-admin": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-bold": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- Admin SideNav Shell -->
+<aside class="fixed left-0 top-0 h-full w-64 flex flex-col bg-inverse-surface dark:bg-inverse-surface shadow-sm border-r border-outline-variant dark:border-outline z-50">
+<div class="p-lg">
+<h1 class="font-headline-admin text-headline-admin font-bold text-on-primary-fixed-variant mb-xs">CBT Admin</h1>
+<p class="font-body-admin text-body-admin text-on-surface-variant opacity-70">Institutional Portal</p>
+</div>
+<nav class="flex-1 px-md space-y-sm">
+<!-- Active: Dashboard -->
+<a class="flex items-center gap-md px-4 py-3 bg-primary-container text-on-primary-container rounded-lg scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-admin text-body-admin">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-admin text-body-admin">Student Management</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-admin text-body-admin">Configuration</span>
+</a>
+<a class="flex items-center gap-md px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="font-body-admin text-body-admin">Question Bank</span>
+</a>
+</nav>
+<div class="p-lg border-t border-outline-variant/20 flex items-center gap-md">
+<img alt="School Administrator Avatar" class="w-10 h-10 rounded-full border-2 border-primary-fixed" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzL2xKnhM1HnAW8Uy-N4TFoUOg6JFIZ3FUHIHAjt0Bm37Ch73wP2FAa6mcqvyg_5ib0I1ft5gGwIvJzqpTlXDrjqu41vimb17VSplF-z4qRnJfdYlGg2oJn7Gae7kfhVn0cU_8FX6KM1Xu0Hzq9UVS3Xjyy7S3SdmoQaIUqfceLl57kAs9BazgRHBDzZRtdg1pEnpSvJVytNyb4cm_Zt0p6jS_mkapGSxUzumeLI6EdbONziADnnXoe3uFVoEpe6qvbOGOJKtsHare"/>
+<div class="overflow-hidden">
+<p class="font-label-bold text-label-bold text-white truncate">Drs. M. Arifin</p>
+<p class="font-caption text-caption text-on-surface-variant">Kepala Sekolah</p>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen p-xl max-w-[1400px]">
+<!-- Header / Top Bar -->
+<header class="flex justify-between items-center mb-xl">
+<div>
+<h2 class="font-display-exam text-display-exam text-on-surface">Dashboard Monitoring</h2>
+<p class="font-body-admin text-body-admin text-on-surface-variant">Real-time examination overview for Mathematics Final Exam</p>
+</div>
+<div class="flex gap-md">
+<button class="flex items-center gap-sm px-lg py-sm bg-surface-container-high rounded-lg font-label-bold text-label-bold hover:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined" data-icon="refresh">refresh</span>
+                    Refresh Data
+                </button>
+<button class="flex items-center gap-sm px-lg py-sm bg-primary text-on-primary rounded-lg font-label-bold text-label-bold shadow-sm hover:opacity-90 transition-all">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+                    Export PDF
+                </button>
+</div>
+</header>
+<!-- Exam Status Toggle Card (OPEN State) -->
+<section class="mb-xl">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm flex flex-col md:flex-row justify-between items-center">
+<div class="flex items-center gap-xl mb-md md:mb-0">
+<div class="relative flex items-center justify-center">
+<div class="absolute w-12 h-12 bg-emerald-500/20 rounded-full animate-ping"></div>
+<div class="relative w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+</div>
+<div>
+<span class="font-label-bold text-label-bold text-emerald-600 uppercase tracking-widest block mb-xs">Status Aktif</span>
+<h3 class="font-headline-student text-headline-student text-on-surface">Ujian Sedang Berlangsung</h3>
+<p class="font-body-admin text-body-admin text-on-surface-variant">Dimulai sejak 07:30 WIB • Berakhir 09:30 WIB</p>
+</div>
+</div>
+<div class="flex gap-md w-full md:w-auto">
+<button class="flex-1 md:flex-none px-xl py-md bg-error text-on-error rounded-xl font-label-bold text-label-bold flex items-center justify-center gap-sm shadow-sm hover:bg-red-700 transition-all">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+                        Tutup Ujian
+                    </button>
+</div>
+</div>
+</section>
+<!-- Stats Bento Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg mb-xl">
+<!-- Total Siswa -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-primary-container rounded-lg text-on-primary-container">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Semua Kelas</span>
+</div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Total Siswa</p>
+<div class="flex items-baseline gap-sm">
+<h4 class="font-display-exam text-display-exam">420</h4>
+<span class="font-caption text-caption text-on-surface-variant">Peserta</span>
+</div>
+</div>
+<!-- Sedang Ujian -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-secondary-container rounded-lg text-on-secondary">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+</div>
+<span class="font-label-sm text-label-sm text-emerald-600 font-bold">LIVE</span>
+</div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Sedang Ujian</p>
+<div class="flex items-baseline gap-sm">
+<h4 class="font-display-exam text-display-exam text-primary">312</h4>
+<span class="font-caption text-caption text-on-surface-variant">74% Progres</span>
+</div>
+</div>
+<!-- Selesai -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-emerald-100 rounded-lg text-emerald-700">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Sudah Kumpul</span>
+</div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Selesai</p>
+<div class="flex items-baseline gap-sm">
+<h4 class="font-display-exam text-display-exam">104</h4>
+<span class="font-caption text-caption text-emerald-600 font-bold">+5 Menit lalu</span>
+</div>
+</div>
+<!-- Diskualifikasi -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-error-container rounded-lg text-on-error-container">
+<span class="material-symbols-outlined" data-icon="report">report</span>
+</div>
+<span class="font-label-sm text-label-sm text-error font-bold">Alert</span>
+</div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Diskualifikasi</p>
+<div class="flex items-baseline gap-sm">
+<h4 class="font-display-exam text-display-exam text-error">4</h4>
+<span class="font-caption text-caption text-error">Pelanggaran</span>
+</div>
+</div>
+</section>
+<!-- Live Monitoring Table Container -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+<div class="p-lg border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-headline-admin text-headline-admin">Live Student Monitoring</h3>
+<div class="flex gap-md">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]" data-icon="search">search</span>
+<input class="pl-10 pr-md py-sm border border-outline-variant rounded-lg font-body-admin text-body-admin w-64 focus:ring-2 focus:ring-primary focus:border-transparent outline-none" placeholder="Search student name..." type="text"/>
+</div>
+<select class="px-md py-sm border border-outline-variant rounded-lg font-body-admin text-body-admin focus:ring-2 focus:ring-primary outline-none">
+<option>All Classes</option>
+<option>XII-IPA-1</option>
+<option>XII-IPA-2</option>
+<option>XII-IPS-1</option>
+</select>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low">
+<tr>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">No</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">Student Name</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">Class</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">Status</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">Live Score</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">Violations</th>
+<th class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-body-admin text-body-admin">1</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<img alt="Student Profile" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDt9qKAep0WHlXqzVIVJCWPe1hcQDSlnf2x0uUD9Bkt2uoyraZ-HiYBY6MJVAta10Nef_fk_k3IMdTy_fIkriVYsn8S6gtuIybAWU1UtOeE2BVGBu1CGeCCALvr96h6hGhLqPd1w3SrOrumnaOHFjtDhrSgCjtFjXXI41-TjYP0yGmqrcqzTw_XhF_xlynxEk47nwRVyFlQkTOYH6jjCiukAq15LfdQ7dXOMd5d5G6hZGWarvqbULteayIoBSjZ7xpFe8P7F0TLU6go"/>
+<span class="font-label-bold text-label-bold">Ahmad Fauzi</span>
+</div>
+</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">XII-IPA-1</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center gap-xs px-md py-xs bg-emerald-100 text-emerald-700 rounded-full font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                    Selesai
+                                </span>
+</td>
+<td class="px-lg py-md font-label-bold text-label-bold text-primary">92/100</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">0</td>
+<td class="px-lg py-md text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-body-admin text-body-admin">2</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<img alt="Student Profile" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwGhrthxr3wfDocqt5J5LrWVV12HQhEPOM-111LpUD1DqlIAafH8NmB3ziGf4x0ODe-cJF1ZWcwyMZtmoOkt0fNi3_qublssEsVCESHzvONtYc8AJbzibJBuTZRPEkVkpwgpDyR2Q_tIvEKhKVIpig-HwKCCGVaGFioE5N-8va6Rw7m1WOH6mRDlzOnZ6y_cINXHBtO7COtFs6NkYlmh_2C1WczyWLQC7JKvxzfFoona4csQ0IJXV-f4j892r-E1tt7reHXHYoQ3xM"/>
+<span class="font-label-bold text-label-bold">Budi Santoso</span>
+</div>
+</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">XII-IPA-2</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center gap-xs px-md py-xs bg-primary-container/20 text-primary rounded-full font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
+                                    Dikerjakan
+                                </span>
+</td>
+<td class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">--/100</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">0</td>
+<td class="px-lg py-md text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="monitor">monitor</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 - Violation Highlight -->
+<tr class="bg-error-container/5 hover:bg-error-container/10 transition-colors">
+<td class="px-lg py-md font-body-admin text-body-admin">3</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<img alt="Student Profile" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjLiV7JhHUscn1xkUOs4ZkLsOb-IaDNrwSTchByg-7uMziPzPDaow1FdEYLbXZoRCD84MduaRH3br0k3vV9rRBvpQDCcgkohxyaREmtH_CrFxa7T5aSJRRvBPPIlkyJaBZVy3_dGFIHr3HKiHBgsfPHPNAB2AmsYd6sbSVUF0LxdHoMp5hglJVjid9GexIohuH2VXpkmdo9J3bLehOmy5cSSqnkRKW6HoV1A0XRyuXhBHhjFcsxhTeF3uiPXjXMUXTqKnm6DdTZT2u"/>
+<span class="font-label-bold text-label-bold">Citra Lestari</span>
+</div>
+</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">XII-IPA-1</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center gap-xs px-md py-xs bg-error-container text-on-error-container rounded-full font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[14px]" data-icon="warning">warning</span>
+                                    Diskualifikasi
+                                </span>
+</td>
+<td class="px-lg py-md font-label-bold text-label-bold text-error">Locked</td>
+<td class="px-lg py-md font-label-bold text-label-bold text-error">3 Tabs Switch</td>
+<td class="px-lg py-md text-right">
+<button class="text-error hover:opacity-70 transition-colors">
+<span class="material-symbols-outlined" data-icon="lock_open">lock_open</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-body-admin text-body-admin">4</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<img alt="Student Profile" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7PJzHs5DVyBvGaUcIS9gVPu1I_7FSzFXmXYOzk-kzlMCz-pm9R_MSdlTPpqTq8gdy2AU4EMtW1fK5War33hurf0RYBXdgtG2tLY0PoV2m9fA3K3cfevqm8CT9g31EQuWUbjmH0XJrcAtDLThMmJwfJh28BiJYXdUnkZnK8iEqYD27vR7pi1LhTD6KMlLTDGnrqcWz1hx-eQVodJQ1r4I8B8KAYyIEcyvv-mZqzSE_IuQiwnrKwhbwwBqYiSdkpuifNnTtlHwPRzBi"/>
+<span class="font-label-bold text-label-bold">Dewi Ayu</span>
+</div>
+</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">XII-IPS-1</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center gap-xs px-md py-xs bg-primary-container/20 text-primary rounded-full font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
+                                    Dikerjakan
+                                </span>
+</td>
+<td class="px-lg py-md font-label-bold text-label-bold text-on-surface-variant">--/100</td>
+<td class="px-lg py-md font-body-admin text-body-admin text-on-surface-variant">1</td>
+<td class="px-lg py-md text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="monitor">monitor</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer / Pagination -->
+<div class="px-lg py-md border-t border-outline-variant flex justify-between items-center bg-surface-container-low">
+<p class="font-caption text-caption text-on-surface-variant">Showing 4 of 420 Students</p>
+<div class="flex items-center gap-md">
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant text-on-surface-variant hover:bg-white transition-all">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_left">chevron_left</span>
+</button>
+<div class="flex gap-sm">
+<span class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-on-primary font-label-sm text-label-sm">1</span>
+<span class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-white cursor-pointer font-label-sm text-label-sm transition-all">2</span>
+<span class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-white cursor-pointer font-label-sm text-label-sm transition-all">3</span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant text-on-surface-variant hover:bg-white transition-all">
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Secondary Info Cards -->
+<section class="mt-xl grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<div class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<h4 class="font-headline-admin text-headline-admin mb-md">Daily Activity Insight</h4>
+<div class="h-64 flex items-end justify-between gap-sm pt-xl px-md">
+<!-- Placeholder Chart Bars -->
+<div class="flex-1 bg-surface-container-high rounded-t-lg relative group h-1/4">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-on-surface text-white px-2 py-1 rounded text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">07:00</div>
+</div>
+<div class="flex-1 bg-surface-container-high rounded-t-lg relative group h-2/4"></div>
+<div class="flex-1 bg-primary rounded-t-lg relative group h-full">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-on-surface text-white px-2 py-1 rounded text-[10px] opacity-100">09:00 (Peak)</div>
+</div>
+<div class="flex-1 bg-primary/60 rounded-t-lg relative group h-3/4"></div>
+<div class="flex-1 bg-surface-container-high rounded-t-lg relative group h-2/4"></div>
+<div class="flex-1 bg-surface-container-high rounded-t-lg relative group h-1/5"></div>
+</div>
+<div class="flex justify-between mt-md px-md">
+<span class="font-caption text-caption text-on-surface-variant">07:00</span>
+<span class="font-caption text-caption text-on-surface-variant">08:00</span>
+<span class="font-caption text-caption text-on-surface-variant">09:00</span>
+<span class="font-caption text-caption text-on-surface-variant">10:00</span>
+<span class="font-caption text-caption text-on-surface-variant">11:00</span>
+<span class="font-caption text-caption text-on-surface-variant">12:00</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
+<h4 class="font-headline-admin text-headline-admin mb-md">System Log</h4>
+<div class="space-y-md">
+<div class="flex gap-md">
+<div class="min-w-[4px] bg-emerald-500 rounded-full"></div>
+<div>
+<p class="font-label-bold text-label-bold">Exam Session Started</p>
+<p class="font-caption text-caption text-on-surface-variant">All server clusters responding normally.</p>
+<p class="font-caption text-[10px] mt-xs text-on-surface-variant">07:30:04 WIB</p>
+</div>
+</div>
+<div class="flex gap-md">
+<div class="min-w-[4px] bg-error rounded-full"></div>
+<div>
+<p class="font-label-bold text-label-bold">Security Triggered</p>
+<p class="font-caption text-caption text-on-surface-variant">ID: XII-042 attempted window change.</p>
+<p class="font-caption text-[10px] mt-xs text-on-surface-variant">08:12:21 WIB</p>
+</div>
+</div>
+<div class="flex gap-md">
+<div class="min-w-[4px] bg-primary rounded-full"></div>
+<div>
+<p class="font-label-bold text-label-bold">Auto-Backup Completed</p>
+<p class="font-caption text-caption text-on-surface-variant">1,240 records synced to cloud storage.</p>
+<p class="font-caption text-[10px] mt-xs text-on-surface-variant">08:15:00 WIB</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-lg py-sm border border-outline-variant rounded-lg font-label-sm text-label-sm text-on-surface-variant hover:bg-surface-container-low transition-all">View All Logs</button>
+</div>
+</section>
+</main>
+</body></html>

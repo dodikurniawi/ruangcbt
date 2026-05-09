@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mathematics Final Exam - Live Leaderboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary": "#943700",
+                      "surface-dim": "#cbdbf5",
+                      "primary-container": "#2563eb",
+                      "primary-fixed": "#dbe1ff",
+                      "inverse-surface": "#213145",
+                      "surface-variant": "#d3e4fe",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "error": "#ba1a1a",
+                      "surface-container-highest": "#d3e4fe",
+                      "outline-variant": "#c3c6d7",
+                      "inverse-primary": "#b4c5ff",
+                      "on-secondary-container": "#fffbff",
+                      "secondary-fixed-dim": "#c3c0ff",
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#0b1c30",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "outline": "#737686",
+                      "surface-container-low": "#eff4ff",
+                      "on-error-container": "#93000a",
+                      "background": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#3323cc",
+                      "tertiary-container": "#bc4800",
+                      "surface-bright": "#f8f9ff",
+                      "error-container": "#ffdad6",
+                      "surface-container": "#e5eeff",
+                      "surface": "#f8f9ff",
+                      "on-tertiary-container": "#ffede6",
+                      "on-background": "#0b1c30",
+                      "on-primary-fixed": "#00174b",
+                      "secondary": "#4b41e1",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "surface-tint": "#0053db",
+                      "primary": "#004ac6",
+                      "on-tertiary-fixed": "#360f00",
+                      "on-secondary": "#ffffff",
+                      "secondary-container": "#645efb",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "on-error": "#ffffff",
+                      "on-primary-container": "#eeefff",
+                      "on-surface-variant": "#434655",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-container-high": "#dce9ff",
+                      "tertiary-fixed": "#ffdbcd",
+                      "secondary-fixed": "#e2dfff",
+                      "on-secondary-fixed": "#0f0069",
+                      "on-primary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "xl": "32px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "container-max-width": "1280px",
+                      "student-gap": "24px",
+                      "md": "16px",
+                      "2xl": "48px",
+                      "admin-gap": "16px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "caption": ["Inter"],
+                      "headline-student": ["Inter"],
+                      "headline-admin": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "label-bold": ["Inter"],
+                      "body-admin": ["Inter"],
+                      "body-student": ["Inter"],
+                      "display-exam": ["Inter"]
+              },
+              "fontSize": {
+                      "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                      "headline-student": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "headline-admin": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                      "label-bold": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                      "body-admin": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "body-student": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "display-exam": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .pulse-red {
+            box-shadow: 0 0 0 0 rgba(186, 26, 26, 0.7);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(186, 26, 26, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(186, 26, 26, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(186, 26, 26, 0); }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-admin min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 flex justify-between items-center w-full px-lg py-md max-w-container-max-width mx-auto bg-surface border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="school">school</span>
+<div class="flex flex-col">
+<h1 class="font-headline-student text-headline-student font-extrabold text-primary">Mathematics Final Exam</h1>
+<div class="flex items-center gap-sm">
+<span class="flex h-2 w-2 rounded-full bg-error pulse-red"></span>
+<span class="font-label-bold text-error uppercase tracking-wider text-[10px]">Live Monitoring</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="hidden md:flex flex-col items-end">
+<span class="font-label-bold text-on-surface-variant uppercase text-[10px]">Time Elapsed</span>
+<span class="font-display-exam text-primary">01:25:00</span>
+</div>
+<div class="flex items-center gap-sm bg-surface-container-high px-md py-sm rounded-xl">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="public">public</span>
+<span class="font-label-bold text-on-surface">Public View</span>
+</div>
+</div>
+</header>
+<main class="max-w-6xl mx-auto px-lg py-xl space-y-2xl">
+<!-- Podium Section -->
+<section class="grid grid-cols-1 md:grid-cols-3 items-end gap-lg pt-12">
+<!-- Rank 2 -->
+<div class="order-2 md:order-1 bg-surface-container-low border-t-4 border-secondary p-lg rounded-xl shadow-sm text-center transform transition-transform hover:scale-105">
+<div class="relative inline-block mb-md">
+<img alt="Student Rank 2" class="w-24 h-24 rounded-full border-4 border-white shadow-md mx-auto object-cover" data-alt="A professional headshot of a high school student with a confident smile, set against a soft blurred academic background. The lighting is bright and even, fitting a modern corporate educational interface. The color palette is clean with subtle blue undertones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuApk-jgdD6iOokWalmgCC_vRMe9T_Z0M9kVHbR1JvE_tzzJkC85Z2q-A1AZpnbIFuyi-JR6ASiG73c3ydiuHzQGUJ6OlyKBQ7Dv6JanaxuVRU3QNBs5HJO4epWeUECBVwKqP9KgzLaGv46Q396pDegK1EqN9Jo5Hnt9yFbYk9TpJpDFZ48wGfq2u-54u6cp78Ea8KCEmB7hamw5sUzM4y5AUNcXEFH-OolQ_JNxRyeygj40J6GhLV9tfm4heTBtCP261j8r_-506vj0"/>
+<div class="absolute -bottom-2 -right-2 bg-secondary text-on-secondary w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl border-4 border-white">2</div>
+</div>
+<h3 class="font-headline-admin text-on-surface mb-xs">Budi Santoso</h3>
+<p class="font-label-sm text-on-surface-variant mb-md">Class XII-A</p>
+<div class="bg-secondary-container text-on-secondary-container py-xs px-md rounded-full font-display-exam text-2xl">94.5</div>
+</div>
+<!-- Rank 1 -->
+<div class="order-1 md:order-2 bg-white border-t-8 border-primary-container p-xl rounded-2xl shadow-lg text-center transform md:-translate-y-8 transition-transform hover:scale-105 ring-4 ring-primary-container/10">
+<div class="relative inline-block mb-lg">
+<img alt="Student Rank 1" class="w-32 h-32 rounded-full border-4 border-white shadow-xl mx-auto object-cover" data-alt="A high-quality portrait of a female student looking focused and proud, captured in high-key natural lighting. The setting is a minimalist library with clean lines and soft white highlights. The overall aesthetic is professional, scholarly, and bright, emphasizing academic achievement." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsG1Mnsahmm5GgZ_OL7O1QoSx4OxpRaxSgiS-USJoKcGowHxH6LGixOEr7p1qp_zwa2htKodVoNUPnzNhvEr5GgefEwIRV9sHKeNAJiVXKscW_8tK84X9z8ci23krFAR5hEsHKav8ZJ_Z3NTzSVbfO6lTtjWKDrtF1qojJDQb6fBtyZOMFeJ5z_UinTtyER5EsY3Gyf4rlJsPonfffoqKUGbMeS21sVsaES4pz2gRyDAXAtu22Y4oYmLIsKBcHRW4Lt-ZGTHbrVsyk"/>
+<div class="absolute -bottom-3 -right-3 bg-primary-container text-white w-14 h-14 rounded-full flex items-center justify-center font-extrabold text-2xl border-4 border-white shadow-lg">1</div>
+<div class="absolute -top-6 left-1/2 -translate-x-1/2">
+<span class="material-symbols-outlined text-yellow-500 text-5xl" data-icon="workspace_premium" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+</div>
+<h3 class="text-3xl font-extrabold text-on-surface mb-xs">Siti Aminah</h3>
+<p class="font-label-bold text-on-surface-variant mb-lg">Class XII-C</p>
+<div class="bg-primary-container text-white py-sm px-lg rounded-full font-display-exam text-4xl shadow-md">98.2</div>
+</div>
+<!-- Rank 3 -->
+<div class="order-3 md:order-3 bg-surface-container-low border-t-4 border-tertiary p-lg rounded-xl shadow-sm text-center transform transition-transform hover:scale-105">
+<div class="relative inline-block mb-md">
+<img alt="Student Rank 3" class="w-24 h-24 rounded-full border-4 border-white shadow-md mx-auto object-cover" data-alt="A professional portrait of a male student wearing a neat uniform, looking directly at the camera with a calm expression. The background is a crisp, off-white studio setting with soft shadows. The lighting is clean and modern, supporting a high-end educational dashboard feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAoV3Pwyacl9_aO2N4tswty3h1vhY-tyaUU7bp5TnfjCi7mriNGU2VhAr64I_Mo0tJOnBbTgl8RZcCF7oIFaj-8JPwY9EdDYiWWmaCd6ADfI4LJiiwSWGIrl_QYKnrR7WGd2lZEwrBikEZyKS6whl6WpOBBbquyd02kMwQydGYHDsJ2zb8Qiw0bnMCOIQx2Zu0f1KsySzglEehFLG7rgjvaxbvL-gfFYZfU-4ykVsSfmmkTafAPj6nTVFLgQd658T9CuZ8by0dXMUeb"/>
+<div class="absolute -bottom-2 -right-2 bg-tertiary text-on-tertiary-container w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl border-4 border-white">3</div>
+</div>
+<h3 class="font-headline-admin text-on-surface mb-xs">Adi Wijaya</h3>
+<p class="font-label-sm text-on-surface-variant mb-md">Class XII-B</p>
+<div class="bg-tertiary-container text-on-tertiary-container py-xs px-md rounded-full font-display-exam text-2xl">92.0</div>
+</div>
+</section>
+<!-- List Section -->
+<section class="bg-white rounded-2xl shadow-sm border border-outline-variant overflow-hidden">
+<div class="px-xl py-lg bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center">
+<h2 class="font-headline-admin text-primary flex items-center gap-sm">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+                    Live Participant Rankings
+                </h2>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-xs">
+<span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+<span class="font-label-sm text-on-surface-variant">Selesai</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="w-3 h-3 rounded-full bg-amber-500"></span>
+<span class="font-label-sm text-on-surface-variant">Sedang Mengerjakan</span>
+</div>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container text-on-surface-variant">
+<th class="px-xl py-md font-label-bold uppercase text-[11px] tracking-widest w-20">Rank</th>
+<th class="px-lg py-md font-label-bold uppercase text-[11px] tracking-widest">Student Name</th>
+<th class="px-lg py-md font-label-bold uppercase text-[11px] tracking-widest">Class</th>
+<th class="px-lg py-md font-label-bold uppercase text-[11px] tracking-widest">Status</th>
+<th class="px-xl py-md font-label-bold uppercase text-[11px] tracking-widest text-right">Live Score</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Rank 4 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-md">
+<span class="font-bold text-on-surface text-lg">4</span>
+</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary">EN</div>
+<span class="font-semibold text-on-surface">Eka Nurhaliza</span>
+</div>
+</td>
+<td class="px-lg py-md text-on-surface-variant">XII-A</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Selesai
+                                </span>
+</td>
+<td class="px-xl py-md text-right font-display-exam text-primary text-xl">89.5</td>
+</tr>
+<!-- Rank 5 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-md">
+<span class="font-bold text-on-surface text-lg">5</span>
+</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary">DP</div>
+<span class="font-semibold text-on-surface">Deni Pratama</span>
+</div>
+</td>
+<td class="px-lg py-md text-on-surface-variant">XII-C</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    Sedang Mengerjakan
+                                </span>
+</td>
+<td class="px-xl py-md text-right font-display-exam text-primary text-xl">87.2</td>
+</tr>
+<!-- Rank 6 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-md">
+<span class="font-bold text-on-surface text-lg">6</span>
+</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary">MA</div>
+<span class="font-semibold text-on-surface">Maya Anggraini</span>
+</div>
+</td>
+<td class="px-lg py-md text-on-surface-variant">XII-B</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Selesai
+                                </span>
+</td>
+<td class="px-xl py-md text-right font-display-exam text-primary text-xl">85.0</td>
+</tr>
+<!-- Rank 7 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-md">
+<span class="font-bold text-on-surface text-lg">7</span>
+</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary">RK</div>
+<span class="font-semibold text-on-surface">Rizky Kurniawan</span>
+</div>
+</td>
+<td class="px-lg py-md text-on-surface-variant">XII-A</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    Sedang Mengerjakan
+                                </span>
+</td>
+<td class="px-xl py-md text-right font-display-exam text-primary text-xl">82.8</td>
+</tr>
+<!-- Rank 8 -->
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-xl py-md">
+<span class="font-bold text-on-surface text-lg">8</span>
+</td>
+<td class="px-lg py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary">FS</div>
+<span class="font-semibold text-on-surface">Fahmi Salim</span>
+</div>
+</td>
+<td class="px-lg py-md text-on-surface-variant">XII-C</td>
+<td class="px-lg py-md">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Selesai
+                                </span>
+</td>
+<td class="px-xl py-md text-right font-display-exam text-primary text-xl">80.1</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-xl py-md bg-surface-container-low text-center">
+<p class="font-label-sm text-on-surface-variant">Showing top 8 of 124 participants • Auto-refreshing in 15s</p>
+</div>
+</section>
+</main>
+<!-- Projector Optimization Footer -->
+<footer class="fixed bottom-0 left-0 w-full bg-inverse-surface text-white py-sm px-lg flex justify-between items-center z-50">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-sm" data-icon="update">update</span>
+<span class="font-label-sm">Last Update: 14:45:22 WIB</span>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-xs">
+<span class="font-label-sm opacity-70">Total Submitted:</span>
+<span class="font-label-bold">82</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="font-label-sm opacity-70">Active Now:</span>
+<span class="font-label-bold text-emerald-400">42</span>
+</div>
+</div>
+</footer>
+</body></html>

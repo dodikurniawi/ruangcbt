@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "tertiary-container": "#bc4800",
+                "surface-dim": "#cbdbf5",
+                "on-primary-fixed-variant": "#003ea8",
+                "surface-container-lowest": "#ffffff",
+                "on-secondary": "#ffffff",
+                "secondary-container": "#645efb",
+                "on-tertiary-fixed": "#360f00",
+                "tertiary-fixed": "#ffdbcd",
+                "surface-container-highest": "#d3e4fe",
+                "on-error": "#ffffff",
+                "primary-fixed": "#dbe1ff",
+                "on-primary-container": "#eeefff",
+                "on-secondary-container": "#fffbff",
+                "background": "#f8f9ff",
+                "secondary-fixed": "#e2dfff",
+                "outline": "#737686",
+                "on-secondary-fixed-variant": "#3323cc",
+                "inverse-on-surface": "#eaf1ff",
+                "secondary": "#4b41e1",
+                "on-tertiary": "#ffffff",
+                "on-primary-fixed": "#00174b",
+                "error": "#ba1a1a",
+                "on-surface": "#0b1c30",
+                "surface-tint": "#0053db",
+                "surface": "#f8f9ff",
+                "surface-container": "#e5eeff",
+                "primary-fixed-dim": "#b4c5ff",
+                "secondary-fixed-dim": "#c3c0ff",
+                "on-secondary-fixed": "#0f0069",
+                "outline-variant": "#c3c6d7",
+                "on-error-container": "#93000a",
+                "on-background": "#0b1c30",
+                "primary": "#004ac6",
+                "surface-container-high": "#dce9ff",
+                "surface-container-low": "#eff4ff",
+                "surface-bright": "#f8f9ff",
+                "on-primary": "#ffffff",
+                "tertiary": "#943700",
+                "tertiary-fixed-dim": "#ffb596",
+                "inverse-surface": "#213145",
+                "surface-variant": "#d3e4fe",
+                "on-tertiary-container": "#ffede6",
+                "error-container": "#ffdad6",
+                "on-tertiary-fixed-variant": "#7d2d00",
+                "primary-container": "#2563eb",
+                "on-surface-variant": "#434655",
+                "inverse-primary": "#b4c5ff"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "md": "16px",
+                "admin-gap": "16px",
+                "sm": "8px",
+                "xl": "32px",
+                "2xl": "48px",
+                "container-max-width": "1280px",
+                "student-gap": "24px",
+                "lg": "24px",
+                "xs": "4px",
+                "unit": "4px"
+            },
+            "fontFamily": {
+                "body-student": ["Inter"],
+                "headline-student": ["Inter"],
+                "body-admin": ["Inter"],
+                "display-exam": ["Inter"],
+                "headline-admin": ["Inter"],
+                "label-bold": ["Inter"],
+                "label-sm": ["Inter"],
+                "caption": ["Inter"]
+            },
+            "fontSize": {
+                "body-student": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                "headline-student": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                "body-admin": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "display-exam": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "headline-admin": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                "label-bold": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                "caption": ["12px", {"lineHeight": "16px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .timer-warning { color: #f59e0b; }
+        .timer-critical { color: #dc2626; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background font-body-student text-on-background min-h-screen flex flex-col">
+<!-- TopAppBar from JSON -->
+<header class="sticky top-0 z-50 flex justify-between items-center w-full px-lg py-sm max-w-container-max-width mx-auto bg-surface dark:bg-surface-dim border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed" data-icon="school">school</span>
+<h1 class="font-headline-student text-headline-student font-extrabold text-primary dark:text-inverse-primary">Mathematics Final Exam</h1>
+</div>
+<div class="flex items-center gap-md">
+<!-- Large Timer -->
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Time Remaining</span>
+<span class="text-[28px] font-bold leading-none text-[#10b981]">01:25:00</span>
+</div>
+<div class="hidden md:flex gap-sm">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all"><span class="material-symbols-outlined" data-icon="help">help</span></button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all"><span class="material-symbols-outlined" data-icon="person">person</span></button>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow w-full max-w-[800px] mx-auto px-lg pt-lg pb-xl flex flex-col gap-student-gap">
+<!-- Violation Toast (Simulated) -->
+<div class="bg-error-container text-on-error-container px-md py-sm rounded-lg flex items-center gap-sm shadow-sm border border-error/10">
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+<p class="font-label-bold text-label-bold">Warning: Do not switch tabs. Your activity is being monitored.</p>
+</div>
+<!-- Question Header -->
+<div class="flex justify-between items-end border-b border-outline-variant pb-xs">
+<div>
+<span class="font-label-bold text-label-bold text-primary">Question 12</span>
+<h2 class="font-headline-student text-headline-student text-on-surface mt-1">Soal 12 dari 40</h2>
+</div>
+<button class="flex items-center gap-xs font-label-bold text-label-bold text-tertiary px-3 py-1 rounded-full bg-tertiary-fixed/30 border border-tertiary/20">
+<span class="material-symbols-outlined text-[18px]" data-icon="flag">flag</span>
+<span>Ragu-ragu</span>
+</button>
+</div>
+<!-- Question Card -->
+<section class="bg-surface-container-lowest p-xl rounded-xl border border-outline-variant shadow-sm">
+<p class="font-body-student text-body-student text-on-surface leading-relaxed mb-xl">
+                Given a quadratic equation $x^2 - 5x + 6 = 0$. What are the roots of the equation, and what is the sum of the roots according to Vieta's formulas?
+            </p>
+<!-- Option Cards -->
+<div class="flex flex-col gap-md">
+<!-- Selected Option -->
+<button class="flex items-center w-full min-h-[56px] text-left px-md py-sm rounded-xl border-2 border-primary bg-primary-container/10 text-on-surface transition-all group">
+<div class="flex-shrink-0 w-8 h-8 rounded-full border-2 border-primary bg-primary flex items-center justify-center mr-md">
+<span class="text-on-primary font-bold text-label-bold">A</span>
+</div>
+<span class="flex-grow font-body-student text-body-student">x = 2 and x = 3; Sum = 5</span>
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</button>
+<!-- Normal Option -->
+<button class="flex items-center w-full min-h-[56px] text-left px-md py-sm rounded-xl border border-outline-variant bg-surface hover:border-primary transition-all group">
+<div class="flex-shrink-0 w-8 h-8 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center mr-md">
+<span class="text-on-surface-variant group-hover:text-primary font-bold text-label-bold">B</span>
+</div>
+<span class="flex-grow font-body-student text-body-student">x = 1 and x = 6; Sum = 7</span>
+</button>
+<button class="flex items-center w-full min-h-[56px] text-left px-md py-sm rounded-xl border border-outline-variant bg-surface hover:border-primary transition-all group">
+<div class="flex-shrink-0 w-8 h-8 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center mr-md">
+<span class="text-on-surface-variant group-hover:text-primary font-bold text-label-bold">C</span>
+</div>
+<span class="flex-grow font-body-student text-body-student">x = -2 and x = -3; Sum = -5</span>
+</button>
+<button class="flex items-center w-full min-h-[56px] text-left px-md py-sm rounded-xl border border-outline-variant bg-surface hover:border-primary transition-all group">
+<div class="flex-shrink-0 w-8 h-8 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center mr-md">
+<span class="text-on-surface-variant group-hover:text-primary font-bold text-label-bold">D</span>
+</div>
+<span class="flex-grow font-body-student text-body-student">x = 2 and x = -3; Sum = -1</span>
+</button>
+</div>
+</section>
+<!-- Submit Section -->
+<div class="mt-md pt-lg border-t border-outline-variant flex flex-col gap-md">
+<button class="w-full h-14 bg-primary text-on-primary rounded-xl font-bold text-headline-student shadow-lg active:scale-95 transition-transform">
+                Kumpulkan Ujian
+            </button>
+<p class="text-caption font-caption text-on-surface-variant text-center px-xl">
+                Pastikan semua soal telah terjawab sebelum menekan tombol kumpulkan. Aksi ini tidak dapat dibatalkan.
+            </p>
+</div>
+</main>
+<!-- Bottom Navigation Shell (Always visible on mobile as per logic) -->
+<div class="fixed bottom-0 left-0 w-full z-50 flex flex-col bg-surface-container-low border-t border-outline-variant shadow-lg md:rounded-t-2xl">
+<!-- Question Grid Navigator (Scrollable) -->
+<div class="px-md pt-md pb-xs">
+<div class="flex items-center justify-between mb-xs">
+<span class="font-label-bold text-label-bold">Navigasi Soal</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">11/40 Terjawab</span>
+</div>
+<div class="flex gap-sm overflow-x-auto no-scrollbar py-2 px-1">
+<!-- Answered -->
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-label-bold">1</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-label-bold">2</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-label-bold">3</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-label-bold">4</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-label-bold">5</div>
+<!-- Unanswered -->
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">6</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">7</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">8</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">9</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">10</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">11</div>
+<!-- Current (Active) -->
+<div class="flex-shrink-0 w-10 h-10 rounded-lg border-4 border-primary bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-label-bold">12</div>
+<!-- Next items -->
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">13</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">14</div>
+<div class="flex-shrink-0 w-10 h-10 rounded-lg bg-outline-variant text-on-surface-variant flex items-center justify-center font-bold text-label-bold">15</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<nav class="flex justify-around items-center px-md py-md gap-md">
+<button class="flex-1 h-14 flex items-center justify-center gap-xs text-on-surface font-bold rounded-xl border-2 border-outline-variant bg-surface active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+<span class="font-label-bold text-label-bold">SEBELUMNYA</span>
+</button>
+<button class="flex-1 h-14 flex items-center justify-center gap-xs text-on-primary font-bold rounded-xl bg-primary active:scale-95 duration-100">
+<span class="font-label-bold text-label-bold">SELANJUTNYA</span>
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</nav>
+</div>
+<!-- Padding for Fixed Footer -->
+<div class="h-[180px] md:h-[200px] flex-shrink-0"></div>
+</body></html>

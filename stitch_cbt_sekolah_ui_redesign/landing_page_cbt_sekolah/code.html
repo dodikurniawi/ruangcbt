@@ -1,0 +1,531 @@
+<!doctype html>
+
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>CBT Sekolah - Platform Ujian Berbasis Komputer Modern</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-container": "#bc4800",
+              "surface-dim": "#cbdbf5",
+              "on-primary-fixed-variant": "#003ea8",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "secondary-container": "#645efb",
+              "on-tertiary-fixed": "#360f00",
+              "tertiary-fixed": "#ffdbcd",
+              "surface-container-highest": "#d3e4fe",
+              "on-error": "#ffffff",
+              "primary-fixed": "#dbe1ff",
+              "on-primary-container": "#eeefff",
+              "on-secondary-container": "#fffbff",
+              background: "#f8f9ff",
+              "secondary-fixed": "#e2dfff",
+              outline: "#737686",
+              "on-secondary-fixed-variant": "#3323cc",
+              "inverse-on-surface": "#eaf1ff",
+              secondary: "#4b41e1",
+              "on-tertiary": "#ffffff",
+              "on-primary-fixed": "#00174b",
+              error: "#ba1a1a",
+              "on-surface": "#0b1c30",
+              "surface-tint": "#0053db",
+              surface: "#f8f9ff",
+              "surface-container": "#e5eeff",
+              "primary-fixed-dim": "#b4c5ff",
+              "secondary-fixed-dim": "#c3c0ff",
+              "on-secondary-fixed": "#0f0069",
+              "outline-variant": "#c3c6d7",
+              "on-error-container": "#93000a",
+              "on-background": "#0b1c30",
+              primary: "#004ac6",
+              "surface-container-high": "#dce9ff",
+              "surface-container-low": "#eff4ff",
+              "surface-bright": "#f8f9ff",
+              "on-primary": "#ffffff",
+              tertiary: "#943700",
+              "tertiary-fixed-dim": "#ffb596",
+              "inverse-surface": "#213145",
+              "surface-variant": "#d3e4fe",
+              "on-tertiary-container": "#ffede6",
+              "error-container": "#ffdad6",
+              "on-tertiary-fixed-variant": "#7d2d00",
+              "primary-container": "#2563eb",
+              "on-surface-variant": "#434655",
+              "inverse-primary": "#b4c5ff",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            spacing: {
+              md: "16px",
+              "admin-gap": "16px",
+              sm: "8px",
+              xl: "32px",
+              "2xl": "48px",
+              "container-max-width": "1280px",
+              "student-gap": "24px",
+              lg: "24px",
+              xs: "4px",
+              unit: "4px",
+            },
+            fontFamily: {
+              "body-student": ["Inter"],
+              "headline-student": ["Inter"],
+              "body-admin": ["Inter"],
+              "display-exam": ["Inter"],
+              "headline-admin": ["Inter"],
+              "label-bold": ["Inter"],
+              "label-sm": ["Inter"],
+              caption: ["Inter"],
+            },
+            fontSize: {
+              "body-student": [
+                "18px",
+                { lineHeight: "28px", fontWeight: "400" },
+              ],
+              "headline-student": [
+                "24px",
+                { lineHeight: "32px", fontWeight: "600" },
+              ],
+              "body-admin": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+              "display-exam": [
+                "30px",
+                {
+                  lineHeight: "38px",
+                  letterSpacing: "-0.02em",
+                  fontWeight: "700",
+                },
+              ],
+              "headline-admin": [
+                "20px",
+                { lineHeight: "28px", fontWeight: "600" },
+              ],
+              "label-bold": [
+                "14px",
+                {
+                  lineHeight: "20px",
+                  letterSpacing: "0.01em",
+                  fontWeight: "600",
+                },
+              ],
+              "label-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+              caption: ["12px", { lineHeight: "16px", fontWeight: "400" }],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      .pattern-bg {
+        background-color: #f8f9ff;
+        background-image: radial-gradient(#d3e4fe 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-background text-on-surface font-body-student selection:bg-primary-fixed selection:text-on-primary-fixed"
+  >
+    <header
+      class="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant px-lg py-sm"
+    >
+      <nav
+        class="max-w-container-max-width mx-auto flex justify-between items-center"
+      >
+        <div class="flex items-center gap-sm">
+          <span
+            class="material-symbols-outlined text-primary text-3xl"
+            data-icon="school"
+            >school</span
+          >
+          <span
+            class="font-headline-student text-headline-student font-extrabold text-primary tracking-tight"
+            >CBT Sekolah</span
+          >
+        </div>
+        <div class="hidden md:flex items-center gap-xl">
+          <a
+            class="text-on-surface-variant font-medium hover:text-primary transition-all"
+            href="#fitur"
+            >Fitur Utama</a
+          >
+          <a
+            class="text-on-surface-variant font-medium hover:text-primary transition-all"
+            href="#"
+            >Bantuan</a
+          >
+          <a
+            class="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-bold hover:bg-primary-container transition-colors shadow-sm"
+            href="/login"
+            >Mulai Ujian</a
+          >
+        </div>
+        <button class="md:hidden text-on-surface-variant">
+          <span class="material-symbols-outlined" data-icon="menu">menu</span>
+        </button>
+      </nav>
+    </header>
+    <main>
+      <section class="relative overflow-hidden pt-2xl pb-32 pattern-bg">
+        <div
+          class="max-w-container-max-width mx-auto px-lg flex flex-col md:flex-row items-center gap-2xl"
+        >
+          <div class="flex-1 space-y-lg text-center md:text-left">
+            <div
+              class="inline-flex items-center gap-xs bg-primary-fixed text-on-primary-fixed px-md py-xs rounded-full"
+            >
+              <span
+                class="material-symbols-outlined text-sm"
+                data-icon="verified_user"
+                style="font-variation-settings: &quot;FILL&quot; 1"
+                >verified_user</span
+              >
+              <span class="font-label-sm uppercase tracking-wider"
+                >Terpercaya oleh 500+ Sekolah</span
+              >
+            </div>
+            <h1
+              class="font-display-exam text-[40px] md:text-[64px] leading-[1.1] text-on-surface font-extrabold"
+            >
+              Masa Depan <br /><span class="text-primary">Asesmen Digital</span>
+              Indonesia.
+            </h1>
+            <p class="font-body-student text-on-surface-variant max-w-2xl">
+              Platform Computer Based Test (CBT) yang dirancang khusus untuk
+              kurikulum K-12. Menghadirkan integritas ujian tinggi dengan
+              antarmuka yang tenang dan bebas gangguan bagi siswa.
+            </p>
+            <div
+              class="flex flex-col sm:flex-row gap-md justify-center md:justify-start pt-md"
+            >
+              <a
+                class="inline-flex items-center justify-center gap-sm bg-primary text-on-primary px-xl py-4 rounded-xl font-headline-admin hover:scale-[1.02] transition-transform shadow-lg"
+                href="/login"
+              >
+                Mulai Ujian
+                <span
+                  class="material-symbols-outlined"
+                  data-icon="arrow_forward"
+                  >arrow_forward</span
+                >
+              </a>
+              <a
+                class="inline-flex items-center justify-center gap-sm bg-transparent border-2 border-outline-variant text-on-surface px-xl py-4 rounded-xl font-headline-admin hover:bg-surface-container-low transition-colors"
+                href="/admin"
+              >
+                Admin / Pengawas
+                <span
+                  class="material-symbols-outlined"
+                  data-icon="admin_panel_settings"
+                  >admin_panel_settings</span
+                >
+              </a>
+            </div>
+          </div>
+          <div class="flex-1 relative w-full">
+            <div
+              class="relative z-10 rounded-2xl overflow-hidden shadow-2xl border border-outline-variant"
+            >
+              <img
+                alt="Student Interface Dashboard"
+                class="w-full h-auto object-cover aspect-[4/3]"
+                data-alt="A high-angle, clean lifestyle photograph of a modern Indonesian student in a bright classroom using a sleek laptop to take a digital exam. The screen displays a professional, light-mode educational user interface with blue and white accents. The lighting is soft and natural, creating a focused and calm academic atmosphere. The background shows a minimalist, well-organized school setting with soft-focus books and plants."
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsA-tzvzK1mELa_MjCLUc1q9uoKSX4GbomYOHJLYiH71Wy3R2KEczHQbp4KERnygMEnNW_e-EWRk9GVt8_Ai1U-rZE-LXdQ7UMDoLu1uyGsMrzmcJpIFd8GeG1LIz8MniQT1mPO776HLpmt9UGHCvWvaLRgUeBIa-iT2MPRI72snslIsld84H8R0_2a_9fsbQSf-Ljb-cOViYSBQD1II2757YQ0fRNrGw7c9RBqgAGjtwI9ovGNAGakQv5mObTyqPitxwZ_mFoVSwS"
+              />
+            </div>
+            <div
+              class="absolute -bottom-6 -left-6 z-20 bg-white p-md rounded-xl shadow-xl border border-outline-variant hidden lg:block"
+            >
+              <div class="flex items-center gap-md">
+                <div
+                  class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    data-icon="check_circle"
+                    style="font-variation-settings: &quot;FILL&quot; 1"
+                    >check_circle</span
+                  >
+                </div>
+                <div>
+                  <p class="font-label-bold text-on-surface">99.9% Uptime</p>
+                  <p class="font-caption text-on-surface-variant text-xs">
+                    Sistem stabil saat ujian serentak
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="py-2xl bg-white" id="fitur">
+        <div class="max-w-container-max-width mx-auto px-lg">
+          <div class="text-center max-w-2xl mx-auto mb-2xl">
+            <h2
+              class="font-headline-student text-headline-student text-primary mb-sm"
+            >
+              Fitur Utama
+            </h2>
+            <p class="font-body-student text-on-surface-variant">
+              Keunggulan teknologi yang kami rancang untuk mendukung
+              transparansi dan efisiensi pendidikan di Indonesia.
+            </p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+            <div
+              class="group p-lg bg-surface-container-low rounded-2xl border border-transparent hover:border-primary-container hover:bg-white hover:shadow-lg transition-all duration-300"
+            >
+              <div
+                class="w-14 h-14 bg-primary-container text-on-primary-container rounded-xl flex items-center justify-center mb-lg group-hover:scale-110 transition-transform"
+              >
+                <span
+                  class="material-symbols-outlined text-3xl"
+                  data-icon="monitoring"
+                  >monitoring</span
+                >
+              </div>
+              <h3
+                class="font-headline-admin text-headline-admin text-on-surface mb-md"
+              >
+                Real-time Monitoring
+              </h3>
+              <p class="font-body-admin text-on-surface-variant">
+                Pantau progres siswa secara langsung dari dashboard pengawas.
+                Deteksi aktivitas mencurigakan dengan sistem proctoring cerdas.
+              </p>
+            </div>
+            <div
+              class="group p-lg bg-surface-container-low rounded-2xl border border-transparent hover:border-primary-container hover:bg-white hover:shadow-lg transition-all duration-300"
+            >
+              <div
+                class="w-14 h-14 bg-secondary-container text-on-secondary-container rounded-xl flex items-center justify-center mb-lg group-hover:scale-110 transition-transform"
+              >
+                <span
+                  class="material-symbols-outlined text-3xl"
+                  data-icon="security"
+                  >security</span
+                >
+              </div>
+              <h3
+                class="font-headline-admin text-headline-admin text-on-surface mb-md"
+              >
+                Secure Architecture
+              </h3>
+              <p class="font-body-admin text-on-surface-variant">
+                Enkripsi data tingkat tinggi dan mode browser terkunci untuk
+                mencegah kecurangan dan kebocoran soal ujian.
+              </p>
+            </div>
+            <div
+              class="group p-lg bg-surface-container-low rounded-2xl border border-transparent hover:border-primary-container hover:bg-white hover:shadow-lg transition-all duration-300"
+            >
+              <div
+                class="w-14 h-14 bg-tertiary-container text-on-tertiary-container rounded-xl flex items-center justify-center mb-lg group-hover:scale-110 transition-transform"
+              >
+                <span
+                  class="material-symbols-outlined text-3xl"
+                  data-icon="touch_app"
+                  >touch_app</span
+                >
+              </div>
+              <h3
+                class="font-headline-admin text-headline-admin text-on-surface mb-md"
+              >
+                Easy to Use
+              </h3>
+              <p class="font-body-admin text-on-surface-variant">
+                Antarmuka intuitif yang meminimalisir 'test anxiety'. Setup
+                ujian hanya dalam hitungan menit untuk administrator.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="py-2xl pattern-bg">
+        <div class="max-w-container-max-width mx-auto px-lg">
+          <div
+            class="bg-primary rounded-[32px] p-xl md:p-2xl flex flex-col md:flex-row items-center justify-between gap-xl relative overflow-hidden shadow-2xl"
+          >
+            <div
+              class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"
+            ></div>
+            <div
+              class="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24"
+            ></div>
+            <div class="relative z-10 text-center md:text-left space-y-md">
+              <h2 class="font-display-exam text-display-exam text-on-primary">
+                Siap mendigitalisasi sekolah Kamu?
+              </h2>
+              <p
+                class="font-body-student text-on-primary-container opacity-90 max-w-xl"
+              >
+                Bergabunglah dengan ratusan institusi pendidikan lainnya untuk
+                menciptakan ekosistem ujian yang adil, modern, dan efisien.
+              </p>
+            </div>
+            <div
+              class="relative z-10 flex flex-col sm:flex-row gap-md w-full md:w-auto"
+            >
+              <a
+                class="bg-on-primary text-primary px-xl py-4 rounded-xl font-headline-admin text-center hover:bg-primary-fixed transition-colors"
+                href="/login"
+                >Daftar Sekarang</a
+              >
+              <a
+                class="bg-primary-container text-on-primary-container border border-white/20 px-xl py-4 rounded-xl font-headline-admin text-center hover:bg-primary/50 transition-colors"
+                href="#"
+                >Jadwalkan Demo</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer
+      class="bg-inverse-surface text-on-primary-fixed-variant pt-2xl pb-xl"
+    >
+      <div
+        class="max-w-container-max-width mx-auto px-lg grid grid-cols-1 md:grid-cols-4 gap-2xl border-b border-outline/30 pb-2xl mb-xl"
+      >
+        <div class="space-y-md">
+          <div class="flex items-center gap-sm">
+            <span
+              class="material-symbols-outlined text-inverse-primary text-2xl"
+              data-icon="school"
+              >school</span
+            >
+            <span
+              class="font-headline-admin text-headline-admin font-bold text-on-primary-fixed-variant"
+              >CBT Sekolah</span
+            >
+          </div>
+          <p class="font-caption text-outline-variant leading-relaxed">
+            Solusi Asesmen Digital Terpadu untuk Sekolah Dasar hingga Menengah
+            Atas di seluruh Nusantara.
+          </p>
+        </div>
+        <div>
+          <h4 class="font-label-bold text-white mb-lg">Produk</h4>
+          <ul class="space-y-sm font-body-admin text-outline-variant">
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Fitur Admin</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Portal Siswa</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Keamanan Data</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Integritas Ujian</a
+              >
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-label-bold text-white mb-lg">Dukungan</h4>
+          <ul class="space-y-sm font-body-admin text-outline-variant">
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Pusat Bantuan</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Dokumentasi Webappscript</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Panduan Guru</a
+              >
+            </li>
+            <li>
+              <a class="hover:text-inverse-primary transition-colors" href="#"
+                >Status Server</a
+              >
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-label-bold text-white mb-lg">Hubungi Kami</h4>
+          <div class="flex gap-md">
+            <a
+              class="w-10 h-10 rounded-full bg-outline/20 flex items-center justify-center hover:bg-primary transition-colors"
+              href="#"
+            >
+              <span
+                class="material-symbols-outlined text-sm"
+                data-icon="alternate_email"
+                >alternate_email</span
+              >
+            </a>
+            <a
+              class="w-10 h-10 rounded-full bg-outline/20 flex items-center justify-center hover:bg-primary transition-colors"
+              href="#"
+            >
+              <span class="material-symbols-outlined text-sm" data-icon="share"
+                >share</span
+              >
+            </a>
+            <a
+              class="w-10 h-10 rounded-full bg-outline/20 flex items-center justify-center hover:bg-primary transition-colors"
+              href="#"
+            >
+              <span
+                class="material-symbols-outlined text-sm"
+                data-icon="location_on"
+                >location_on</span
+              >
+            </a>
+          </div>
+        </div>
+      </div>
+      <div
+        class="max-w-container-max-width mx-auto px-lg flex flex-col md:flex-row justify-between items-center gap-md font-caption text-outline-variant"
+      >
+        <p>© 2026CBT Sekolah. Hak Cipta Dilindungi Undang-Undang.</p>
+        <div class="flex gap-xl">
+          <a class="hover:text-white" href="#">Kebijakan Privasi</a>
+          <a class="hover:text-white" href="#">Syarat &amp; Ketentuan</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
