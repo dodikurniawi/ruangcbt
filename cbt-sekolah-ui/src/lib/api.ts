@@ -186,6 +186,13 @@ export async function createStudent(data: StudentInput): Promise<ApiResponse> {
     return fetchApi('createStudent', 'POST', { ...data });
 }
 
+export async function updateStudent(
+    id_siswa: string,
+    data: { nama_lengkap?: string; username?: string; password?: string; kelas?: string }
+): Promise<ApiResponse> {
+    return fetchApi('updateStudent', 'POST', { id_siswa, ...data });
+}
+
 export async function deleteStudent(id_siswa: string): Promise<ApiResponse> {
     return fetchApi('deleteStudent', 'POST', { id_siswa });
 }

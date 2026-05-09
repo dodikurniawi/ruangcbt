@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, deleteStudent, createStudent, resetUserLogin, updateConfig } from "@/lib/api";
+import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig } from "@/lib/api";
 import type { User } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
@@ -34,6 +34,7 @@ function StatusBadge({ status }: { status: User["status_ujian"] }) {
 }
 
 interface StudentForm { username: string; password: string; nama_lengkap: string; kelas: string; }
+interface EditForm { id_siswa: string; username: string; password: string; nama_lengkap: string; kelas: string; }
 
 export default function AdminManagement() {
   const router = useTenantRouter();
@@ -58,6 +59,9 @@ export default function AdminManagement() {
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "" });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm>({ id_siswa: "", username: "", password: "", nama_lengkap: "", kelas: "" });
 
   // Uncontrolled config form
   const configFormRef = useRef<HTMLFormElement>(null);
@@ -109,6 +113,32 @@ export default function AdminManagement() {
     await resetUserLogin(id);
     await mutateUsers();
     setResettingId(null);
+  };
+
+  const openEdit = (u: User) => {
+    setEditForm({ id_siswa: u.id_siswa, username: u.username, password: "", nama_lengkap: u.nama_lengkap, kelas: u.kelas });
+    setFormError("");
+    setShowEditModal(true);
+  };
+
+  const handleUpdateStudent = async () => {
+    if (!editForm.nama_lengkap || !editForm.username || !editForm.kelas) {
+      setFormError("Nama, username, dan kelas harus diisi."); return;
+    }
+    setIsUpdating(true); setFormError("");
+    const res = await updateStudent(editForm.id_siswa, {
+      nama_lengkap: editForm.nama_lengkap,
+      username: editForm.username,
+      kelas: editForm.kelas,
+      ...(editForm.password ? { password: editForm.password } : {}),
+    });
+    if (res.success) {
+      await mutateUsers();
+      setShowEditModal(false);
+    } else {
+      setFormError(res.message || "Gagal memperbarui data siswa.");
+    }
+    setIsUpdating(false);
   };
 
   const handleSaveConfig = async () => {
@@ -426,6 +456,13 @@ export default function AdminManagement() {
                           </span>
                         </button>
                         <button
+                          onClick={() => openEdit(u)}
+                          title="Edit data siswa"
+                          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-amber-500 text-slate-500 hover:text-white flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px] font-bold">edit</span>
+                        </button>
+                        <button
                           onClick={() => setDeleteConfirmId(u.id_siswa)}
                           title="Hapus siswa"
                           className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-red-500 text-slate-500 hover:text-white flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer"
@@ -516,6 +553,55 @@ export default function AdminManagement() {
           </div>
         </section>
       </main>
+
+      {/* Edit Student Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200/80">
+            <h3 className="font-extrabold text-lg text-slate-800 mb-1">Edit Data Siswa</h3>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-6">ID: {editForm.id_siswa}</p>
+            {formError && (
+              <div className="mb-4 bg-red-50 text-red-700 px-4 py-3 rounded-xl border border-red-200/50 font-bold text-xs uppercase tracking-wider">
+                {formError}
+              </div>
+            )}
+            <div className="space-y-4">
+              {([
+                { label: "Nama Lengkap", key: "nama_lengkap", type: "text", placeholder: "Nama siswa" },
+                { label: "Username / NIS", key: "username", type: "text", placeholder: "Username login" },
+                { label: "Password Baru", key: "password", type: "password", placeholder: "Kosongkan jika tidak diubah" },
+                { label: "Kelas", key: "kelas", type: "text", placeholder: "Contoh: 6A" },
+              ] as const).map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">{label}</label>
+                  <input
+                    type={type}
+                    placeholder={placeholder}
+                    value={editForm[key]}
+                    onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 outline-none font-bold text-xs text-slate-600 transition-all"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => { setShowEditModal(false); setFormError(""); }}
+                className="flex-1 h-12 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-50 cursor-pointer transition-all"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleUpdateStudent}
+                disabled={isUpdating}
+                className="flex-1 h-12 bg-amber-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60 hover:bg-amber-600 transition-all shadow-md shadow-amber-500/10"
+              >
+                {isUpdating ? "Menyimpan..." : "Simpan Perubahan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Student Modal */}
       {showAddModal && (

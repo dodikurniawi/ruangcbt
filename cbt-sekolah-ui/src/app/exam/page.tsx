@@ -41,6 +41,7 @@ export default function ExamPage() {
   const [violationToast, setViolationToast] = useState("");
   const [maxViolations, setMaxViolations] = useState(3);
   const [examName, setExamName] = useState("RuangCBT");
+  const [subjectName, setSubjectName] = useState("");
 
   const [raguraguSet, setRaguraguSet] = useState<Set<string>>(new Set());
   const [fontSize, setFontSize] = useState<'sm'|'base'|'lg'>('base');
@@ -136,6 +137,11 @@ export default function ExamPage() {
         if (qRes.success && qRes.data) {
           setQuestions(qRes.data);
           setIsExamStarted(true);
+          // Derive subject name from the first question that has nama_mapel
+          const firstMapel = qRes.data.find((q: Question) => q.nama_mapel);
+          if (firstMapel?.nama_mapel) {
+            setSubjectName(firstMapel.nama_mapel);
+          }
         } else {
           setLoadError("Gagal memuat soal. Coba refresh halaman.");
           setIsLoading(false);
@@ -254,7 +260,7 @@ export default function ExamPage() {
               MATA PELAJARAN
             </span>
             <span className="text-white font-extrabold text-sm tracking-wide">
-              {examName} – KELAS {user?.kelas || "X"}
+              {subjectName || examName} – KELAS {user?.kelas || "X"}
             </span>
           </div>
 

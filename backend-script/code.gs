@@ -165,6 +165,9 @@ function doPost(e) {
       case "createStudent":
         result = handleCreateStudent(params);
         break;
+      case "updateStudent":
+        result = handleUpdateStudent(params);
+        break;
       case "deleteStudent":
         result = handleDeleteStudent(params);
         break;
@@ -236,6 +239,18 @@ function handleGetQuestions() {
   const cached = cache.get("questions");
   if (cached) return JSON.parse(cached);
 
+  // Build lookup: id_mapel → nama_mapel dari sheet MataPelajaran
+  const mapelLookup = {};
+  const mapelSheet = getSheet("MataPelajaran");
+  if (mapelSheet) {
+    const mapelData = mapelSheet.getDataRange().getValues();
+    for (let m = 1; m < mapelData.length; m++) {
+      if (mapelData[m][0]) {
+        mapelLookup[mapelData[m][0]] = mapelData[m][2]; // id_mapel → nama_mapel
+      }
+    }
+  }
+
   const sheet = getSheet("Questions");
   const data = sheet.getDataRange().getValues();
   const questions = [];
@@ -244,6 +259,7 @@ function handleGetQuestions() {
     const row = data[i];
     if (!row[0]) continue;
 
+    const id_mapel = row[13] || null;
     questions.push({
       id_soal: row[0],
       nomor_urut: row[1],
@@ -258,7 +274,8 @@ function handleGetQuestions() {
       // row[10] = kunci_jawaban — tidak dikirim ke client
       bobot: row[11] || 1,
       kategori: row[12] || null,
-      id_mapel: row[13] || null,   // kolom 14
+      id_mapel: id_mapel,
+      nama_mapel: id_mapel ? (mapelLookup[id_mapel] || null) : null,
     });
   }
 
@@ -1119,6 +1136,40 @@ function handleCreateStudent(params) {
   ]);
 
   return { success: true, message: "Siswa berhasil ditambahkan" };
+}
+
+function handleUpdateStudent(params) {
+  const { id_siswa, nama_lengkap, username, password, kelas } = params;
+
+  if (!id_siswa) return { success: false, message: "id_siswa diperlukan" };
+
+  const sheet = getSheet("Users");
+  const data = sheet.getDataRange().getValues();
+
+  // Cek duplikat username (selain diri sendiri)
+  if (username) {
+    for (let i = 1; i < data.length; i++) {
+      if (
+        data[i][0] !== id_siswa &&
+        data[i][1] &&
+        data[i][1].toString().toLowerCase() === username.toLowerCase()
+      ) {
+        return { success: false, message: "Username sudah digunakan siswa lain" };
+      }
+    }
+  }
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === id_siswa) {
+      if (nama_lengkap) sheet.getRange(i + 1, 4).setValue(nama_lengkap);
+      if (username)     sheet.getRange(i + 1, 2).setValue(username);
+      if (password)     sheet.getRange(i + 1, 3).setValue(password);
+      if (kelas)        sheet.getRange(i + 1, 5).setValue(kelas);
+      return { success: true, message: "Data siswa diperbarui" };
+    }
+  }
+
+  return { success: false, message: "Siswa tidak ditemukan" };
 }
 
 function handleDeleteStudent(params) {
