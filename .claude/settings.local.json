@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm install *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git -C \"d:/Projects/Webappscript/ruangcbt\" status --short)",
+      "Bash(npx next *)"
     ]
   }
 }
