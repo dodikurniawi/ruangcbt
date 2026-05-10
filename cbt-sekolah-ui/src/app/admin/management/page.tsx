@@ -148,11 +148,13 @@ export default function AdminManagement() {
     const exam_duration = Number(fd.get("exam_duration")) || 90;
     const exam_pin = (fd.get("exam_pin") as string) || "";
     const admin_password = (fd.get("admin_password") as string) || "";
+    const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
 
     setIsSavingConfig(true);
     const tasks: Promise<unknown>[] = [
       updateConfig("exam_name", exam_name),
       updateConfig("exam_duration", exam_duration),
+      updateConfig("admin_wa", admin_wa),
     ];
     if (exam_pin) tasks.push(updateConfig("exam_pin", exam_pin));
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
@@ -531,6 +533,22 @@ export default function AdminManagement() {
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">
+                  Nomor WhatsApp Admin
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 font-bold text-xs pointer-events-none">+</span>
+                  <input
+                    name="admin_wa"
+                    type="text"
+                    defaultValue={config?.admin_wa ?? ""}
+                    placeholder="628123456789 (tanpa spasi atau strip)"
+                    className="w-full pl-6 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">Digunakan siswa untuk tombol &ldquo;Hubungi Administrator Sekolah&rdquo; di halaman login.</p>
               </div>
               <div>
                 <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">Password Admin Baru</label>

@@ -13,6 +13,7 @@ export interface ExamConfig {
     live_score_pin?: string;
     exam_pin?: string;
     exam_status?: 'OPEN' | 'CLOSED';
+    admin_wa?: string;  // nomor WA admin sekolah, misal "628123456789"
 }
 
 // User types

@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
-import { login } from "@/lib/api";
+import { login, getConfig } from "@/lib/api";
 import { useExamStore } from "@/store/examStore";
+
+function buildWaUrl(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("62")) return `https://wa.me/${digits}`;
+  if (digits.startsWith("0")) return `https://wa.me/62${digits.slice(1)}`;
+  return `https://wa.me/62${digits}`;
+}
 
 export default function LoginPage() {
   const router = useTenantRouter();
@@ -14,6 +22,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adminWaUrl, setAdminWaUrl] = useState("");
+
+  useEffect(() => {
+    getConfig().then((res) => {
+      if (res.success && res.data?.admin_wa) {
+        setAdminWaUrl(buildWaUrl(res.data.admin_wa));
+      }
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -153,7 +170,14 @@ export default function LoginPage() {
           <div className="mt-xl pt-xl border-t border-outline-variant text-center">
             <p className="font-caption text-caption text-on-surface-variant">
               Butuh bantuan? Hubungi{" "}
-              <span className="text-primary font-medium">Administrator Sekolah</span>
+              {adminWaUrl ? (
+                <a href={adminWaUrl} target="_blank" rel="noopener noreferrer"
+                   className="text-primary font-medium underline hover:opacity-80 transition-opacity">
+                  Administrator Sekolah
+                </a>
+              ) : (
+                <span className="text-primary font-medium">Administrator Sekolah</span>
+              )}
             </p>
           </div>
         </div>

@@ -231,6 +231,7 @@ function handleGetConfig() {
     max_violations: config.max_violations,
     auto_submit: config.auto_submit,
     shuffle_questions: config.shuffle_questions,
+    admin_wa: config.admin_wa || "",   // nomor WA admin sekolah (publik, boleh dikirim ke siswa)
   };
   return { success: true, data: safeConfig };
 }
