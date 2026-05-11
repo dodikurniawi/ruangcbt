@@ -42,6 +42,34 @@ const EMPTY_FORM: QuestionForm = {
 const KATEGORI_OPTIONS = ["Mudah", "Sedang", "Sulit", "Sangat Sulit"];
 const OPTION_KEYS = ["a", "b", "c", "d", "e"] as const;
 
+const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-70b-versatile",
+  "llama-3.1-8b-instant",
+  "mixtral-8x7b-32768",
+];
+
+async function callGroq(apiKey: string, prompt: string): Promise<string> {
+  for (const model of GROQ_MODELS) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_tokens: 1024,
+        }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content ?? "";
+    } catch { continue; }
+  }
+  throw new Error("Semua model Groq gagal. Periksa API key Anda.");
+}
+
 // ─── Toolbar Button ─────────────────────────────────────────────────────────
 function ToolbarBtn({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
   return (
@@ -133,6 +161,15 @@ export default function QuestionBankPage() {
   const [search, setSearch] = useState("");
   const [filterMapel, setFilterMapel] = useState("");
   const [entriesCount, setEntriesCount] = useState(20);
+
+  // ── AI Generate state ──────────────────────────────────────────────────────
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiKelas, setAiKelas] = useState("5");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [wikiImages, setWikiImages] = useState<{ title: string; url: string; thumb: string }[]>([]);
+  const [showWikiPicker, setShowWikiPicker] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_auth") !== "true") router.replace("/admin/login");
@@ -273,6 +310,75 @@ export default function QuestionBankPage() {
     await mutate();
     setDeleteConfirmId(null);
     setIsDeleting(false);
+  };
+
+  const searchWikimedia = async (term: string) => {
+    try {
+      const searchRes = await fetch(
+        `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(term)}&srnamespace=6&format=json&srlimit=6&origin=*`
+      );
+      const searchData = await searchRes.json();
+      const titles: string[] = searchData?.query?.search?.map((s: { title: string }) => s.title) ?? [];
+      if (titles.length === 0) return;
+
+      const infoRes = await fetch(
+        `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join("|"))}&prop=imageinfo&iiprop=url&iiurlwidth=200&format=json&origin=*`
+      );
+      const infoData = await infoRes.json();
+      type WikiPage = { title: string; imageinfo?: Array<{ url: string; thumburl: string }> };
+      const pages = Object.values(infoData?.query?.pages ?? {}) as WikiPage[];
+      const images = pages
+        .filter((p) => p.imageinfo?.[0])
+        .map((p) => ({ title: p.title.replace("File:", ""), url: p.imageinfo![0].url, thumb: p.imageinfo![0].thumburl }));
+
+      setWikiImages(images);
+      if (images.length > 0) setShowWikiPicker(true);
+    } catch { /* silently skip if Wikimedia is unreachable */ }
+  };
+
+  const handleAiGenerate = async () => {
+    const apiKey = localStorage.getItem("groq_api_key") ?? "";
+    if (!apiKey) { setAiError("API key Groq belum diatur. Masukkan di kotak di bawah."); return; }
+    if (!aiTopic.trim()) { setAiError("Isi topik soal terlebih dahulu."); return; }
+
+    setAiGenerating(true);
+    setAiError("");
+    setWikiImages([]);
+    setShowWikiPicker(false);
+
+    const mapelName = mapelList.find(m => m.id_mapel === form.id_mapel)?.nama_mapel ?? "umum";
+    const prompt = `Buat 1 soal pilihan ganda untuk siswa kelas ${aiKelas} Indonesia tentang topik "${aiTopic}" pada mata pelajaran ${mapelName}. Kembalikan HANYA JSON valid tanpa komentar atau teks lain:
+{
+  "pertanyaan": "teks pertanyaan",
+  "opsi_a": "teks opsi A",
+  "opsi_b": "teks opsi B",
+  "opsi_c": "teks opsi C",
+  "opsi_d": "teks opsi D",
+  "kunci_jawaban": "A",
+  "wikipedia_search_term": "english keyword for Wikimedia Commons image search"
+}`;
+
+    try {
+      const raw = await callGroq(apiKey, prompt);
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("AI tidak menghasilkan JSON yang valid.");
+      const parsed = JSON.parse(match[0]);
+      setForm(p => ({
+        ...p,
+        pertanyaan: parsed.pertanyaan ?? p.pertanyaan,
+        opsi_a: parsed.opsi_a ?? "",
+        opsi_b: parsed.opsi_b ?? "",
+        opsi_c: parsed.opsi_c ?? "",
+        opsi_d: parsed.opsi_d ?? "",
+        opsi_e: "",
+        kunci_jawaban: parsed.kunci_jawaban ?? "",
+      }));
+      if (parsed.wikipedia_search_term) await searchWikimedia(parsed.wikipedia_search_term);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Terjadi kesalahan saat generate soal.");
+    } finally {
+      setAiGenerating(false);
+    }
   };
 
   const KATEGORI_COLOR: Record<string, string> = {
@@ -675,6 +781,94 @@ export default function QuestionBankPage() {
                 )}
               </div>
 
+              {/* AI Generate Panel */}
+              <div className="border border-purple-200 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowAiPanel(p => !p)}
+                  className="w-full flex items-center justify-between px-md py-sm bg-gradient-to-r from-purple-50 to-violet-50 hover:from-purple-100 hover:to-violet-100 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-sm">
+                    <span className="text-purple-600 text-base">✨</span>
+                    <span className="font-bold text-sm text-purple-800">Generate dengan AI</span>
+                    <span className="text-[10px] text-purple-500 font-semibold bg-purple-100 px-2 py-0.5 rounded-full">BETA</span>
+                  </div>
+                  <span className="material-symbols-outlined text-purple-400 text-sm">
+                    {showAiPanel ? "expand_less" : "expand_more"}
+                  </span>
+                </button>
+
+                {showAiPanel && (
+                  <div className="px-md py-md bg-purple-50/40 space-y-sm border-t border-purple-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-sm">
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">Topik / Materi</label>
+                        <input
+                          type="text"
+                          placeholder="contoh: Fotosintesis, Pecahan, Proklamasi 1945..."
+                          value={aiTopic}
+                          onChange={e => setAiTopic(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleAiGenerate(); }}
+                          className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm text-slate-800 bg-white focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">Kelas</label>
+                        <select
+                          value={aiKelas}
+                          onChange={e => setAiKelas(e.target.value)}
+                          className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm text-slate-800 bg-white focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none cursor-pointer"
+                        >
+                          {["1","2","3","4","5","6","7","8","9","10","11","12"].map(k => (
+                            <option key={k} value={k}>Kelas {k}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">
+                        Groq API Key{" "}
+                        <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="ml-1 text-purple-500 normal-case font-normal hover:underline">
+                          (dapatkan gratis di console.groq.com)
+                        </a>
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="gsk_..."
+                        defaultValue={typeof window !== "undefined" ? (localStorage.getItem("groq_api_key") ?? "") : ""}
+                        onChange={e => localStorage.setItem("groq_api_key", e.target.value)}
+                        className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm text-slate-800 bg-white focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none font-mono"
+                      />
+                    </div>
+
+                    {aiError && (
+                      <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 font-semibold">
+                        {aiError}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-sm">
+                      <button
+                        type="button"
+                        onClick={handleAiGenerate}
+                        disabled={aiGenerating || !form.id_mapel}
+                        className="flex items-center gap-sm px-md py-sm bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {aiGenerating ? (
+                          <><span className="material-symbols-outlined text-[16px] animate-spin">sync</span>Sedang generate...</>
+                        ) : (
+                          <><span className="text-sm">✨</span>Generate Soal</>
+                        )}
+                      </button>
+                      {!form.id_mapel && (
+                        <p className="text-[10px] text-amber-600 font-semibold">Pilih mata pelajaran dulu.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Row 1: Jenis, Kategori, Bobot */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-md">
                 <div className="lg:col-span-2">
@@ -796,6 +990,36 @@ export default function QuestionBankPage() {
                     >
                       <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
+                  </div>
+                )}
+
+                {/* Wikimedia Image Picker */}
+                {showWikiPicker && wikiImages.length > 0 && (
+                  <div className="mt-md">
+                    <div className="flex items-center justify-between mb-sm">
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-xs">
+                        <span className="text-purple-500">✨</span> Gambar dari Wikimedia Commons
+                      </p>
+                      <button type="button" onClick={() => setShowWikiPicker(false)} className="text-slate-400 hover:text-error cursor-pointer">
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    </div>
+                    <div className="flex gap-sm overflow-x-auto pb-sm">
+                      {wikiImages.map((img) => (
+                        <button
+                          key={img.url}
+                          type="button"
+                          onClick={() => { setForm(p => ({ ...p, gambar_url: img.url })); setShowWikiPicker(false); }}
+                          className="flex-shrink-0 group relative rounded-lg overflow-hidden border-2 border-outline-variant hover:border-purple-400 transition-all"
+                          title={img.title}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.thumb} alt={img.title} className="h-20 w-28 object-cover" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all" />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-xs">Klik gambar untuk menggunakannya. Sumber: Wikimedia Commons (lisensi bebas).</p>
                   </div>
                 )}
               </div>

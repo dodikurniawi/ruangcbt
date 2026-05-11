@@ -136,3 +136,16 @@ export interface MataPelajaran {
     nama_mapel: string;
 }
 
+// CP Registry types
+export type PhaseName = 'fase_A' | 'fase_B' | 'fase_C' | 'fase_D' | 'fase_E' | 'fase_F';
+
+export interface CPElement {
+    elemen: Record<string, string>;
+}
+
+export interface PhaseData {
+    jenjang: string;
+    mapel: Record<string, CPElement>;
+    mata_pelajaran_pilihan?: Record<string, CPElement>;
+}
+
