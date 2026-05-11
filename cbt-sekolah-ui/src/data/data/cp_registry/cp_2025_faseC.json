@@ -1,0 +1,147 @@
+{
+  "fase_C": {
+    "jenjang": "SD Kelas 5-6",
+    "mapel": {
+      "Pendidikan Agama Islam dan Budi Pekerti": {
+        "elemen": {
+          "Al-Qur’an Hadis": "Memahami beberapa surah pendek dan ayat Al-Qur’an serta hadis tentang keragaman.",
+          "Akidah": "Memahami beberapa asmaulhusna, iman kepada hari akhir, qadāʾ dan qadr.",
+          "Akhlak": "Memahami akhlak terhadap Allah Swt. dengan berdoa dan bertawakal kepada-Nya, akhlak terhadap teman, tetangga, non muslim, hewan, dan tumbuhan.",
+          "Fikih": "Memahami puasa sunah, zakat, infak, sedekah, hadiah, makanan dan minuman yang halal dan haram.",
+          "Sejarah Peradaban Islam": "Memahami kisah Nabi Muhammad saw. periode Madinah dan khulafaurasyidin."
+        }
+      },
+      "Pendidikan Agama Kristen dan Budi Pekerti": {
+        "elemen": {
+          "Allah Berkarya": "Memahami Allah Pencipta berkarya melalui keluarga, sekolah, dan masyarakat; Memahami Allah memelihara seluruh umat manusia termasuk mereka yang berkebutuhan khusus; Memahami Allah menyelamatkan manusia melalui Yesus Kristus; Memahami Allah membarui hidup Manusia.",
+          "Manusia dan Nilai-nilai Kristiani": "Memahami bahwa manusia adalah makhluk terbatas; Memahami buah Roh dalam interaksi antarsesama.",
+          "Gereja dan Masyarakat Majemuk": "Memahami pelayanan terhadap sesama sebagai tanggung jawab orang beriman dalam kehidupan; Memahami hidup rukun dan toleransi dalam masyarakat majemuk.",
+          "Alam dan Lingkungan Hidup": "Memahami Allah hadir melalui alam ciptaan; Memahami tanggung jawab orang beriman dalam memelihara alam dan lingkungan hidup."
+        }
+      },
+      "Pendidikan Agama Katolik dan Budi Pekerti": {
+        "elemen": {
+          "Pribadi Murid": "Memahami diri sebagai perempuan atau laki-laki sebagai citra Allah yang sederajat dan saling melengkapi; memahami hak dan kewajiban dirinya sebagai warga negara dan bangga sebagai bangsa Indonesia; memahami diri sebagai warga dunia.",
+          "Yesus Kristus": "Memahami perjuangan tokoh-tokoh kitab suci: Daud sebagai pemimpin yang tangguh; Salomo yang bijaksana, dan Ester perempuan pemberani, serta tokoh Maria dan Elisabet yang setia dan berserah kepada Allah; meneladani Yesus yang taat kepada Allah; mengajarkan pengampunan, memanggil orang berdosa; menderita, wafat, dan bangkit; mengutus Roh Kudus untuk menguatkan para rasul, dan orang yang beriman kepada-Nya; memahami perjuangan Nabi Elia yang menobatkan bangsa Israel; Nabi Amos sebagai pejuang keadilan; dan Nabi Yesaya yang me-nubuat-kan kedatangan Juru Selamat; memahami Yesus yang mewartakan kerajaan Allah dengan perkataan dan perbuatan.",
+          "Gereja": "Mewujudkan iman dalam kehidupan sehari-hari, melibatkan diri dalam kehidupan menggereja, sebagai wujud kehidupan bersama yang dijiwai oleh Roh Kudus; memahami gereja yang satu, kudus, katolik, dan apostolik; persekutuan para kudus; pengampunan dosa, kebangkitan badan dan kehidupan kekal.",
+          "Masyarakat": "Memahami pentingnya terlibat aktif dalam pelestarian lingkungan, bersikap jujur, bertindak menurut hati nurani, menegakkan keadilan dalam hidup sehari-hari sebagai orang beriman kristiani, melakukan dialog antar umat beragama."
+        }
+      },
+      "Pendidikan Agama Hindu dan Budi Pekerti": {
+        "elemen": {
+          "Kitab Suci Weda": "Memahami Weda Sruti dan Weda Smerti.",
+          "Sraddha dan Bhakti": "Memahami Bhuana Agung dan Bhuana Alit.",
+          "Susila": "Memahami ajaran Catur Guru dan Catur Asrama.",
+          "Acara": "Memahami Panca Yadnya dan Manggalaning Yadnya.",
+          "Sejarah Agama Hindu": "Memahami Sejarah Perkembangan Agama Hindu di Indonesia."
+        }
+      },
+      "Pendidikan Agama Buddha dan Budi Pekerti": {
+        "elemen": {
+          "Sejarah": "Meneladani Buddha Sakyamuni dalam menghadapi hambatan untuk meraih kesuksesan; meneladan kehidupan Buddha Sakyamuni dalam menyelesaikan masalah kehidupan individu dan sosial; Murid memahami konsep dasar musyawarah mufakat dalam kehidupan Buddha Sakyamuni.",
+          "Ritual": "Memahami keragaman upacara puja dan meditasi ketenangan dari berbagai aliran atau tradisi Agama Buddha. Murid mengamalkan sikap bersatu dalam perbedaan dengan berperan serta melakukan dialog moderasi beragama.",
+          "Etika": "Mengamalkan nilai-nilai Buddhadharma, Pancasila Buddhis, dan nilai-nilai Pancasila dasar negara berlandaskan pada nilai-nilai Hukum Sebab Akibat yang Saling Bergantungan. Murid memahami hak dan kewajiban, permasalahan dan solusinya di rumah, sekolah, dan rumah ibadah sebagai dasar keyakinan terhadap Agama Buddha, melalui pembelajaran ramah anak serta mencerminkan kehidupan yang moderat."
+        }
+      },
+      "Pendidikan Agama Khonghucu dan Budi Pekerti": {
+        "elemen": {
+          "Sejarah Suci": "Memahami wahyu Tiān (天) yang diterima oleh para nabi dan raja suci, tokoh-tokoh Rújiào (儒教) serta sumbangsih pemikirannya, sejarah perkembangan agama Khonghucu di Indonesia.",
+          "Kitab Suci": "Memahami ayat-ayat dalam kitab Sìshū (四书) dan Wŭjīng (五经) tentang Nabi Kŏngzĭ (孔子) sebagai Tiān Zhī Mùduó (天之木铎), persaudaraan dalam pergaulan, rasa cinta tanah air, empat pantangan sìwù (四勿), dan yang berhubungan dengan konsep sāncái (三才).",
+          "Keimanan": "Memahami bahwa sembahyang adalah pokok dari agama, definisi iman, hukum yīnyáng (阴阳) sebagai dasar hukum alam semesta, konsep Tiga Dasar Kenyataan (sāncái 三才).",
+          "Tata Ibadah": "Memahami hari raya/sembahyang kepada Tiān (天), Nabi Kŏngzĭ (孔子), shénmíng (神明), dan leluhur sebagai wujud kesusilaan (lĭ 礼), perlengkapan dan peralatan sembahyang sehingga menumbuhkan keimanan dan kepribadian luhur.",
+          "Perilaku Jūnzĭ (君子)": "Memahami sikap cinta kasih kepada seluruh makhluk ciptaan Tiān (天), cinta tanah air, hidup tepa salira dan harmonis kepada sesama, bakti kepada Tiāndìrén (天地人), prinsip empat pantangan (sìwù 四勿) dan lima hubungan kemasyarakatan (wŭlún 五伦) dalam keseharian."
+        }
+      },
+      "Pendidikan Pancasila": {
+        "elemen": {
+          "Pancasila": "Memahami kronologi sejarah kelahiran Pancasila; meneladani sikap para perumus Pancasila dan menerapkan di lingkungan masyarakat; menghubungkan sila-sila dalam Pancasila sebagai suatu kesatuan yang utuh; menguraikan makna nilai-nilai Pancasila sebagai dasar negara, dan pandangan hidup bangsa.",
+          "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945": "Mengimplementasikan bentuk-bentuk norma, hak, dan kewajiban dalam kedudukannya sebagai warga negara; mengenal Pembukaan Undang-Undang Dasar Negara Republik Indonesia tahun 1945; mempraktikkan musyawarah untuk membuat kesepakatan dan aturan bersama, serta menerapkannya dalam lingkungan keluarga dan sekolah.",
+          "Bhinneka Tunggal Ika": "Menyajikan hasil identifikasi sikap menghormati, menjaga, dan melestarikan keberagaman budaya sesuai semboyan dalam bingkai Bhinneka Tunggal Ika di lingkungan sekitar.",
+          "Negara Kesatuan Republik Indonesia": "Mengenal wilayahnya dalam konteks kabupaten/kota, dan provinsi sebagai bagian dari wilayah Negara Kesatuan Republik Indonesia; menunjukkan perilaku gotong royong untuk menjaga persatuan di lingkungan sekolah dan sekitar sebagai wujud bela negara."
+        }
+      },
+      "Bahasa Indonesia": {
+        "elemen": {
+          "Menyimak": "Menganalisis informasi dari teks nonsastra berbentuk teks aural (teks yang dibacakan dan/atau didengarkan; dan menganalisis isi teks sastra berbentuk teks aural.",
+          "Membaca dan Memirsa": "Membaca kata-kata dengan berbagai pola kombinasi huruf dengan fasih dari bacaan dan/atau tayangan yang dipirsa; dan menganalisis informasi serta nilai-nilai dalam teks sastra dan nonsastra berwujud teks visual dan/atau audiovisual.",
+          "Berbicara dan Mempresentasikan": "Mempresentasikan gagasan dari berbagai tipe teks dengan efektif dan santun; dan menyampaikan perasaan berdasarkan fakta, imajinasi (dari diri sendiri dan orang lain) secara indah dan menarik dalam bentuk teks sastra dengan penggunaan kosakata secara kreatif.",
+          "Menulis": "Menulis berbagai tipe teks sederhana berdasarkan gagasan, hasil pengamatan, pengalaman, dan/atau imajinasi dengan rangkaian kalimat kompleks secara kreatif, menarik, dan/atau indah; dan menggunakan kaidah kebahasaan dan kosakata baru yang memiliki makna denotatif dan konotatif."
+        }
+      },
+      "Matematika": {
+        "elemen": {
+          "Bilangan": "Menunjukkan pemahaman dan intuisi bilangan (number sense) pada bilangan cacah sampai 1.000.000; membaca, menulis, menentukan nilai tempat, membandingkan, mengurutkan, melakukan komposisi dan dekomposisi bilangan; menyelesaikan masalah yang berkaitan dengan uang; melakukan operasi penjumlahan, pengurangan, perkalian, dan pembagian bilangan cacah sampai 100.000; serta menyelesaikan masalah yang berkaitan dengan KPK dan FPB. Murid dapat membandingkan dan mengurutkan berbagai pecahan termasuk pecahan campuran, melakukan operasi penjumlahan dan pengurangan pecahan, serta melakukan operasi perkalian dan pembagian pecahan dengan bilangan asli; mengubah pecahan menjadi berbagai bentuk pecahan lain, serta membandingkan dan mengurutkan bilangan desimal (satu angka di belakang koma).",
+          "Aljabar": "Menemukan nilai yang belum diketahui dalam kalimat matematika yang melibatkan penjumlahan, pengurangan, perkalian, dan pembagian pada bilangan cacah sampai 1000 dengan menggunakan sifat-sifat bilangan dan operasinya. Murid dapat mengidentifikasi, meniru, dan mengembangkan pola bilangan membesar dan mengecil yang melibatkan perkalian dan pembagian; bernalar secara proporsional untuk menyelesaikan masalah sehari-hari dengan rasio satuan; menggunakan operasi perkalian dan pembagian dalam menyelesaikan masalah sehari- hari yang terkait dengan proporsi.",
+          "Pengukuran": "Menentukan keliling dan luas berbagai bentuk bangun datar (segitiga, segiempat, dan segi banyak) serta gabungannya; menghitung durasi waktu dan mengukur besar sudut pada bangun datar atau yang dibentuk dari dua garis berpotongan.",
+          "Geometri": "Mengkonstruksi dan mengurai bangun ruang (kubus, balok, dan gabungannya) dan mengenali visualisasi spasial (bagian depan, atas, dan samping); membandingkan karakteristik antar bangun datar dan antar bangun ruang; serta menentukan lokasi pada peta yang menggunakan sistem berpetak.",
+          "Analisis Data dan Peluang": "Mengurutkan, membandingkan, menyajikan, dan menganalisis data banyak benda dan data hasil pengukuran dalam bentuk gambar, piktogram, diagram batang, dan tabel frekuensi untuk mendapatkan informasi; menentukan kejadian dengan kemungkinan yang lebih besar atau lebih kecil dalam suatu percobaan acak."
+        }
+      },
+      "Bahasa Inggris": {
+        "elemen": {
+          "Menyimak - Berbicara (Listening - Speaking)": "Memahami alur informasi teks secara keseluruhan dan merespon teks lisan atau teks multimodal sederhana tentang topik sehari-hari secara lisan dengan kalimat pendek dan sederhana sesuai konteks.",
+          "Membaca - Memirsa (Reading - Viewing)": "Memahami alur informasi secara keseluruhan, gagasan utama dan informasi rinci dari beragam teks pendek atau teks multimodal tentang topik sehari-hari dan meresponnya sesuai konteks.",
+          "Menulis - Mempresentasikan (Writing - Presenting)": "Mengomunikasikan ide dan pengalamannya melalui berbagai jenis teks tulis sederhana atau teks multimodal tentang topik sehari-hari sesuai konteks."
+        }
+      },
+      "Ilmu Pengetahuan Alam dan Sosial (IPAS)": {
+        "elemen": {
+          "Pemahaman IPAS": "Merefleksikan sistem organ tubuh manusia yang dikaitkan dengan cara menjaga kesehatan tubuhnya; menganalisis hubungan antar komponen biotik dan abiotik, serta pengaruhnya terhadap ekosistem; menjelaskan fenomena gelombang bunyi dan cahaya dalam kehidupan sehari-hari; menghasilkan upaya penghematan energi, serta pemanfaatan sumber energi alternatif dari sumber daya yang ada di sekitarnya sebagai upaya mitigasi perubahan iklim; menjelaskan sistem tata surya, serta kaitannya dengan rotasi dan revolusi bumi; menjelaskan letak dan kondisi geografis negara Indonesia dengan menggunakan peta konvensional/digital; meninjau sejarah perjuangan para pahlawan di lingkungan sekitar tempat tinggalnya; menemukan keragaman budaya nasional dalam konteks kebhinekaan berdasarkan pemahaman terhadap nilai-nilai kearifan lokal yang berlaku di wilayah tempat tinggal; serta menerapkan kegiatan ekonomi masyarakat di lingkungan sekitar.",
+          "Keterampilan Proses": "Mampu menerapkan keterampilan proses yang meliputi: Mengamati (Murid mengamati fenomena dan peristiwa secara sederhana, mencatat hasil pengamatannya, serta mencari persamaan dan perbedaannya); Mempertanyakan dan Memprediksi (Dengan panduan pendidik, murid mengidentifikasi pertanyaan yang dapat diselidiki secara ilmiah dan membuat prediksinya); Merencanakan dan Melakukan Penyelidikan (Secara mandiri, murid merencanakan dan melakukan langkah-langkah operasional untuk menjawab pertanyaan yang diajukan. Murid melakukan observasi menggunakan alat bantu pengukuran sederhana); Memproses serta Menganalisis Data dan Informasi (Murid mengolah data dalam bentuk tabel dan grafik, serta menjelaskan hasil pengamatan dan pola atau hubungan pada data. Murid membandingkan data dengan prediksi dan memberikan alasan berdasarkan bukti); Mengevaluasi dan Refleksi (Melakukan refleksi dan memberikan saran perbaikan terhadap penyelidikan yang sudah dilakukan); Mengomunikasikan Hasil (Murid mengomunikasikan hasil penyelidikan secara utuh yang ditunjang dengan argumen dalam berbagai media)."
+        }
+      },
+      "Pendidikan Jasmani Olahraga dan Kesehatan": {
+        "elemen": {
+          "Terampil Bergerak": "Menyesuaikan keterampilan gerak melintasi berbagai situasi gerak; mentransfer strategi gerak yang sudah dikuasai ke dalam berbagai situasi gerak yang berbeda; dan menginvestigasi berbagai konsep gerak yang dapat diterapkan untuk meningkatkan capaian keterampilan gerak.",
+          "Belajar Melalui Gerak": "Menguji efektivitas penerapan strategi gerak dalam berbagai situasi gerak; merancang peraturan alternatif dan modifikasi permainan untuk mendukung fair play dan partisipasi inklusif; dan menjalankan berbagai peran untuk mencapai keberhasilan kelompok atau tim di dalam berbagai aktivitas jasmani.",
+          "Bergaya Hidup Aktif": "Berpartisipasi dalam aktivitas jasmani dan menjelaskan pengaruh aktivitas jasmani yang teratur terhadap kesehatan; mengidentifikasi rekomendasi aktivitas jasmani serta pencegahan perilaku sedenter.",
+          "Memilih Hidup yang Menyehatkan": "Mengidentifikasi dan menghubungkan antara gaya hidup, risiko kesehatan, dan aktivitas pencegahannya sesuai rekomendasi otoritas kesehatan; menjelaskan pola makan sehat untuk menunjang aktivitas jasmani berdasarkan informasi kandungan gizi pada makanan; dan mempraktikkan penanganan cedera sedang sesuai pemahaman tentang prinsip pertolongan pertama."
+        }
+      },
+      "Seni Musik": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Mengenali dan menerapkan unsur-unsur musik (nada, irama dan melodi) menggunakan alat musik ritmis dan melodis serta menunjukkan tingkat kepekaan akan unsur-unsur musik dengan menggunakan alat musik ritmis dan melodis.",
+          "Merefleksikan (Reflecting)": "Melakukan umpan balik mengenai karya dan kemampuan bermusik diri sendiri atau orang lain menggunakan istilah musik yang tepat.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Mengeksplorasi variasi pola irama, tempo dan melodi dengan alat musik ritmis dan melodis menggunakan notasi musik dan teknik dasar yang telah dipelajari; menemukan alternatif untuk menghasilkan bunyi musik sederhana melalui eksplorasi material yang tersedia di lingkungan sekitar dan menerapkan cara memainkan dan merawat alat musik dengan teknik yang tepat sesuai dengan spesifikasi bahan alat musik.",
+          "Menciptakan (Creating)": "Membuat dan mengembangkan pola irama menggunakan anggota tubuh atau alat musik ritmis yang tersedia berdasarkan nilai kearifan lokal daerahnya.",
+          "Berdampak (Impacting)": "Menunjukkan minat dan rasa ingin tahu dalam kegiatan bermusik."
+        }
+      },
+      "Seni Rupa": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Menjelaskan unsur rupa dan prinsip desain dalam benda-benda di sekitar/karya seni rupa.",
+          "Merefleksikan (Reflecting)": "Merefleksikan dan mengapresiasi karya diri sendiri dan teman sekelas menggunakan kosa kata seni rupa yang sesuai.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Mengenali dan menguji coba variasi teknik penggunaan alat dan/atau bahan.",
+          "Menciptakan (Making/Creating)": "Membuat karya seni rupa berdasarkan pengalaman dan/atau hasil pengamatan terhadap lingkungan sekitar melalui pengembangan imajinasi.",
+          "Berdampak (Impacting)": "Menghasilkan karya seni rupa yang mewakili minatnya."
+        }
+      },
+      "Seni Tari": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Mengamati berbagai bentuk tari tradisi yang dapat digunakan untuk mengekspresikan diri melalui unsur pendukung tari.",
+          "Merefleksikan (Reflecting)": "Mengidentifikasi unsur pendukung tari dalam tari tradisi serta menghargai hasil pencapaian diri dengan mempertimbangkan pendapat orang lain.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Meragakan hasil rangkaian gerak tari menggunakan unsur pendukung tari dengan menunjukan kerja sama dan berperan aktif dalam kelompok.",
+          "Menciptakan (Creating)": "Merangkai gerak tari yang berpijak pada tradisi/ kreasi dengan menerapkan desain kelompok.",
+          "Berdampak (Impacting)": "Menanggapi kejadian-kejadian di lingkungan sekitar melalui tari yang disajikan kepada penonton atau masyarakat sekitar."
+        }
+      },
+      "Seni Teater": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Melakukan permainan peran berkelompok, seperti improvisasi untuk melatih aksi dan reaksi dalam mengelaborasi cerita atau tokoh dan melakukan pengenalan karakter melalui pengamatan kebiasaan tokoh yang diperankan.",
+          "Merefleksikan (Reflection)": "Menceritakan pendapatnya tentang sebuah cerita sederhana (penokohan, perwatakan).",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Mengidentifikasi properti sederhana berdasarkan cerita yang akan dimainkan.",
+          "Menciptakan (Creating)": "Mengenal dan memainkan ragam peran dari cerita sederhana berdasarkan hasil pengamatan.",
+          "Berdampak (Impacting)": "Memerankan lakon secara individu maupun berkelompok berdasarkan minat, pengamatan, dan pengalaman."
+        }
+      },
+      "Koding dan Kecerdasan Artifisial": {
+        "elemen": {
+          "Berpikir Komputasional": "Memahami permasalahan sederhana dalam kehidupan sehari-hari, menerapkan pemecahan masalah secara sistematis, serta menuliskan instruksi logis dan terstruktur menggunakan sekumpulan kosakata atau simbol.",
+          "Literasi Digital": "Memahami konsep dasar, manfaat, dan dampak teknologi digital, memahami sistem komputer tingkat pradasar, menerapkan pengamanan informasi pribadi dalam komunikasi daring, memanfaatkan internet, dan memproduksi serta mendiseminasi konten digital dalam bentuk teks dan gambar.",
+          "Literasi dan Etika Kecerdasan Artifisial": "Memahami konsep KA sederhana, manfaat dan dampak KA pada kehidupan sehari-hari, prinsip bahwa KA dikembangkan untuk meningkatkan kesejahteraan manusia dan tidak boleh merugikan manusia, mengetahui perbedaan manusia dan komputer dalam melakukan penginderaan, dan mengetahui perbedaan antara mesin cerdas dan mesin non-cerdas. Memahami etika dasar penggunaan KA seperti empati dan tidak menyakiti orang lain.",
+          "Pemanfaatan dan Pengembangan Kecerdasan Artifisial": "Menyimulasikan secara sederhana kerja KA saat mengenali pola, mengklasifikasi benda konkret berdasarkan sifatnya, dan mengetahui bagaimana prediksi sistem KA dipengaruhi input benda konkret."
+        }
+      }
+    }
+  }
+}

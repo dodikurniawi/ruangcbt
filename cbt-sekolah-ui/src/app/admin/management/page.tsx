@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig } from "@/lib/api";
-import type { User } from "@/types";
+import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig } from "@/lib/api";
+import type { User, MataPelajaran } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
   const map = {
@@ -72,9 +72,11 @@ export default function AdminManagement() {
 
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR("getUsers", getUsers, { refreshInterval: 10000 });
   const { data: configRes } = useSWR("getConfig", getConfig);
+  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
+  const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
   const classes = Array.from(new Set(users.map((u) => u.kelas))).filter(Boolean);
 
   const filtered = users.filter((u) => {
@@ -149,12 +151,14 @@ export default function AdminManagement() {
     const exam_pin = (fd.get("exam_pin") as string) || "";
     const admin_password = (fd.get("admin_password") as string) || "";
     const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
+    const exam_mapel = (fd.get("exam_mapel") as string) || "";
 
     setIsSavingConfig(true);
     const tasks: Promise<unknown>[] = [
       updateConfig("exam_name", exam_name),
       updateConfig("exam_duration", exam_duration),
       updateConfig("admin_wa", admin_wa),
+      updateConfig("exam_mapel", exam_mapel),
     ];
     if (exam_pin) tasks.push(updateConfig("exam_pin", exam_pin));
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
@@ -511,6 +515,22 @@ export default function AdminManagement() {
                   defaultValue={config?.exam_name ?? ""}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all"
                 />
+              </div>
+              <div>
+                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">
+                  Mata Pelajaran yang Diujikan
+                </label>
+                <select
+                  name="exam_mapel"
+                  defaultValue={config?.exam_mapel ?? ""}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all bg-white"
+                >
+                  <option value="">— Semua Mapel (tidak difilter) —</option>
+                  {mapelList.map((m) => (
+                    <option key={m.id_mapel} value={m.id_mapel}>{m.nama_mapel}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">Pilih mapel agar soal yang tampil ke siswa hanya soal mapel tersebut.</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

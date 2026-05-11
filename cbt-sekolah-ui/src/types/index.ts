@@ -14,6 +14,7 @@ export interface ExamConfig {
     exam_pin?: string;
     exam_status?: 'OPEN' | 'CLOSED';
     admin_wa?: string;  // nomor WA admin sekolah, misal "628123456789"
+    exam_mapel?: string; // id_mapel yang diujikan, kosong = semua mapel
 }
 
 // User types

@@ -1,0 +1,192 @@
+{
+  "fase_E": {
+    "jenjang": "Kelas 10 SMA/SMK",
+    "mapel": {
+      "Pendidikan Agama Islam dan Budi Pekerti": {
+        "elemen": {
+          "Al-Qur’an Hadis": "Memahami ayat Al-Qur’an dan hadis tentang perintah berlomba-lomba dalam kebaikan, larangan pergaulan bebas, dan zina.",
+          "Akidah": "Memahami beberapa cabang iman (syu‘ab al-īmān).",
+          "Akhlak": "Memahami manfaat menghindari penyakit hati.",
+          "Fikih": "Memahami sumber hukum Islam dan pentingnya menjaga lima prinsip dasar hukum Islam (al-kulliyāt al-khamsah).",
+          "Sejarah Peradaban Islam": "Memahami sejarah masuknya Islam ke Indonesia dan peran tokoh ulama dalam penyebarannya."
+        }
+      },
+      "Pendidikan Agama Kristen dan Budi Pekerti": {
+        "elemen": {
+          "Allah Berkarya": "Memahami manusia diberi kemampuan untuk mengembangkan rasio dan kepekaan hati nurani; memahami bentuk-bentuk pemeliharaan Allah dalam setiap situasi kehidupan; memahami karya penyelamatan Allah melalui peran keluarga dan orang tua sebagai pendidik pertama dan utama; memahami bahwa Roh Kudus membarui dan memulihkan kehidupan keluarga.",
+          "Manusia dan Nilai-Nilai Kristiani": "Memahami peran dirinya sebagai remaja Kristen mengacu pada teks Alkitab dan tokoh-tokoh inspiratif; memahami prinsip kesetiaan, kasih dan keadilan dalam kehidupan sosial yang lebih luas.",
+          "Gereja dan Masyarakat Majemuk": "Memahami peran gereja dalam mewujudkan solidaritas dan kebersamaan dalam hubungan antarumat beragama dan internal umat beragama terkait dengan isu ras, etnis, serta gender di dalam masyarakat; memahami peran keluarga dan sekolah sebagai lembaga pendidikan yang mendidik kemajemukan.",
+          "Alam dan Lingkungan Hidup": "Memahami berbagai fakta kerusakan alam dan perubahan iklim serta pemanasan global yang mengancam hidup manusia dan alam; memahami berbagai bentuk pencegahan dan pelestarian alam demi keberlanjutan hidup manusia dan alam."
+        }
+      },
+      "Pendidikan Agama Katolik dan Budi Pekerti": {
+        "elemen": {
+          "Pribadi Murid": "Memahami dirinya sebagai pribadi yang unik, kesetaraan antara laki-laki dan perempuan, memiliki keutuhan martabat sebagai citra Allah; memahami suara hati, mampu bersikap kritis dan bertanggung jawab terhadap pengaruh media massa, media sosial, ideologi, dan gaya hidup saat ini.",
+          "Yesus Kristus": "Memahami Yesus sebagai Putra Allah dan Juru Selamat yang mewartakan kerajaan Allah, mengalami sengsara, wafat, bangkit, dan naik ke surga; memahami Tri Tunggal Maha Kudus, peran Roh Kudus; menjadikan Yesus sebagai idola dan sahabat sejati.",
+          "Gereja": "Memahami kitab suci, tradisi suci dan magisterium sebagai sumber ajaran kristiani.",
+          "Masyarakat": "Memahami hidup berpola pada pribadi Yesus Kristus dalam mewujudkan imannya di tengah masyarakat."
+        }
+      },
+      "Pendidikan Agama Hindu dan Budi Pekerti": {
+        "elemen": {
+          "Kitab Suci Weda": "Memahami Dharmasastra.",
+          "Sraddha dan Bhakti": "Memahami Karmaphala dan Punarbhawa.",
+          "Susila": "Memahami ajaran Catur Warna.",
+          "Acara": "Memahami Yadnya dan Ramayana dan Mahabhrata.",
+          "Sejarah Agama Hindu": "Memahami Corak Keagamaan Hindu di dunia."
+        }
+      },
+      "Pendidikan Agama Buddha dan Budi Pekerti": {
+        "elemen": {
+          "Sejarah": "Memahami penyiaran Agama Buddha, meneladan perjuangan pelaku sejarah Agama Buddha masa kini.",
+          "Ritual": "Memahami meditasi ketenangan batin dengan keyakinan.",
+          "Etika": "Memahami nilai-nilai moderasi beragama berdasarkan Buddhadharma sebagai dasar dalam memaknai fenomena dan masalah kehidupan; Murid memahami ilmu pengetahuan dan teknologi berdasarkan nilai-nilai agama Buddha; Murid memahami nilai-nilai Hukum Kebenaran Mutlak melalui pembelajaran ramah anak serta mencerminkan kehidupan yang moderat."
+        }
+      },
+      "Pendidikan Agama Khonghucu dan Budi Pekerti": {
+        "elemen": {
+          "Sejarah Suci": "Memahami karya dan nilai keteladanan para nabi, raja suci dan tokoh Khonghucu, kisah hidup murid Nabi Kŏngzĭ (孔子).",
+          "Kitab Suci": "Memahami fase perkembangan kitab-kitab suci agama Khonghucu dan bagian-bagian Kitab Wŭjīng (五经).",
+          "Keimanan": "Memahami kebesaran jalan suci Tiān (Tiāndào 天道), kekuasaan hukum suci Tiān (Tiānlĭ 天理), makna diturunkannya wahyu Tiān (天) dalam agama Khonghucu, konsep dasar dan prinsip yīnyáng (阴阳).",
+          "Tata Ibadah": "Memahami hakikat dan makna ibadah persembahyangan kepada Tiān (天).",
+          "Perilaku Jūnzĭ (君子)": "Memahami hakikat dan sifat dasar manusia, serta sikap moderasi beragama."
+        }
+      },
+      "Pendidikan Pancasila": {
+        "elemen": {
+          "Pancasila": "Menganalisis cara pandang para perumus Pancasila tentang dasar negara; menganalisis kedudukan Pancasila sebagai dasar negara, pandangan hidup bangsa, dan ideologi negara.",
+          "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945": "Menerapkan perilaku taat hukum berdasarkan peraturan yang berlaku untuk mewujudkan harmoni dengan sesama manusia dan lingkungan; menganalisis tata urutan peraturan perundang - undangan di Indonesia; menganalisis makna kedudukan Pancasila sebagai sumber dari segala sumber hukum negara.",
+          "Bhinneka Tunggal Ika": "Menyajikan makna semboyan Bhinneka Tunggal Ika sebagai modal sosial; dan memahami prinsip gotong royong sebagai perwujudan sistem ekonomi Pancasila yang inklusif dan berkeadilan.",
+          "Negara Kesatuan Republik Indonesia": "Memahami peran dan kedudukannya sebagai warga Negara Indonesia; memahami sistem pertahanan dan keamanan negara; menganalisis peran Indonesia dalam hubungan antarnegara; serta memahami nilai-nilai Pancasila dalam konteks pembangunan nasional."
+        }
+      },
+      "Bahasa Indonesia": {
+        "elemen": {
+          "Menyimak": "Mengevaluasi gagasan, pandangan, arahan, dan/atau pesan dari teks nonsastra berbentuk teks aural (teks yang dibacakan dan/atau didengarkan); dan mengevaluasi unsur intrinsik dan ekstrinsik teks sastra berbentuk teks aural.",
+          "Membaca dan Memirsa": "Mengevaluasi informasi berupa gagasan, pandangan, arahan, dan/atau pesan dari berbagai tipe teks berwujud visual dan/atau audiovisual untuk menemukan makna yang tersurat dan tersirat; menginterpretasi informasi untuk mengungkapkan gagasan dan perasaan (simpati, peduli, dan empati) dari berbagai tipe teks berwujud teks visual dan/atau audiovisual secara kreatif; mengevaluasi kualitas dan/atau kredibilitas dari berbagai tipe teks berwujud teks visual dan/atau audiovisual menggunakan sumber informasi lain; dan membandingkan isi teks.",
+          "Berbicara dan Mempresentasikan": "Mempresentasikan gagasan, pandangan, arahan, dan/atau pesan berbagai tipe teks berbentuk monolog, dialog, dan/atau gelar wicara secara sistematis, kritis, dan/atau kreatif; dan mengungkapkan kepedulian dari berbagai tipe teks dan/atau teks multimodal secara kreatif.",
+          "Menulis": "Menulis gagasan, pandangan, arahan, pesan, dan/atau imajinasi dalam berbagai tipe teks secara logis, kritis, dan kreatif; dan memublikasikan hasil karya di media cetak, elektronik, dan/atau digital."
+        }
+      },
+      "Matematika": {
+        "elemen": {
+          "Bilangan": "Menggeneralisasi sifat-sifat bilangan berpangkat (termasuk bilangan pangkat pecahan), dan menggunakannya untuk menyelesaikan masalah.",
+          "Aljabar dan Fungsi": "Menyelesaikan masalah yang berkaitan dengan sistem pertidaksamaan linear dua variabel; menyelesaikan masalah yang berkaitan dengan persamaan dan fungsi kuadrat (termasuk akar imajiner), serta persamaan eksponensial (berbasis/ bilangan pokok sama) dan fungsi eksponensial.",
+          "Geometri": "Mengaplikasikan perbandingan trigonometri (sinus, cosinus, tangen) dari sudut lancip.",
+          "Analisis Data dan Peluang": "Merepresentasikan dan menginterpretasi data dengan cara menentukan jangkauan kuartil dan interkuartil; membuat dan menginterpretasi diagram box plot dan menggunakannya untuk membandingkan himpunan data; menentukan dan menggunakan dari box plot, histogram dan dot plot sesuai dengan natur (karakteristik) data dan kebutuhan; menggunakan diagram pencar untuk menyelidiki dan menjelaskan hubungan antara dua variabel numerik/kuantitatif (termasuk salah satunya variabel bebas berupa waktu); serta mengevaluasi laporan statistika di media berdasarkan tampilan, statistika dan representasi data, termasuk yang disajikan dalam bentuk matriks."
+        }
+      },
+      "Ilmu Pengetahuan Alam (IPA)": {
+        "elemen": {
+          "Pemahaman IPA": "Menerapkan prinsip klasifikasi dan strategi pelestarian keanekaragaman hayati; mendeskripsikan peranan virus, bakteri, dan jamur dalam kehidupan; menganalisis interaksi antar komponen ekosistem dan pengaruhnya terhadap keseimbangan ekosistem; menggunakan sistem pengukuran dalam kerja ilmiah; menganalisis gerak dua dimensi; menganalisis pemanfaatan energi alternatif untuk mengatasi permasalahan ketersediaan energi; menganalisis partikel penyusun materi dan menerapkan konsep stoikiometri dalam berbagai aspek kuantitatif reaksi kimia; dan menerapkan konsep IPA untuk mengatasi permasalahan berkaitan dengan perubahan iklim.",
+          "Keterampilan Proses": "Mampu menerapkan keterampilan proses yang meliputi: Mengamati (Melakukan pengamatan terhadap fenomena dan peristiwa di sekitarnya dan mencatat hasil pengamatannya dengan memperhatikan karakteristik objek yang diamati); Mempertanyakan dan Memprediksi (Mengidentifikasi pertanyaan yang dapat diselidiki secara ilmiah dan membuat prediksinya); Merencanakan dan Melakukan Penyelidikan (Merencanakan dan melakukan langkah-langkah operasional untuk menjawab pertanyaan; Murid menggunakan alat bantu pengukuran untuk mendapatkan data yang akurat dan memahami adanya potensi kekeliruan dalam penyelidikan); Memproses, Menganalisis Data dan Informasi (Mengolah data dalam bentuk tabel, grafik, dan model serta menjelaskan hasil pengamatan dan pola atau hubungan pada data; Murid mengumpulkan data dari penyelidikan yang dilakukannya, serta menggunakan pemahaman sains untuk mengidentifikasi hubungan dan menarik kesimpulan berdasarkan bukti); Mengevaluasi dan Refleksi (Mengidentifikasi sumber ketidakpastian dan kemungkinan penjelasan alternatif dalam rangka mengevaluasi kesimpulan, serta menjelaskan cara spesifik untuk meningkatkan kualitas data); Mengomunikasikan Hasil (Mengomunikasikan hasil penyelidikan secara sistematis dan utuh yang ditunjang dengan argumen dan bahasa yang sesuai konteks penyelidikan)."
+        }
+      },
+      "Ilmu Pengetahuan Sosial (IPS)": {
+        "elemen": {
+          "Pemahaman Konsep": "Menjelaskan konsep dasar geografi, fenomena geografi fisik melalui litosfer, atmosfer, dan hidrosfer sebagai ruang hidup, serta mengimplementasikan teknologi geospasial berupa peta, penginderaan jauh dan Sistem Informasi Geografis (SIG); menelaah hakikat ilmu ekonomi sebagai ilmu yang mempelajari upaya manusia dalam memenuhi kebutuhan hidupnya; membedakan produk keuangan bank dan nonbank sebagai dasar dalam menggunakan produk dan layanan, risiko keuangan dan menyusun laporan keuangan pribadi; menjelaskan fungsi sosiologi sebagai ilmu yang secara kritis, analitis, kreatif, dan solutif mengkaji masyarakat; menelaah status dan peran individu dalam kelompok sosial dan memberikan contoh berbagai ragam gejala sosial yang ada di dalam masyarakat; menganalisis keragaman manusia dan budayanya sebagai bagian dari masyarakat multikultural; dan menelaah konsep dasar ilmu sejarah dan mengimplementasikan penelitian sejarah untuk merefleksikan keterhubungan antara masa lampau, masa kini, dan masa yang akan datang melalui berbagai peristiwa atau kejadian penting dalam lingkup lokal, nasional dan global mulai dari masa kerajaan Hindu-Buddha hingga masa kerajaan Islam.",
+          "Keterampilan Proses": "Mengamati fenomena kehidupan manusia dalam dimensi ruang dan waktu secara sistematis serta menemukan persamaan dan perbedaannya dan potensinya; membuat pertanyaan secara mandiri untuk menggali informasi tentang fenomena kehidupan manusia dalam dimensi ruang dan waktu secara sistematis; mengumpulkan informasi dari sumber primer dan/atau sekunder, melakukan observasi, dan mendokumentasikannya; menarik simpulan berdasarkan dari informasi yang diperoleh dari sumber primer dan/atau sekunder, hasil observasi dan hasil dokumentasi; mengomunikasikan hasil analisis informasi yang diperoleh dari sumber primer dan/atau sekunder, data hasil observasi, dan hasil dokumentasi dalam bentuk media digital dan/atau non digital; dan merefleksikan hasil analisis informasi yang diperoleh dari sumber primer dan/atau sekunder, hasil observasi, dan hasil dokumentasi serta menyusun rencana tindak lanjut."
+        }
+      },
+      "Bahasa Inggris": {
+        "elemen": {
+          "Menyimak - Berbicara (Listening - Speaking)": "Memahami alur informasi secara keseluruhan, gagasan utama dan detail dalam teks lisan fiksi dan non fiksi mengenai berbagai macam topik yang relevan dengan topik sehari-hari atau isu terkini; menggunakan bahasa Inggris untuk mengungkapkan pendapat dan mempertahankan argumen tentang topik yang dibahas.",
+          "Membaca - Memirsa (Reading - Viewing)": "Memahami alur informasi secara keseluruhan, menganalisis dan menyimpulkan informasi tersurat dan tersirat dari berbagai jenis teks fiksi dan non fiksi tertulis atau teks multimodal tentang topik sehari-hari atau isu terkini.",
+          "Menulis - Mempresentasikan (Writing - Presenting)": "Mengomunikasikan gagasan dan pengalaman mereka secara tertulis atau multimodal dalam berbagai jenis fiksi dan nonfiksi dengan menggunakan berbagai media presentasi (cetak atau digital) untuk mencapai tujuan tertentu dengan struktur teks dan unsur kebahasaan yang tepat; mengungkapkan pendapat dan mempertahankan argumen tentang topik sehari-hari atau isu terkini."
+        }
+      },
+      "Informatika": {
+        "elemen": {
+          "Berpikir Komputasional": "Memahami konsep struktur data dan algoritma standar; menerapkan proses komputasi yang dilakukan manusia secara mandiri atau berkelompok untuk mendapatkan data yang berkualitas; menerapkan algoritma dan struktur data standar untuk menghasilkan berbagai solusi dalam menyelesaikan persoalan; menuliskan solusi rancangan program sederhana dalam format pseudocode yang dekat dengan bahasa komputer; memahami model dan menyimulasikan dinamika Input-Process-Output dalam sebuah komputer Von Neumann, serta memahami peran sistem operasi.",
+          "Literasi Digital": "Memahami penggunaan mesin pencari dengan variabel yang lebih banyak; mengetahui ekosistem periksa fakta untuk memilah fakta dan bukan; menggunakan cara membaca lateral untuk mengevaluasi berbagai informasi digital; memahami pemanfaatan perangkat teknologi yang lebih beragam untuk pengolah dokumen, lembar kerja, dan presentasi; memahami konsep dan penerapan serta konfigurasi keamanan dasar untuk konektivitas jaringan data lokal dan internet baik kabel maupun nirkabel; memahami pemanfaatan media digital untuk produksi dan diseminasi konten, partisipasi dan kolaborasi; menghargai hak atas kekayaan intelektual, mengenal profesi bidang Informatika, memahami penerapan digitalisasi budaya Indonesia, menyaring konten negatif di dunia digital; menerapkan pengelolaan kata sandi dengan manajer kata sandi, dan menerapkan autentikasi dua langkah secara sederhana, serta menerapkan konfigurasi privasi dan keamanan pada akun platform digital."
+        }
+      },
+      "Pendidikan Jasmani Olahraga dan Kesehatan": {
+        "elemen": {
+          "Terampil Bergerak": "Menerapkan keterampilan gerak spesifik di dalam berbagai situasi gerak yang menantang; mengembangkan strategi gerak untuk mendapatkan keberhasilan capaian keterampilan gerak melintasi berbagai situasi gerak yang menantang.",
+          "Belajar Melalui Gerak": "Merefleksikan transfer strategi gerak yang telah dikuasai dalam situasi gerak yang berbeda; memperagakan fair play dan mengevaluasi pengaruh perilaku etis terhadap capaian aktivitas jasmani bagi individu dan kelompok; serta menerapkan strategi pengambilan keputusan dalam kerja tim yang mempertunjukkan keterampilan kepemimpinan dan kolaborasi.",
+          "Bergaya Hidup Aktif": "Berpartisipasi dalam aktivitas kebugaran dan menginvestigasi dampak partisipasi yang teratur terhadap kesehatan; merancang strategi peningkatan aktivitas kebugaran untuk kesehatan.",
+          "Memilih Hidup yang Menyehatkan": "Mengevaluasi risiko kesehatan akibat gaya hidup dan tindakan pencegahan melalui aktivitas jasmani serta mempromosikannya menggunakan berbagai media; mengevaluasi pola makan sehat berdasarkan analisis kandungan gizi sesuai kebutuhan aktivitas jasmani. Murid mempraktikkan pertolongan pertama."
+        }
+      },
+      "Seni Musik": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Mengidentifikasi dan menjelaskan unsur-unsur musik berupa nada, irama, melodi, harmoni, timbre, tempo, dan dinamika menggunakan alat musik dengan teknologi yang sesuai dengan kondisi setempat, serta menganalisis musik dari berbagai genre, era, dan instrumen yang digunakan.",
+          "Merefleksikan (Reflecting)": "Menjelaskan hasil analisis kemampuan bermain musik dan karya musik diri sendiri atau orang lain, sesuai dengan teknik dan genre menggunakan istilah musik yang tepat.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Menjalani proses praktik musik dengan penuh kesadaran untuk perbaikan dan perkembangan keterampilan bermusik; menyajikan musik nusantara dengan penuh ekspresi; dan menyajikan karya-karya musik modern Indonesia dengan interpretasi dan ekspresi yang tepat, baik secara individu maupun berkelompok.",
+          "Menciptakan (Creating)": "Menciptakan, menyajikan dan mendokumentasikan karya musik kreasi sendiri untuk mengekspresikan pengalaman pribadi maupun persoalan di masyarakat.",
+          "Berdampak (Impacting)": "Menerapkan dampak positif dari kegiatan bermusik dalam perilaku di kehidupan sehari-hari."
+        }
+      },
+      "Seni Rupa": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Mengeksplorasi unsur rupa dan prinsip desain dalam benda-benda di sekitar/karya seni rupa.",
+          "Merefleksikan (Reflecting)": "Merefleksikan penggunaan unsur rupa, prinsip desain, dan fungsi dalam karya diri sendiri dan teman sekelas menggunakan kosa kata seni rupa yang sesuai.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Mengeksplorasi alternatif/potensi alat dan bahan yang ada di lingkungan sekitar dan menghubungkan seni dengan kelompok atau bidang keilmuan lain dalam berkarya seni rupa.",
+          "Menciptakan (Making/Creating)": "Membuat karya seni rupa berdasarkan pengalaman dan/atau hasil pengamatan terhadap lingkungan sekitar, dengan mempertimbangkan fungsi, menggunakan gaya atau teknik yang dipilih.",
+          "Berdampak (Impacting)": "Menghasilkan karya seni rupa untuk mengajak orang lain, merespon pengalaman sehari-hari, dan mengekspresikan perasaan atau minat."
+        }
+      },
+      "Seni Tari": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Menginterpretasi makna dan simbol pada tari tradisi/tari kreasi dalam bentuk karya seni pertunjukan.",
+          "Merefleksikan (Reflecting)": "Membandingkan makna dan simbol dengan mengapresiasi tari tradisi/tari kreasi.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Merancang karya tari tradisi/tari kreasi secara individu maupun berkelompok.",
+          "Menciptakan (Creating)": "Menata gerak tari berdasarkan makna dan simbol dari tari tradisi/tari kreasi dalam bentuk karya seni pertunjukan.",
+          "Berdampak (Impacting)": "Mengaktualisasikan diri melalui pertunjukan tari."
+        }
+      },
+      "Seni Teater": {
+        "elemen": {
+          "Mengalami (Experiencing)": "Menginterpretasi dialog atau naskah dengan ragam teater bergenre propaganda, serta tokoh dan perwatakannya berdasar analisis karakteristik dan sosiologis untuk menunjang pesan/isu cerita secara realis.",
+          "Merefleksikan (Reflection)": "Mengapresiasi dan memberikan umpan balik mengenai pesan, kualitas akting, tata artistik, teknologi, dan elaborasi genre pada suatu karya, dengan menggunakan kosakata seni teater yang tepat dan argumentasi berdasarkan teori yang dipelajari.",
+          "Berpikir dan Bekerja Artistik (Thinking and Working Artistically)": "Mengeksplorasi berbagai peran dan tata artistik panggung yang sesuai dengan cerita/genre yang dipertunjukkan di panggung maupun secara digital.",
+          "Menciptakan (Making/Creating)": "Mengeksplorasi beragam peran realis, penulisan naskah orisinal, dan penyusunan cerita/alur pertunjukan.",
+          "Berdampak (Impacting)": "Menghasilkan naskah atau pertunjukan berdasarkan minat, pengetahuan, peristiwa aktual, pengalaman, empati, kreativitas, dan respons terhadap isu sosial dalam masyarakat."
+        }
+      },
+      "Prakarya Budi Daya": {
+        "elemen": {
+          "Eksplorasi dan Observasi": "Menganalisis keragaman teknik budi daya tanaman, jamur, ternak, atau ikan yang bernilai ekonomis.",
+          "Desain/Perencanaan": "Menyusun rencana kegiatan budi daya dan kelayakannya berdasarkan analisis kebutuhan pasar dan/atau potensi sumber daya yang tersedia.",
+          "Produksi": "Melakukan kegiatan budi daya berbasis nilai ekonomi produk/ kebutuhan pasar dan/atau sumber daya yang tersedia dan pengemasan yang menarik.",
+          "Evaluasi dan Refleksi": "Mengevaluasi dan merefleksi proses serta produk budi daya bernilai ekonomis yang dihasilkan."
+        }
+      },
+      "Prakarya Kerajinan": {
+        "elemen": {
+          "Observasi dan Eksplorasi": "Mengeksplorasi beragam produk kerajinan nusantara berdasarkan aspek ergonomis dan nilai ekonomis dari berbagai sumber.",
+          "Desain/ Perencanaan": "Membuat rancangan/desain produk kerajinan nusantara melalui modifikasi bahan, alat, teknik, dan prosedur pembuatan berdasarkan analisis kebutuhan pasar dan/atau potensi sumber daya yang tersedia.",
+          "Produksi": "Membuat produk kerajinan nusantara bernilai ekonomis berdasarkan desain yang dibuat dan ditampilkan dengan displai dan /atau kemasan produk.",
+          "Refleksi dan Evaluasi": "Menggunakan hasil refleksi dari observasi, eksplorasi, desain, dan produksi untuk mengevaluasi produk kerajinan dan memberikan saran perbaikan."
+        }
+      },
+      "Prakarya Pengolahan": {
+        "elemen": {
+          "Observasi dan Eksplorasi": "Menganalisis dan menginformasikan bahan, alat, dan teknik pengolahan, pengemasan, dan penyajian produk olahan pangan nusantara dan atau nonpangan.",
+          "Perencanaan": "Merancang pengembangan produk olahan pangan nusantara dan atau nonpangan secara sistematis dan kreatif.",
+          "Produksi": "Membuat, mengemas, dan menyajikan produk olahan pangan nusantara dan atau nonpangan hasil rancangan pengembangan secara kreatif dan inovatif.",
+          "Refleksi dan Evaluasi": "Mengevaluasi dan merefleksi setiap tahapan pengembangan produk olahan pangan nusantara dan atau nonpangan."
+        }
+      },
+      "Prakarya Rekayasa": {
+        "elemen": {
+          "Observasi dan eksplorasi": "Menganalisis aspek-aspek yang penting diobservasi dalam pengembangan produk rekayasa teknologi terapan; mengeksplorasi karakteristik bahan, alat, teknik, prosedur pembuatan produk prototipe/dummy/model rekayasa teknologi terapan berdasarkan analisis kebutuhan, kelayakan fungsi, atau nilai ekonomis.",
+          "Desain/perencanaan": "Membuat rancangan prototipe/dummy/model rekayasa teknologi terapan dari hasil mengeksplorasi bahan, teknik, alat, dan prosedur pembuatan, serta memperhatikan potensi budaya, kearifan lokal dan teknologi yang siap dikembangkan.",
+          "Produksi": "Membuat produk rekayasa teknologi terapan sesuai dengan kebutuhan lingkungan melalui modifikasi bahan, alat, teknik, dan prosedur pembuatan yang berdampak pada lingkungan maupun kehidupan sehari-hari.",
+          "Refleksi dan Evaluasi": "Memberi penilaian dan saran perbaikan produk rekayasa teknologi terapan karya diri sendiri, teman sebaya, maupun dari sumber yang lain; merefleksikan proses dan hasil observasi, eksplorasi, desain, dan evaluasi produk berdasarkan kajian ilmiah terhadap fungsi dan nilai guna."
+        }
+      },
+      "Koding dan Kecerdasan Artifisial": {
+        "elemen": {
+          "Berpikir Komputasional": "Menerapkan berpikir komputasional untuk memecahkan permasalahan pada objek sesuai bidang keahlian.",
+          "Literasi Digital": "Menerapkan produksi dan diseminasi konten digital dalam bentuk sajian multimedia sesuai dengan bidang keahlian.",
+          "Algoritma Pemrograman": "Membandingkan beberapa algoritma dan menerapkan algoritma pemrograman untuk menghasilkan aplikasi.",
+          "Analisis Data": "Memahami konsep dasar basis data dan menerapkan pengolahan data pada basis data.",
+          "Literasi dan Etika Kecerdasan Artifisial": "Memahami prinsip kerja teknologi kecerdasan artifisial secara tepat guna dan bertanggung jawab pada bidang keahlian dengan memperhatikan aspek etika, keamanan data dan dampak sosial penggunaannya.",
+          "Pemanfaatan dan Pengembangan Kecerdasan Artifisial": "Menerapkan prompt engineering pada KA generatif sebagai evaluasi dari pemahaman rencana proyek, desain dan pengembangan produk berupa barang/jasa."
+        }
+      }
+    }
+  }
+}

@@ -231,7 +231,9 @@ function handleGetConfig() {
     max_violations: config.max_violations,
     auto_submit: config.auto_submit,
     shuffle_questions: config.shuffle_questions,
-    admin_wa: config.admin_wa || "",   // nomor WA admin sekolah (publik, boleh dikirim ke siswa)
+    admin_wa: config.admin_wa || "",
+    exam_status: config.exam_status || "OPEN",
+    exam_mapel: config.exam_mapel || "",
   };
   return { success: true, data: safeConfig };
 }
@@ -239,6 +241,9 @@ function handleGetConfig() {
 function handleGetQuestions() {
   const cached = cache.get("questions");
   if (cached) return JSON.parse(cached);
+
+  const config = getConfig();
+  const exam_mapel = config.exam_mapel || "";
 
   // Build lookup: id_mapel → nama_mapel dari sheet MataPelajaran
   const mapelLookup = {};
@@ -261,6 +266,10 @@ function handleGetQuestions() {
     if (!row[0]) continue;
 
     const id_mapel = row[13] || null;
+
+    // Filter per mapel jika exam_mapel dikonfigurasi
+    if (exam_mapel && id_mapel !== exam_mapel) continue;
+
     questions.push({
       id_soal: row[0],
       nomor_urut: row[1],
@@ -813,7 +822,7 @@ function handleGetKelas() {
     list.push({
       id_kelas: row[0],
       nama_kelas: row[1],
-      tingkat: row[2],
+      tingkat: String(row[2]),
     });
   }
 
@@ -987,12 +996,14 @@ function handleUpdateConfig(params) {
     if (data[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(value);
       cache.remove("config");
+      if (key === "exam_mapel") cache.remove("questions");
       return { success: true, message: "Config updated" };
     }
   }
 
   sheet.appendRow([key, value, ""]);
   cache.remove("config");
+  if (key === "exam_mapel") cache.remove("questions");
   return { success: true, message: "Config added" };
 }
 
