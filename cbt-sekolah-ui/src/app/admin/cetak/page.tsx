@@ -1524,9 +1524,9 @@ export default function AdminCetak() {
                           <svg viewBox="0 0 100 100" className="w-9 h-9">
                             <polygon points="50,2 93,27 93,73 50,98 7,73 7,27" fill="#f8fafc" stroke="#2563EB" strokeWidth="4"/>
                             <circle cx="50" cy="46" r="24" fill="none" stroke="#2563EB" strokeWidth="3"/>
-                            <path d="M50,12 L50,80 M20,46 L80,46" stroke="#2563EB" stroke-width="2"/>
+                            <path d="M50,12 L50,80 M20,46 L80,46" stroke="#2563EB" strokeWidth="2"/>
                             <polygon points="50,22 40,55 60,55" fill="#2563EB"/>
-                            <path d="M28,68 C35,85 65,85 72,68" fill="none" stroke="#2563EB" stroke-width="3"/>
+                            <path d="M28,68 C35,85 65,85 72,68" fill="none" stroke="#2563EB" strokeWidth="3"/>
                           </svg>
                         )}
                       </div>
