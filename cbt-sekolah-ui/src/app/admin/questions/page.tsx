@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage } from "@/lib/api";
+import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage } from "@/lib/api";
 import type { Question, MataPelajaran } from "@/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ export default function QuestionBankPage() {
     if (sessionStorage.getItem("admin_auth") !== "true") router.replace("/admin/login");
   }, [router]);
 
-  const { data: questionsRes, mutate, isLoading } = useSWR("getQuestions", getQuestions);
+  const { data: questionsRes, mutate, isLoading } = useSWR("getAdminQuestions", getAdminQuestions);
   const questions: Question[] = questionsRes?.data ?? [];
 
   const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
@@ -381,12 +381,6 @@ export default function QuestionBankPage() {
     }
   };
 
-  const KATEGORI_COLOR: Record<string, string> = {
-    Mudah: "bg-emerald-100 text-emerald-700",
-    Sedang: "bg-amber-100 text-amber-700",
-    Sulit: "bg-orange-100 text-orange-700",
-    "Sangat Sulit": "bg-error-container text-on-error-container",
-  };
 
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col md:flex-row font-body-admin">

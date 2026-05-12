@@ -80,7 +80,10 @@ function doGet(e) {
         result = handleGetConfig();
         break;
       case "getQuestions":
-        result = handleGetQuestions();
+        result = handleGetQuestions(false);
+        break;
+      case "getAdminQuestions":
+        result = handleGetQuestions(true); // skip exam_mapel filter for admin bank soal
         break;
       case "getLiveScore":
         result = handleGetLiveScore();
@@ -238,8 +241,10 @@ function handleGetConfig() {
   return { success: true, data: safeConfig };
 }
 
-function handleGetQuestions() {
-  const cached = cache.get("questions");
+function handleGetQuestions(skipMapelFilter) {
+  // Admin bank soal uses skipMapelFilter=true to see all questions regardless of exam_mapel
+  const cacheKey = skipMapelFilter ? "questions_all" : "questions";
+  const cached = cache.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
   const config = getConfig();
@@ -267,8 +272,8 @@ function handleGetQuestions() {
 
     const id_mapel = row[13] || null;
 
-    // Filter per mapel jika exam_mapel dikonfigurasi
-    if (exam_mapel && id_mapel !== exam_mapel) continue;
+    // Filter per mapel jika exam_mapel dikonfigurasi (dilewati untuk admin)
+    if (!skipMapelFilter && exam_mapel && id_mapel !== exam_mapel) continue;
 
     questions.push({
       id_soal: row[0],
@@ -292,7 +297,7 @@ function handleGetQuestions() {
   questions.sort(function(a, b) { return a.nomor_urut - b.nomor_urut; });
 
   const result = { success: true, data: questions };
-  cache.put("questions", JSON.stringify(result), CACHE_DURATION);
+  cache.put(cacheKey, JSON.stringify(result), CACHE_DURATION);
   return result;
 }
 
@@ -515,7 +520,7 @@ function handleSubmitExam(params) {
     forced ? "DISKUALIFIKASI - Auto Submit" : violationLog, "",
   ]);
 
-  cache.remove("questions");
+  cache.remove("questions"); cache.remove("questions_all");
 
   return {
     success: true,
@@ -590,7 +595,7 @@ function handleCreateQuestion(params) {
     data.id_mapel || "",   // kolom 14
   ]);
 
-  cache.remove("questions");
+  cache.remove("questions"); cache.remove("questions_all");
   return { success: true, message: "Question created", id_soal: id_soal };
 }
 
@@ -619,7 +624,7 @@ function handleUpdateQuestion(params) {
         data.id_mapel || "",        // kolom 14
       ]]);
 
-      cache.remove("questions");
+      cache.remove("questions"); cache.remove("questions_all");
       return { success: true, message: "Question updated" };
     }
   }
@@ -635,7 +640,7 @@ function handleDeleteQuestion(params) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === id_soal) {
       sheet.deleteRow(i + 1);
-      cache.remove("questions");
+      cache.remove("questions"); cache.remove("questions_all");
       return { success: true, message: "Question deleted" };
     }
   }
@@ -996,14 +1001,14 @@ function handleUpdateConfig(params) {
     if (data[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(value);
       cache.remove("config");
-      if (key === "exam_mapel") cache.remove("questions");
+      if (key === "exam_mapel") cache.remove("questions"); cache.remove("questions_all");
       return { success: true, message: "Config updated" };
     }
   }
 
   sheet.appendRow([key, value, ""]);
   cache.remove("config");
-  if (key === "exam_mapel") cache.remove("questions");
+  if (key === "exam_mapel") cache.remove("questions"); cache.remove("questions_all");
   return { success: true, message: "Config added" };
 }
 
@@ -1016,7 +1021,13 @@ function handleResetUserLogin(params) {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === id_siswa) {
-      sheet.getRange(i + 1, 6).setValue(false);
+      const row = i + 1;
+      sheet.getRange(row, 6).setValue(false);   // status_login = false
+      sheet.getRange(row, 7).setValue("");       // waktu_mulai = kosong
+      sheet.getRange(row, 8).setValue("");       // waktu_selesai = kosong
+      sheet.getRange(row, 9).setValue("");       // skor_akhir = kosong
+      sheet.getRange(row, 10).setValue(0);       // violation_count = 0
+      sheet.getRange(row, 11).setValue("BELUM"); // status_ujian = BELUM
       return { success: true, message: "Login reset successful" };
     }
   }

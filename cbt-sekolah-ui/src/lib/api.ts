@@ -74,6 +74,10 @@ export async function getQuestions(): Promise<ApiResponse<Question[]>> {
     return fetchApi<Question[]>('getQuestions');
 }
 
+export async function getAdminQuestions(): Promise<ApiResponse<Question[]>> {
+    return fetchApi<Question[]>('getAdminQuestions');
+}
+
 export async function getConfig(): Promise<ApiResponse<ExamConfig>> {
     const res = await fetchApi<ExamConfig>('getConfig');
     if (res.success && res.data) {

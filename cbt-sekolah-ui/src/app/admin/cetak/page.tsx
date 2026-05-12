@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getPrintSettings, savePrintSettings, type PrintSettings } from "@/lib/api";
+import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, type PrintSettings } from "@/lib/api";
+import type { MataPelajaran } from "@/types";
 import type { User } from "@/types";
 import * as XLSX from "xlsx";
 
@@ -418,6 +419,7 @@ export default function AdminCetak() {
   // Filter and sort states for print previews
   const [kartuClass, setKartuClass] = useState("All Classes");
   const [hasilClass, setHasilClass] = useState("All Classes");
+  const [hasilMapel, setHasilMapel] = useState(""); // "" = tampilkan label dari print settings
   const [sortBy, setSortBy] = useState<"nama" | "skor">("skor");
   const [isExportingXlsx, setIsExportingXlsx] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -443,9 +445,11 @@ export default function AdminCetak() {
   const { data: usersRes } = useSWR("getUsers", getUsers);
   const { data: configRes } = useSWR("getConfig", getConfig);
   const { data: printRes, mutate: mutatePrint } = useSWR("getPrintSettings", getPrintSettings);
+  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
+  const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
 
   // Initialize local print settings and custom logos on mount
   useEffect(() => {
@@ -1593,7 +1597,10 @@ export default function AdminCetak() {
                   <span>{selectedKelas || 'Semua Kelas'}</span>
                 </div>
                 <h2 className="font-black text-2xl text-slate-900 mt-1">
-                  REKAP NILAI: {(settings?.guru_mapel_mapel || config?.exam_name || 'UJIAN').toUpperCase()}
+                  REKAP NILAI: {(hasilMapel
+                    ? (mapelList.find(m => m.id_mapel === hasilMapel)?.nama_mapel ?? hasilMapel)
+                    : (settings?.guru_mapel_mapel || config?.exam_name || 'UJIAN')
+                  ).toUpperCase()}
                 </h2>
               </div>
 
@@ -1678,6 +1685,20 @@ export default function AdminCetak() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                {/* Mapel filter */}
+                <select
+                  value={hasilMapel}
+                  onChange={(e) => setHasilMapel(e.target.value)}
+                  className="px-4 h-10 border border-slate-200 rounded-xl font-bold text-xs text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all w-full sm:w-auto"
+                >
+                  <option value="">Semua Mapel</option>
+                  {mapelList.map((m) => (
+                    <option key={m.id_mapel} value={m.id_mapel}>
+                      {m.nama_mapel}
+                    </option>
+                  ))}
+                </select>
+
                 {/* Class filter */}
                 <select
                   value={hasilClass}
