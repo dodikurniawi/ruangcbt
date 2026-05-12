@@ -787,7 +787,10 @@ export default function AdminCetak() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Rekap Nilai');
 
-      const filename = `Rekap_Nilai_${(settings?.guru_mapel_mapel || 'Ujian').replace(/\s/g, '_')}_${hasilClass === "All Classes" ? "Semua" : hasilClass}_${new Date().getFullYear()}.xlsx`;
+      const mapelLabel = hasilMapel
+        ? (mapelList.find(m => m.id_mapel === hasilMapel)?.nama_mapel ?? 'Ujian')
+        : (settings?.guru_mapel_mapel || 'Ujian');
+      const filename = `Rekap_Nilai_${mapelLabel.replace(/\s/g, '_')}_${hasilClass === "All Classes" ? "Semua" : hasilClass}_${new Date().getFullYear()}.xlsx`;
       XLSX.writeFile(wb, filename);
     } finally {
       setIsExportingXlsx(false);
@@ -799,7 +802,9 @@ export default function AdminCetak() {
     const today = new Date().toLocaleDateString('id-ID', { 
       day: 'numeric', month: 'long', year: 'numeric' 
     });
-    const mapel = settings?.guru_mapel_mapel || config?.exam_name || 'Ujian';
+    const mapel = hasilMapel
+      ? (mapelList.find(m => m.id_mapel === hasilMapel)?.nama_mapel ?? 'Ujian')
+      : (settings?.guru_mapel_mapel || config?.exam_name || 'Ujian');
     const schoolName = settings?.school_name || 'Nama Sekolah';
     const schoolAddress = settings?.school_address || '';
     const tahunPelajaran = settings?.tahun_pelajaran || '';
@@ -1829,7 +1834,7 @@ export default function AdminCetak() {
             <AIAnalysisPanel
               users={sortedUsers}
               kelas={hasilClass === "All Classes" ? "" : hasilClass}
-              mapelNama={settings?.guru_mapel_mapel || config?.exam_name || 'Ujian'}
+              mapelNama={hasilMapel ? (mapelList.find(m => m.id_mapel === hasilMapel)?.nama_mapel ?? 'Ujian') : (settings?.guru_mapel_mapel || config?.exam_name || 'Ujian')}
               kkm={75}
               rataRata={rataRata}
               tuntas={tuntas}

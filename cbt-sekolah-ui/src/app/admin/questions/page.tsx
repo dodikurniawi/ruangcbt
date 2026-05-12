@@ -242,7 +242,7 @@ export default function QuestionBankPage() {
       opsi_c: q.opsi_c,
       opsi_d: q.opsi_d,
       opsi_e: q.opsi_e ?? "",
-      kunci_jawaban: "",
+      kunci_jawaban: q.kunci_jawaban ?? "",
       id_mapel: q.id_mapel ?? "",
     });
     setSaveError("");

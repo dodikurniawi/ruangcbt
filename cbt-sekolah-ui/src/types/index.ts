@@ -51,6 +51,7 @@ export interface Question {
     kategori?: string | null;
     id_mapel?: string | null;
     nama_mapel?: string | null;
+    kunci_jawaban?: string; // hanya ada di respons admin (getAdminQuestions)
 }
 
 // Answer types

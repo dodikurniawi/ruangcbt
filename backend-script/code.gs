@@ -275,7 +275,7 @@ function handleGetQuestions(skipMapelFilter) {
     // Filter per mapel jika exam_mapel dikonfigurasi (dilewati untuk admin)
     if (!skipMapelFilter && exam_mapel && id_mapel !== exam_mapel) continue;
 
-    questions.push({
+    const entry = {
       id_soal: row[0],
       nomor_urut: row[1],
       tipe: row[2],
@@ -286,12 +286,14 @@ function handleGetQuestions(skipMapelFilter) {
       opsi_c: row[7],
       opsi_d: row[8],
       opsi_e: row[9] || null,
-      // row[10] = kunci_jawaban — tidak dikirim ke client
       bobot: row[11] || 1,
       kategori: row[12] || null,
       id_mapel: id_mapel,
       nama_mapel: id_mapel ? (mapelLookup[id_mapel] || null) : null,
-    });
+    };
+    // Kirim kunci_jawaban hanya untuk admin (skipMapelFilter=true)
+    if (skipMapelFilter) entry.kunci_jawaban = row[10] || "";
+    questions.push(entry);
   }
 
   questions.sort(function(a, b) { return a.nomor_urut - b.nomor_urut; });
@@ -456,6 +458,9 @@ function handleSyncAnswers(params) {
 function handleSubmitExam(params) {
   const { id_siswa, answers, forced } = params;
 
+  const config = getConfig();
+  const exam_mapel = config.exam_mapel || "";
+
   const qSheet = getSheet("Questions");
   const questions = qSheet.getDataRange().getValues();
 
@@ -469,6 +474,11 @@ function handleSubmitExam(params) {
     const tipe = q[2];
     const kunci = q[10];
     const bobot = q[11] || 1;
+    const id_mapel_soal = q[13] || null;
+
+    // Hanya hitung soal yang benar-benar ditampilkan ke siswa
+    if (exam_mapel && id_mapel_soal !== exam_mapel) continue;
+
     const jawaban = answers[id_soal];
 
     maxScore += bobot;
