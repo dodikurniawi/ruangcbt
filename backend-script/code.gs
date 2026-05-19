@@ -370,6 +370,7 @@ function handleGetUsers(params) {
       violation_count: row[9] || 0,
       status_ujian: row[10] || "BELUM",
       last_seen: row[11] ? new Date(row[11]).toLocaleString("id-ID") : null,
+      mapel_diujikan: row[12] || "",
     });
   }
 
@@ -515,6 +516,7 @@ function handleSubmitExam(params) {
       uSheet.getRange(i + 1, 8).setValue(new Date());
       uSheet.getRange(i + 1, 9).setValue(finalScore.toFixed(2));
       uSheet.getRange(i + 1, 11).setValue(forced ? "DISKUALIFIKASI" : "SELESAI");
+      uSheet.getRange(i + 1, 13).setValue(exam_mapel); // simpan mapel yang diujikan
       break;
     }
   }
@@ -1038,6 +1040,7 @@ function handleResetUserLogin(params) {
       sheet.getRange(row, 9).setValue("");       // skor_akhir = kosong
       sheet.getRange(row, 10).setValue(0);       // violation_count = 0
       sheet.getRange(row, 11).setValue("BELUM"); // status_ujian = BELUM
+      sheet.getRange(row, 13).setValue("");      // mapel_diujikan = kosong
       return { success: true, message: "Login reset successful" };
     }
   }
@@ -1165,7 +1168,7 @@ function handleCreateStudent(params) {
 
   sheet.appendRow([
     studentId, username, password, nama_lengkap, kelas,
-    false, "", "", "", 0, "BELUM", "",
+    false, "", "", "", 0, "BELUM", "", "",
   ]);
 
   return { success: true, message: "Siswa berhasil ditambahkan" };
@@ -1248,7 +1251,7 @@ function handleImportStudents(params) {
 
     sheet.appendRow([
       studentId, student.username, student.password, student.nama_lengkap,
-      student.kelas || "", false, "", "", "", 0, "BELUM", "",
+      student.kelas || "", false, "", "", "", 0, "BELUM", "", "",
     ]);
 
     existingUsernames.add(student.username.toLowerCase());

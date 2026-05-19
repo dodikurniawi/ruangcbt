@@ -515,9 +515,10 @@ export default function AdminCetak() {
     return users.filter((u) => {
       const matchClass = hasilClass === "All Classes" || u.kelas === hasilClass;
       const matchStatus = u.status_ujian === "SELESAI" || u.status_ujian === "DISKUALIFIKASI";
-      return matchClass && matchStatus;
+      const matchMapel = hasilMapel === "" || u.mapel_diujikan === hasilMapel;
+      return matchClass && matchStatus && matchMapel;
     });
-  }, [users, hasilClass]);
+  }, [users, hasilClass, hasilMapel]);
 
   const stats = useMemo(() => {
     const selesaiUsers = filteredUsers.filter(u => u.status_ujian === 'SELESAI' && u.skor_akhir != null);

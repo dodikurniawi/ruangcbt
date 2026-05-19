@@ -170,6 +170,7 @@ export default function QuestionBankPage() {
   const [aiError, setAiError] = useState("");
   const [wikiImages, setWikiImages] = useState<{ title: string; url: string; thumb: string }[]>([]);
   const [showWikiPicker, setShowWikiPicker] = useState(false);
+  const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_auth") !== "true") router.replace("/admin/login");
@@ -695,9 +696,7 @@ export default function QuestionBankPage() {
 
                             {/* Cyan Preview Button */}
                             <button
-                              onClick={() => {
-                                alert(`Pratinjau Soal:\n\n${cleanPertanyaan}\n\nOpsi A: ${q.opsi_a}\nOpsi B: ${q.opsi_b}\nOpsi C: ${q.opsi_c}\nOpsi D: ${q.opsi_d}\n${q.opsi_e ? `Opsi E: ${q.opsi_e}\n` : ''}\nKunci: ${(q as Question & { kunci_jawaban?: string }).kunci_jawaban || 'Belum diatur'}`);
-                              }}
+                              onClick={() => setPreviewQuestion(q)}
                               className="w-8 h-8 rounded-lg bg-[#06B6D4] hover:bg-[#0891B2] text-white flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer"
                               title="Pratinjau Soal"
                             >
@@ -1095,6 +1094,112 @@ export default function QuestionBankPage() {
           </div>
         </div>
       )}
+
+      {/* Preview Modal */}
+      {previewQuestion && (() => {
+        const pq = previewQuestion;
+        const kunci = pq.kunci_jawaban ?? "";
+        const kunciArr = pq.tipe === "COMPLEX"
+          ? kunci.split(",").map((k) => k.trim().toUpperCase())
+          : [kunci.toUpperCase()];
+        const opts: [string, string][] = [
+          ["A", pq.opsi_a],
+          ["B", pq.opsi_b],
+          ["C", pq.opsi_c],
+          ["D", pq.opsi_d],
+          ...(pq.opsi_e ? [["E", pq.opsi_e] as [string, string]] : []),
+        ];
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 z-[200] flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setPreviewQuestion(null)}
+          >
+            <div
+              className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-outline-variant my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-xl py-lg border-b border-outline-variant">
+                <div className="flex items-center gap-sm">
+                  <span className="material-symbols-outlined text-primary text-[20px]">visibility</span>
+                  <h3 className="font-headline-admin text-on-surface text-base font-bold">
+                    Pratinjau Soal #{pq.nomor_urut}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${pq.tipe === "COMPLEX" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                    {pq.tipe}
+                  </span>
+                </div>
+                <button onClick={() => setPreviewQuestion(null)} className="text-on-surface-variant hover:text-error transition-colors cursor-pointer">
+                  <span className="material-symbols-outlined text-2xl">close</span>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="px-xl py-lg space-y-lg">
+                {/* Question text */}
+                <div
+                  className="font-body-admin text-on-surface text-base leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: pq.pertanyaan }}
+                />
+
+                {/* Image */}
+                {pq.gambar_url && (
+                  <div className="rounded-xl overflow-hidden border border-outline-variant bg-surface-container-low flex items-center justify-center p-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={pq.gambar_url}
+                      alt="Gambar soal"
+                      className="max-w-full max-h-72 object-contain rounded-lg"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          `https://drive.google.com/thumbnail?id=${pq.gambar_url?.match(/[-\w]{25,}/)?.[0]}&sz=w600`;
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Options */}
+                <div className="space-y-sm">
+                  {opts.map(([key, text]) => {
+                    const isKunci = kunciArr.includes(key);
+                    return (
+                      <div
+                        key={key}
+                        className={`flex items-start gap-sm px-md py-sm rounded-xl border transition-all ${
+                          isKunci
+                            ? "border-green-500 bg-green-50"
+                            : "border-outline-variant bg-surface-container-low"
+                        }`}
+                      >
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                          isKunci ? "bg-green-500 text-white" : "bg-surface-container text-on-surface-variant"
+                        }`}>
+                          {key}
+                        </span>
+                        <span
+                          className={`font-body-admin text-sm leading-relaxed ${isKunci ? "text-green-800 font-semibold" : "text-on-surface"}`}
+                          dangerouslySetInnerHTML={{ __html: text }}
+                        />
+                        {isKunci && (
+                          <span className="ml-auto shrink-0 material-symbols-outlined text-green-500 text-[18px]">check_circle</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Meta */}
+                <div className="flex flex-wrap gap-sm text-xs text-on-surface-variant font-label-admin pt-sm border-t border-outline-variant">
+                  {pq.kategori && <span className="px-2 py-0.5 bg-surface-container rounded-full">{pq.kategori}</span>}
+                  <span className="px-2 py-0.5 bg-surface-container rounded-full">Bobot: {pq.bobot}</span>
+                  {pq.nama_mapel && <span className="px-2 py-0.5 bg-surface-container rounded-full">{pq.nama_mapel}</span>}
+                  {!kunci && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Kunci belum diatur</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delete Confirm */}
       {deleteConfirmId && (

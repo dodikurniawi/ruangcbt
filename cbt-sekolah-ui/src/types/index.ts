@@ -31,6 +31,7 @@ export interface User {
     status_ujian: 'BELUM' | 'SEDANG' | 'SELESAI' | 'DISKUALIFIKASI';
     last_seen?: string;
     exam_duration?: number;
+    mapel_diujikan?: string; // id_mapel yang diujikan saat submit, diisi GAS
 }
 
 // Question types
