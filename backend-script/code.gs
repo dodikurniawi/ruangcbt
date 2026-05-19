@@ -366,7 +366,7 @@ function handleGetUsers(params) {
       status_login: row[5],
       waktu_mulai: row[6] ? new Date(row[6]).toLocaleString("id-ID") : null,
       waktu_selesai: row[7] ? new Date(row[7]).toLocaleString("id-ID") : null,
-      skor_akhir: row[8],
+      skor_akhir: row[8] !== "" && row[8] !== null && row[8] !== undefined ? parseFloat(row[8]) : null,
       violation_count: row[9] || 0,
       status_ujian: row[10] || "BELUM",
       last_seen: row[11] ? new Date(row[11]).toLocaleString("id-ID") : null,

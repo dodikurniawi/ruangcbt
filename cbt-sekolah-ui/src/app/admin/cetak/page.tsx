@@ -525,19 +525,21 @@ export default function AdminCetak() {
     const KKM = 75;
     const totalPeserta = filteredUsers.length;
 
+    const toNum = (v: unknown) => (v !== null && v !== undefined && v !== "" ? Number(v) : 0);
+
     const rataRata = selesaiUsers.length > 0
-      ? selesaiUsers.reduce((sum, u) => sum + (u.skor_akhir ?? 0), 0) / selesaiUsers.length
+      ? selesaiUsers.reduce((sum, u) => sum + toNum(u.skor_akhir), 0) / selesaiUsers.length
       : 0;
 
     const nilaiTertinggi = selesaiUsers.length > 0
-      ? Math.max(...selesaiUsers.map(u => u.skor_akhir ?? 0))
+      ? Math.max(...selesaiUsers.map(u => toNum(u.skor_akhir)))
       : 0;
 
     const nilaiTerendah = selesaiUsers.length > 0
-      ? Math.min(...selesaiUsers.map(u => u.skor_akhir ?? 0))
+      ? Math.min(...selesaiUsers.map(u => toNum(u.skor_akhir)))
       : 0;
 
-    const tuntas = selesaiUsers.filter(u => (u.skor_akhir ?? 0) >= KKM).length;
+    const tuntas = selesaiUsers.filter(u => toNum(u.skor_akhir) >= KKM).length;
 
     return { rataRata, nilaiTertinggi, nilaiTerendah, tuntas, totalPeserta };
   }, [filteredUsers]);
@@ -1769,7 +1771,9 @@ export default function AdminCetak() {
                         }
 
                         const scoreDisplay =
-                          student.status_ujian === "SELESAI" && student.skor_akhir != null ? student.skor_akhir.toFixed(2) : "—";
+                          student.status_ujian === "SELESAI" && student.skor_akhir != null
+                            ? Number(student.skor_akhir).toFixed(2)
+                            : "—";
 
                         return (
                           <tr key={student.id_siswa} className="hover:bg-slate-50/80 transition-colors">
