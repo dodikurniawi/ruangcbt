@@ -28,7 +28,7 @@ function parseGDriveImageUrl(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return "https://drive.google.com/uc?export=view&id=" + match[1];
+      return "https://drive.google.com/thumbnail?id=" + match[1] + "&sz=w800";
     }
   }
 
@@ -724,7 +724,7 @@ function handleUploadImage(params) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     const fileId = file.getId();
-    const directUrl = "https://drive.google.com/uc?export=view&id=" + fileId;
+    const directUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w800";
 
     return { success: true, data: { url: directUrl, fileId: fileId } };
 

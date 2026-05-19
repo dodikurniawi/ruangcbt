@@ -371,6 +371,16 @@ export default function ExamPage() {
                   src={currentQuestion.gambar_url}
                   alt="Gambar soal"
                   className="max-h-60 rounded-lg object-contain border border-slate-200 bg-slate-50 mb-6"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    const idMatch = el.src.match(/[?&]id=([-\w]{25,})/);
+                    const idPath = el.src.match(/\/d\/([-\w]{25,})/);
+                    const fileId = (idMatch?.[1] ?? idPath?.[1]);
+                    if (fileId && !el.dataset.retried) {
+                      el.dataset.retried = "1";
+                      el.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                    }
+                  }}
                 />
               )}
 
