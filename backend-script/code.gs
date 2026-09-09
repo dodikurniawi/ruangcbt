@@ -82,6 +82,154 @@ function isExamDeadlinePassed(waktuMulai, examDurationMinutes) {
   return deadlineMs !== null && Date.now() >= deadlineMs;
 }
 
+// ===== BANK SOAL — INTEGRITAS HISTORIS =====
+// Questions kolom 15 = status_soal. Kosong dibaca sebagai AKTIF sehingga sheet
+// lama (14 kolom) tetap terbaca tanpa migrasi.
+const QUESTION_COLUMNS = 15;
+const QUESTION_STATUS_COL = 15;
+const QUESTION_STATUS_ACTIVE = "AKTIF";
+const QUESTION_STATUS_ARCHIVED = "ARSIP";
+const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];
+const OPTION_LETTERS = ["A", "B", "C", "D", "E"];
+const QUESTION_ALLOWED_FIELDS = [
+  "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
+  "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
+  "kunci_jawaban", "bobot", "kategori", "id_mapel",
+];
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+
+function isQuestionArchived(row) {
+  return String(row[QUESTION_STATUS_COL - 1] || "").toUpperCase() === QUESTION_STATUS_ARCHIVED;
+}
+
+// Ujian dianggap berlangsung bila ada siswa berstatus SEDANG. Soal yang mapel-nya
+// sedang diujikan tidak boleh berubah atau hilang selama itu.
+function isExamRunningForMapel(id_mapel) {
+  const config = getConfig();
+  const exam_mapel = config.exam_mapel || "";
+  if (exam_mapel && String(id_mapel || "") !== exam_mapel) return false;
+
+  const sheet = getSheet("Users");
+  if (!sheet) return false;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][10] === "SEDANG") return true;
+  }
+  return false;
+}
+
+// Soal yang pernah dijawab siswa tercatat pada Responses kolom 5 (JSON answers,
+// key = id_soal). Baris seperti itu tidak boleh hilang dari sheet agar jawaban
+// historis tetap punya konteks soal.
+function isQuestionAnsweredInHistory(id_soal) {
+  const sheet = getSheet("Responses");
+  if (!sheet || !id_soal) return false;
+  const needle = '"' + String(id_soal) + '"';
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const raw = data[i][4];
+    if (raw && String(raw).indexOf(needle) !== -1) return true;
+  }
+  return false;
+}
+
+function getValidMapelIds() {
+  const sheet = getSheet("MataPelajaran");
+  if (!sheet) return null;
+  const data = sheet.getDataRange().getValues();
+  const ids = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) ids.push(String(data[i][0]));
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+function parseAnswerKeys(rawKey) {
+  const parts = String(rawKey == null ? "" : rawKey).split(",");
+  const keys = [];
+  for (let i = 0; i < parts.length; i++) {
+    const key = parts[i].trim().toUpperCase();
+    if (key === "") continue;
+    if (keys.indexOf(key) === -1) keys.push(key);
+  }
+  return keys;
+}
+
+// Validasi otoritatif di boundary GAS. Client boleh punya validasi sendiri, tetapi
+// request dapat datang tanpa melewatinya.
+function validateQuestionPayload(data) {
+  if (!data || typeof data !== "object") return "Data soal tidak valid";
+
+  for (const field in data) {
+    if (Object.prototype.hasOwnProperty.call(data, field) && QUESTION_ALLOWED_FIELDS.indexOf(field) === -1) {
+      return "Field tidak dikenal: " + field;
+    }
+  }
+
+  const tipe = String(data.tipe || "").toUpperCase();
+  if (VALID_QUESTION_TYPES.indexOf(tipe) === -1) return "Tipe soal harus SINGLE atau COMPLEX";
+
+  const plainText = String(data.pertanyaan || "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  if (!plainText) return "Redaksi soal wajib diisi";
+
+  const available = [];
+  for (let i = 0; i < OPTION_LETTERS.length; i++) {
+    const letter = OPTION_LETTERS[i];
+    const value = String(data["opsi_" + letter.toLowerCase()] || "").replace(/<[^>]*>/g, "").trim();
+    if (value !== "") available.push(letter);
+    else if (i < 4) return "Opsi A sampai D wajib diisi";
+  }
+
+  const keys = parseAnswerKeys(data.kunci_jawaban);
+  if (keys.length === 0) return "Kunci jawaban wajib diisi";
+  if (tipe === "SINGLE" && keys.length !== 1) return "Soal SINGLE hanya boleh punya satu kunci jawaban";
+  if (tipe === "COMPLEX" && keys.length < 2) return "Soal COMPLEX minimal punya dua kunci jawaban";
+  for (let k = 0; k < keys.length; k++) {
+    if (available.indexOf(keys[k]) === -1) {
+      return "Kunci jawaban " + keys[k] + " menunjuk opsi yang tidak tersedia";
+    }
+  }
+
+  const bobot = Number(data.bobot);
+  if (!isFinite(bobot) || bobot <= 0 || bobot > 100) return "Bobot harus angka antara 1 dan 100";
+
+  if (data.nomor_urut !== undefined && data.nomor_urut !== null && data.nomor_urut !== "") {
+    const nomor = Number(data.nomor_urut);
+    if (!isFinite(nomor) || nomor < 1) return "Nomor urut tidak valid";
+  }
+
+  const id_mapel = String(data.id_mapel || "").trim();
+  if (!id_mapel) return "Mata pelajaran wajib dipilih";
+  const validMapel = getValidMapelIds();
+  if (validMapel && validMapel.indexOf(id_mapel) === -1) return "Mata pelajaran tidak ditemukan";
+
+  const gambar = String(data.gambar_url || "").trim();
+  if (gambar && !/^(https?:\/\/|data:image\/)/i.test(gambar)) return "URL gambar tidak valid";
+
+  return null;
+}
+
+function questionRowValues(id_soal, data, statusValue) {
+  return [
+    id_soal,
+    data.nomor_urut,
+    String(data.tipe).toUpperCase(),
+    data.pertanyaan,
+    data.gambar_url || "",
+    data.opsi_a,
+    data.opsi_b,
+    data.opsi_c,
+    data.opsi_d,
+    data.opsi_e || "",
+    parseAnswerKeys(data.kunci_jawaban).join(","),
+    Number(data.bobot),
+    data.kategori || "",
+    String(data.id_mapel || "").trim(),
+    statusValue || QUESTION_STATUS_ACTIVE,
+  ];
+}
+
 function isAuthorizedProxyRequest(params) {
   // ponytail: satu secret acak per tenant cukup untuk boundary ini; naikkan ke HMAC
   // bertimestamp jika secret harus melewati perantara yang tidak sepenuhnya dipercaya.
@@ -314,6 +462,11 @@ function handleGetQuestions(skipMapelFilter) {
     if (!row[0]) continue;
 
     const id_mapel = row[13] || null;
+    const archived = isQuestionArchived(row);
+
+    // Soal arsip tidak pernah dikirim ke siswa, tetapi tetap terlihat di admin
+    // supaya soal historis dapat ditelusuri.
+    if (!skipMapelFilter && archived) continue;
 
     // Filter per mapel jika exam_mapel dikonfigurasi (dilewati untuk admin)
     if (!skipMapelFilter && exam_mapel && id_mapel !== exam_mapel) continue;
@@ -335,7 +488,10 @@ function handleGetQuestions(skipMapelFilter) {
       nama_mapel: id_mapel ? (mapelLookup[id_mapel] || null) : null,
     };
     // Kirim kunci_jawaban hanya untuk admin (skipMapelFilter=true)
-    if (skipMapelFilter) entry.kunci_jawaban = row[10] || "";
+    if (skipMapelFilter) {
+      entry.kunci_jawaban = row[10] || "";
+      entry.status_soal = archived ? QUESTION_STATUS_ARCHIVED : QUESTION_STATUS_ACTIVE;
+    }
     questions.push(entry);
   }
 
@@ -599,6 +755,7 @@ function submitExamLocked(params) {
     const id_mapel_soal = q[13] || null;
 
     // Hanya hitung soal yang benar-benar ditampilkan ke siswa
+    if (isQuestionArchived(q)) continue;
     if (exam_mapel && id_mapel_soal !== exam_mapel) continue;
 
     const jawaban = answers[id_soal];
@@ -708,59 +865,72 @@ function handleAdminLogin(params) {
 //  11=kunci_jawaban  12=bobot  13=kategori  14=id_mapel
 
 function handleCreateQuestion(params) {
-  const sheet = getSheet("Questions");
   const { data } = params;
+  const invalid = validateQuestionPayload(data);
+  if (invalid) return { success: false, message: invalid };
 
-  // Auto-generate id_soal jika tidak disediakan FE
-  const id_soal = (data.id_soal && data.id_soal.toString().trim())
-    ? data.id_soal
-    : "Q" + Date.now().toString(36).toUpperCase();
+  // Lock dipegang selama generate-id sampai append supaya dua create bersamaan
+  // tidak dapat menghasilkan id_soal yang sama.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
 
-  sheet.appendRow([
-    id_soal,
-    data.nomor_urut,
-    data.tipe,
-    data.pertanyaan,
-    data.gambar_url || "",
-    data.opsi_a,
-    data.opsi_b,
-    data.opsi_c,
-    data.opsi_d,
-    data.opsi_e || "",
-    data.kunci_jawaban,
-    data.bobot || 1,
-    data.kategori || "",
-    data.id_mapel || "",   // kolom 14
-  ]);
+  try {
+    const sheet = getSheet("Questions");
+    const existing = sheet.getDataRange().getValues();
+    const takenIds = {};
+    for (let i = 1; i < existing.length; i++) {
+      if (existing[i][0]) takenIds[String(existing[i][0])] = true;
+    }
 
-  cache.remove("questions"); cache.remove("questions_all");
-  return { success: true, message: "Question created", id_soal: id_soal };
+    let id_soal = String(data.id_soal || "").trim();
+    if (id_soal) {
+      if (takenIds[id_soal]) return { success: false, message: "id_soal sudah digunakan" };
+    } else {
+      // Q + base36 timestamp masih dipakai agar format id lama tidak berubah;
+      // suffix acak hanya ditambahkan bila ternyata bentrok.
+      id_soal = "Q" + Date.now().toString(36).toUpperCase();
+      while (takenIds[id_soal]) {
+        id_soal = "Q" + Date.now().toString(36).toUpperCase() +
+          Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase();
+      }
+    }
+
+    sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE));
+    cache.remove("questions"); cache.remove("questions_all");
+    return { success: true, message: "Question created", id_soal: id_soal };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function handleUpdateQuestion(params) {
   const sheet = getSheet("Questions");
   const { id_soal, data } = params;
+  if (!id_soal) return { success: false, message: "id_soal diperlukan" };
+
+  const invalid = validateQuestionPayload(data);
+  if (invalid) return { success: false, message: invalid };
+
   const allData = sheet.getDataRange().getValues();
 
   for (let i = 1; i < allData.length; i++) {
     if (allData[i][0] === id_soal) {
-      const row = i + 1;
-      sheet.getRange(row, 1, 1, 14).setValues([[
-        id_soal,                    // pertahankan id yang ada
-        data.nomor_urut,
-        data.tipe,
-        data.pertanyaan,
-        data.gambar_url || "",
-        data.opsi_a,
-        data.opsi_b,
-        data.opsi_c,
-        data.opsi_d,
-        data.opsi_e || "",
-        data.kunci_jawaban,
-        data.bobot || 1,
-        data.kategori || "",
-        data.id_mapel || "",        // kolom 14
-      ]]);
+      const current = allData[i];
+
+      // Ujian yang sudah berjalan memakai soal ini apa adanya; mengubah redaksi,
+      // opsi, kunci, atau bobot di tengah ujian akan mengubah hasil siswa.
+      if (isExamRunningForMapel(current[13]) || isExamRunningForMapel(data.id_mapel)) {
+        return {
+          success: false,
+          message: "Soal sedang dipakai ujian yang berlangsung. Tutup ujian dulu sebelum mengubah soal.",
+        };
+      }
+
+      const status = current[QUESTION_STATUS_COL - 1] || QUESTION_STATUS_ACTIVE;
+      sheet.getRange(i + 1, 1, 1, QUESTION_COLUMNS)
+        .setValues([questionRowValues(id_soal, data, status)]);
 
       cache.remove("questions"); cache.remove("questions_all");
       return { success: true, message: "Question updated" };
@@ -773,13 +943,37 @@ function handleUpdateQuestion(params) {
 function handleDeleteQuestion(params) {
   const sheet = getSheet("Questions");
   const { id_soal } = params;
+  if (!id_soal) return { success: false, message: "id_soal diperlukan" };
+
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === id_soal) {
+      if (isExamRunningForMapel(data[i][13])) {
+        return {
+          success: false,
+          message: "Soal sedang dipakai ujian yang berlangsung dan tidak dapat dihapus.",
+        };
+      }
+
+      // Soal yang pernah dijawab diarsipkan, bukan dihapus: barisnya tetap ada
+      // sehingga jawaban lama di Responses masih punya konteks soal.
+      if (isQuestionAnsweredInHistory(id_soal)) {
+        if (isQuestionArchived(data[i])) {
+          return { success: true, message: "Soal sudah diarsipkan", archived: true };
+        }
+        sheet.getRange(i + 1, QUESTION_STATUS_COL).setValue(QUESTION_STATUS_ARCHIVED);
+        cache.remove("questions"); cache.remove("questions_all");
+        return {
+          success: true,
+          message: "Soal sudah pernah dijawab siswa, jadi diarsipkan agar histori ujian tetap utuh.",
+          archived: true,
+        };
+      }
+
       sheet.deleteRow(i + 1);
       cache.remove("questions"); cache.remove("questions_all");
-      return { success: true, message: "Question deleted" };
+      return { success: true, message: "Question deleted", archived: false };
     }
   }
 
@@ -793,6 +987,17 @@ function handleUploadImage(params) {
 
   if (!base64Data) {
     return { success: false, message: "base64Data diperlukan" };
+  }
+
+  // Batas ukuran dan tipe divalidasi di server; batas 2 MB pada client hanya
+  // mencegah upload yang jelas kebesaran, bukan request yang dibuat langsung.
+  const normalizedMime = String(mimeType || "").toLowerCase().split(";")[0].trim();
+  if (ALLOWED_IMAGE_MIME.indexOf(normalizedMime) === -1) {
+    return { success: false, message: "Tipe gambar harus JPEG, PNG, GIF, atau WebP" };
+  }
+  const base64Length = String(base64Data).replace(/\s/g, "").length;
+  if (Math.floor(base64Length * 3 / 4) > MAX_IMAGE_BYTES) {
+    return { success: false, message: "Ukuran gambar melebihi 2 MB" };
   }
 
   try {
@@ -842,7 +1047,7 @@ function handleUploadImage(params) {
     const bytes = Utilities.base64Decode(base64Data);
     const blob = Utilities.newBlob(
       bytes,
-      mimeType || "image/jpeg",
+      normalizedMime,
       fileName || ("soal_" + Date.now() + ".jpg")
     );
 

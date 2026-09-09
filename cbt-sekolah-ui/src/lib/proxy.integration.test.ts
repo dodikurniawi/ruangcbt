@@ -87,6 +87,30 @@ try {
   const allowedAdmin = await handleProxyRequest(request("GET", "getUsers", adminCookie), "GET", "tenant-a", resolveTarget);
   assert.equal(allowedAdmin.status, 200);
 
+  // Rich text soal disanitasi di proxy, jadi HTML berbahaya tidak pernah sampai ke sheet.
+  const createQuestion = await handleProxyRequest(
+    request("POST", "createQuestion", adminCookie, {
+      data: {
+        tipe: "SINGLE",
+        pertanyaan: '<p onclick="steal()">Ibu kota <b>Indonesia</b>?</p><script>alert(1)</script>',
+        opsi_a: '<img src=x onerror="alert(1)">Jakarta',
+        opsi_b: "Bandung",
+        opsi_c: "Medan",
+        opsi_d: "Surabaya",
+        kunci_jawaban: "A",
+        bobot: 1,
+        id_mapel: "MAPEL_A",
+      },
+    }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(createQuestion.status, 200);
+  const forwarded = lastBody.data as Record<string, unknown>;
+  assert.equal(forwarded.pertanyaan, "<p>Ibu kota <b>Indonesia</b>?</p>");
+  assert.equal(forwarded.opsi_a, "Jakarta");
+  assert.equal(forwarded.kunci_jawaban, "A");
+  assert.equal(forwarded.bobot, 1);
+
   const studentLogin = await handleProxyRequest(
     request("POST", "login", undefined, { username: "student", password: "student-pass" }),
     "POST", "tenant-a", resolveTarget

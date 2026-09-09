@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
+import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import type { Question, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
@@ -458,7 +459,7 @@ export default function ExamPage() {
               {/* Question Text */}
               <div
                 className={`font-body-student text-slate-800 leading-relaxed my-6 font-medium ${fontSizeClass}`}
-                dangerouslySetInnerHTML={{ __html: currentQuestion.pertanyaan }}
+                dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(currentQuestion.pertanyaan) }}
               />
 
               {/* Image if any */}

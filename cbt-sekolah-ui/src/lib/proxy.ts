@@ -10,6 +10,7 @@ import {
   verifySessionToken,
   type ProxyMethod,
 } from "./security.ts";
+import { sanitizeQuestionPayload } from "./questionSanitize.ts";
 
 export interface ProxyTarget {
   gasUrl: string;
@@ -19,6 +20,7 @@ export interface ProxyTarget {
 type TargetResolver = () => Promise<ProxyTarget | null>;
 
 const STUDENT_IDENTITY_ACTIONS = new Set(["syncAnswers", "submitExam", "reportViolation"]);
+const QUESTION_WRITE_ACTIONS = new Set(["createQuestion", "updateQuestion"]);
 
 export async function handleProxyRequest(
   request: NextRequest,
@@ -67,6 +69,12 @@ export async function handleProxyRequest(
       return NextResponse.json({ success: false, message: "Identitas siswa tidak sesuai sesi" }, { status: 403 });
     }
     body = bound.body;
+  }
+
+  // Rich text soal masuk lewat request, jadi disanitasi di boundary server sebelum
+  // pernah tersimpan. Renderer tetap menyanitasi ulang untuk data lama.
+  if (QUESTION_WRITE_ACTIONS.has(parsed.action) && body.data && typeof body.data === "object") {
+    body = { ...body, data: sanitizeQuestionPayload(body.data as Record<string, unknown>) };
   }
 
   const target = await resolveTarget();

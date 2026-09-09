@@ -54,6 +54,7 @@ export interface Question {
     id_mapel?: string | null;
     nama_mapel?: string | null;
     kunci_jawaban?: string; // hanya ada di respons admin (getAdminQuestions)
+    status_soal?: 'AKTIF' | 'ARSIP'; // hanya ada di respons admin; ARSIP = soal historis
 }
 
 // Answer types
@@ -102,6 +103,7 @@ export interface ApiResponse<T = unknown> {
     status?: string;
     violations?: number;
     disqualified?: boolean;
+    archived?: boolean; // deleteQuestion: soal diarsipkan, bukan dihapus
 }
 
 // Exam State (for Zustand/IndexedDB)

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage, logout } from "@/lib/api";
+import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import type { Question, MataPelajaran } from "@/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -157,6 +158,8 @@ export default function QuestionBankPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [filterMapel, setFilterMapel] = useState("");
@@ -182,11 +185,24 @@ export default function QuestionBankPage() {
   const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
   const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
 
-  const filtered = questions.filter((q) =>
-    (filterMapel === "" || q.id_mapel === filterMapel) &&
-    (q.pertanyaan.toLowerCase().includes(search.toLowerCase()) ||
-    (q.kategori ?? "").toLowerCase().includes(search.toLowerCase()))
-  );
+  // Search mencocokkan teks soal tanpa tag, kategori, serta kode/nama mapel —
+  // sesuai yang dijanjikan placeholder. Kode mapel diambil dari daftar mapel.
+  const term = search.trim().toLowerCase();
+  const filtered = questions.filter((q) => {
+    if (filterMapel !== "" && q.id_mapel !== filterMapel) return false;
+    if (term === "") return true;
+    const kodeMapel = mapelList.find((m) => m.id_mapel === q.id_mapel)?.kode_mapel ?? "";
+    return [
+      q.pertanyaan.replace(/<[^>]*>/g, " "),
+      q.kategori ?? "",
+      q.nama_mapel ?? "",
+      kodeMapel,
+    ].some((field) => field.toLowerCase().includes(term));
+  });
+
+  // entriesCount 0 = tampilkan semua. Seluruh data sudah ada di client, jadi ini
+  // murni pemotongan tampilan, bukan pagination server.
+  const visible = entriesCount > 0 ? filtered.slice(0, entriesCount) : filtered;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -307,8 +323,16 @@ export default function QuestionBankPage() {
 
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
-    await deleteQuestion(id);
+    setDeleteError("");
+    const res = await deleteQuestion(id);
+    if (!res.success) {
+      // Jangan pernah menutup dialog seolah berhasil ketika GAS menolak.
+      setDeleteError(res.message || "Gagal menghapus soal.");
+      setIsDeleting(false);
+      return;
+    }
     await mutate();
+    setDeleteNotice(res.message && res.archived ? res.message : "");
     setDeleteConfirmId(null);
     setIsDeleting(false);
   };
@@ -545,6 +569,16 @@ export default function QuestionBankPage() {
           </button>
         </div>
 
+        {deleteNotice && (
+          <div className="mb-md flex items-start gap-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-md py-sm font-body-admin text-sm">
+            <span className="material-symbols-outlined text-[18px] mt-0.5">inventory_2</span>
+            <span className="flex-1">{deleteNotice}</span>
+            <button onClick={() => setDeleteNotice("")} className="cursor-pointer text-amber-500 hover:text-amber-700">
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        )}
+
         {/* Filter & Search Bar Row */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-md mb-lg bg-white p-md rounded-t-xl border border-outline-variant border-b-0">
           <div className="flex items-center gap-xs font-body-admin text-sm text-slate-600">
@@ -558,8 +592,14 @@ export default function QuestionBankPage() {
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={0}>Semua</option>
             </select>
             <span>entries</span>
+            <span className="text-xs text-slate-400 ml-xs">
+              ({visible.length} dari {filtered.length}
+              {filtered.length !== questions.length ? ` · total ${questions.length}` : ""})
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-md font-body-admin text-sm text-slate-600">
@@ -583,7 +623,7 @@ export default function QuestionBankPage() {
               <div className="border border-outline-variant rounded-lg px-3 py-1 bg-white flex items-center gap-xs focus-within:border-[#1E40AF] focus-within:ring-1 focus-within:ring-[#1E40AF]/20 transition-all">
                 <input
                   className="bg-transparent border-none outline-none text-xs text-on-surface w-48 font-semibold placeholder:text-slate-400 placeholder:font-normal"
-                  placeholder="Cari kode/mapel..."
+                  placeholder="Cari soal/kategori/mapel..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -633,7 +673,7 @@ export default function QuestionBankPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.slice(0, entriesCount).map((q, idx) => {
+                  visible.map((q, idx) => {
                     const cleanPertanyaan = q.pertanyaan.replace(/<[^>]*>/g, "");
                     const isE = !!q.opsi_e;
                     const idCode = `SOAL_${q.nomor_urut}_${q.tipe}_${q.id_soal.slice(0, 4).toUpperCase()}`;
@@ -653,8 +693,13 @@ export default function QuestionBankPage() {
                         </td>
                         <td className="px-lg py-5 font-bold text-[#1E3A8A] tracking-wide uppercase font-mono">{idCode}</td>
                         <td className="px-lg py-5">
-                          <div className="font-bold text-slate-800 text-sm max-w-lg truncate" title={cleanPertanyaan}>
-                            {cleanPertanyaan || "Tanpa Redaksi"}
+                          <div className="font-bold text-slate-800 text-sm max-w-lg truncate flex items-center gap-2" title={cleanPertanyaan}>
+                            {q.status_soal === "ARSIP" && (
+                              <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 uppercase tracking-wider">
+                                Arsip
+                              </span>
+                            )}
+                            <span className="truncate">{cleanPertanyaan || "Tanpa Redaksi"}</span>
                           </div>
                           <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-1">
                             Kategori: {q.kategori ?? "—"} • Bobot: {q.bobot}
@@ -705,7 +750,7 @@ export default function QuestionBankPage() {
 
                             {/* Red Delete Button */}
                             <button
-                              onClick={() => setDeleteConfirmId(q.id_soal)}
+                              onClick={() => { setDeleteError(""); setDeleteConfirmId(q.id_soal); }}
                               className="w-8 h-8 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer"
                               title="Hapus Soal"
                             >
@@ -1139,7 +1184,7 @@ export default function QuestionBankPage() {
                 {/* Question text */}
                 <div
                   className="font-body-admin text-on-surface text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: pq.pertanyaan }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(pq.pertanyaan) }}
                 />
 
                 {/* Image */}
@@ -1178,7 +1223,7 @@ export default function QuestionBankPage() {
                         </span>
                         <span
                           className={`font-body-admin text-sm leading-relaxed ${isKunci ? "text-green-800 font-semibold" : "text-on-surface"}`}
-                          dangerouslySetInnerHTML={{ __html: text }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(text) }}
                         />
                         {isKunci && (
                           <span className="ml-auto shrink-0 material-symbols-outlined text-green-500 text-[18px]">check_circle</span>
@@ -1206,9 +1251,17 @@ export default function QuestionBankPage() {
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-lg">
           <div className="bg-white rounded-2xl p-xl max-w-sm w-full shadow-2xl border border-outline-variant">
             <h3 className="font-headline-admin text-on-surface mb-sm">Hapus Soal?</h3>
-            <p className="font-body-admin text-on-surface-variant mb-xl">Soal akan dihapus permanen dari bank soal.</p>
+            <p className="font-body-admin text-on-surface-variant mb-md">
+              Soal yang belum pernah dijawab siswa akan dihapus permanen. Soal yang sudah
+              pernah dijawab hanya diarsipkan agar histori ujian tetap utuh.
+            </p>
+            {deleteError && (
+              <p className="font-body-admin text-sm text-error bg-error/10 border border-error/30 rounded-xl px-md py-sm mb-md">
+                {deleteError}
+              </p>
+            )}
             <div className="flex gap-md">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 h-12 border border-outline-variant rounded-xl font-label-bold text-on-surface cursor-pointer">Batal</button>
+              <button onClick={() => { setDeleteConfirmId(null); setDeleteError(""); }} className="flex-1 h-12 border border-outline-variant rounded-xl font-label-bold text-on-surface cursor-pointer">Batal</button>
               <button onClick={() => handleDelete(deleteConfirmId)} disabled={isDeleting} className="flex-1 h-12 bg-error text-on-error rounded-xl font-label-bold cursor-pointer disabled:opacity-60">
                 {isDeleting ? "Menghapus..." : "Hapus"}
               </button>
