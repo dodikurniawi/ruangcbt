@@ -40,6 +40,14 @@ export default function LoginPage() {
       const res = await login(username, password);
       if (res.success && res.data) {
         setUser(res.data);
+        // ponytail: recover server-saved answers on re-entry if local store is empty
+        const saved = res.data.saved_answers;
+        if (saved && typeof saved === "object" && Object.keys(saved).length > 0) {
+          const local = useExamStore.getState().answers;
+          if (!local || Object.keys(local).length === 0) {
+            useExamStore.getState().setAllAnswers(saved);
+          }
+        }
         router.push("/pin-verification");
       } else {
         setError(res.message || "Username atau password salah.");

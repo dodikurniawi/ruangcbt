@@ -32,6 +32,7 @@ export interface User {
     last_seen?: string;
     exam_duration?: number;
     mapel_diujikan?: string; // id_mapel yang diujikan saat submit, diisi GAS
+    saved_answers?: AnswersRecord | null; // recovered answers from server (col 14)
 }
 
 // Question types

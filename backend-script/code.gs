@@ -451,6 +451,13 @@ function handleLogin(params) {
 
       const config = getConfig();
 
+      // Read saved answers from col 14 (index 13) for recovery
+      var savedRaw = row[13] ? row[13].toString() : "";
+      var savedAnswers = null;
+      if (savedRaw) {
+        try { savedAnswers = JSON.parse(savedRaw); } catch (_e) { savedAnswers = null; }
+      }
+
       return {
         success: true,
         data: {
@@ -461,6 +468,7 @@ function handleLogin(params) {
           status_ujian: row[10] || "SEDANG",
           waktu_mulai: row[6] ? row[6] : new Date().toISOString(),
           exam_duration: parseInt(config.exam_duration) || 90,
+          saved_answers: savedAnswers,
         },
       };
     }
@@ -471,23 +479,76 @@ function handleLogin(params) {
 
 function handleSyncAnswers(params) {
   const { id_siswa, answers } = params;
-  cache.put("answers_" + id_siswa, JSON.stringify(answers), 3600);
 
-  const sheet = getSheet("Users");
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === id_siswa) {
-      sheet.getRange(i + 1, 12).setValue(new Date());
-      break;
-    }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    return { success: false, message: "Server busy, retry later" };
   }
 
-  return { success: true, message: "Synced" };
+  try {
+    var sheet = getSheet("Users");
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === id_siswa) {
+        // ponytail: server-side guard — reject sync after submit to close autosave race
+        var status = data[i][10] || "BELUM";
+        if (status === "SELESAI" || status === "DISKUALIFIKASI") {
+          return { success: false, message: "already_submitted" };
+        }
+        var serialized = JSON.stringify(answers);
+        cache.put("answers_" + id_siswa, serialized, 3600);
+        sheet.getRange(i + 1, 12).setValue(new Date());  // last_seen
+        sheet.getRange(i + 1, 14).setValue(serialized);  // saved_answers (col N)
+        return { success: true, message: "Synced" };
+      }
+    }
+
+    return { success: false, message: "User not found" };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function handleSubmitExam(params) {
+  // Lock dipegang selama seluruh submit agar autosave (yang juga mengunci) tidak
+  // berselang-seling, dan agar dua submit bersamaan tidak sama-sama lolos penjaga.
+  var submitLock = LockService.getScriptLock();
+  if (!submitLock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+  try {
+    return submitExamLocked(params);
+  } finally {
+    submitLock.releaseLock();
+  }
+}
+
+function submitExamLocked(params) {
   const { id_siswa, answers, forced } = params;
+
+  // Idempotency: kalau siswa sudah pernah submit, kembalikan hasil yang tersimpan
+  // tanpa menghitung ulang dan tanpa menambah baris Responses. Ini menutup retry
+  // setelah browser timeout padahal server sebenarnya sudah sukses.
+  const guardSheet = getSheet("Users");
+  const guardData = guardSheet.getDataRange().getValues();
+  for (let g = 1; g < guardData.length; g++) {
+    if (guardData[g][0] === id_siswa) {
+      const prevStatus = guardData[g][10];
+      if (prevStatus === "SELESAI" || prevStatus === "DISKUALIFIKASI") {
+        const prevScore = guardData[g][8];
+        return {
+          success: true,
+          score: (prevScore === "" || prevScore === null || prevScore === undefined)
+            ? "0.00"
+            : Number(prevScore).toFixed(2),
+          status: prevStatus,
+          duplicate: true,
+        };
+      }
+      break;
+    }
+  }
 
   const config = getConfig();
   const exam_mapel = config.exam_mapel || "";
@@ -1075,6 +1136,7 @@ function handleResetUserLogin(params) {
       sheet.getRange(row, 10).setValue(0);       // violation_count = 0
       sheet.getRange(row, 11).setValue("BELUM"); // status_ujian = BELUM
       sheet.getRange(row, 13).setValue("");      // mapel_diujikan = kosong
+      sheet.getRange(row, 14).setValue("");      // saved_answers = kosong
       return { success: true, message: "Login reset successful" };
     }
   }

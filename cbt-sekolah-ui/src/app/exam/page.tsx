@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
 import { useExamStore } from "@/store/examStore";
 import {
@@ -24,6 +24,20 @@ function getOptionText(opt: string, q: Question): string {
 
 const OPTIONS = ["a", "b", "c", "d", "e"] as const;
 
+// Status koneksi dibaca lewat useSyncExternalStore: React memang menyediakan API ini
+// untuk berlangganan state di luar React, sehingga tidak perlu setState di badan effect.
+function subscribeOnline(onChange: () => void): () => void {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+const getOnlineSnapshot = () => navigator.onLine;
+// Server tidak tahu status koneksi klien; anggap online agar hidrasi tidak berbeda.
+const getOnlineServerSnapshot = () => true;
+
 export default function ExamPage() {
   const router = useTenantRouter();
   const {
@@ -42,6 +56,10 @@ export default function ExamPage() {
   const [maxViolations, setMaxViolations] = useState(3);
   const [examName, setExamName] = useState("RuangCBT");
   const [subjectName, setSubjectName] = useState("");
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const isOnline = useSyncExternalStore(subscribeOnline, getOnlineSnapshot, getOnlineServerSnapshot);
+  // Offline selalu menang atas hasil sinkronisasi terakhir saat ditampilkan.
+  const displayStatus = isOnline ? syncStatus : 'offline';
 
   const [raguraguSet, setRaguraguSet] = useState<Set<string>>(new Set());
   const [fontSize, setFontSize] = useState<'sm'|'base'|'lg'>('base');
@@ -67,7 +85,9 @@ export default function ExamPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (syncRef.current) clearInterval(syncRef.current);
     try {
-      const res = await submitExam(user.id_siswa, answers, forced);
+      // BR#9: always use latest state, never closure
+      const latestAnswers = useExamStore.getState().answers;
+      const res = await submitExam(user.id_siswa, latestAnswers, forced);
       if (res.success) {
         sessionStorage.setItem("exam_score", res.score ?? "0");
         sessionStorage.setItem("exam_status", forced ? "DISKUALIFIKASI" : "SELESAI");
@@ -82,7 +102,7 @@ export default function ExamPage() {
       hasSubmittedRef.current = false;
       setIsSubmitting(false);
     }
-  }, [user, answers, setIsSubmitted, resetExam, router]);
+  }, [user, setIsSubmitted, resetExam, router]);
 
   const handleViolation = useCallback(async (type: ViolationType, count: number) => {
     if (!user) return;
@@ -172,18 +192,56 @@ export default function ExamPage() {
     return () => clearTimeout(t);
   }, [timeRemaining, isLoading, isSubmitting, questions.length, doSubmit]);
 
-  // Auto-sync every 30s
+  // Auto-sync every 10s (BR#3) with error handling and online/offline awareness
   useEffect(() => {
     if (isLoading || !user) return;
+
+    const handleOnline = () => {
+      // Immediate sync on reconnect
+      const a = useExamStore.getState().answers;
+      if (Object.keys(a).length > 0 && !hasSubmittedRef.current) {
+        setSyncStatus('saving');
+        setIsSyncing(true);
+        syncAnswers(user.id_siswa, a).then((res) => {
+          if (res.success) {
+            setLastSync(new Date());
+            setSyncStatus('saved');
+          } else {
+            setSyncStatus('failed');
+          }
+          setIsSyncing(false);
+        });
+      }
+    };
+    // Status offline ditampilkan lewat isOnline (useSyncExternalStore), bukan state di sini.
+    window.addEventListener('online', handleOnline);
+
     syncRef.current = setInterval(async () => {
+      if (hasSubmittedRef.current) return;
+      if (!navigator.onLine) return;
       const currentAnswers = useExamStore.getState().answers;
       if (Object.keys(currentAnswers).length === 0) return;
+      setSyncStatus('saving');
       setIsSyncing(true);
-      await syncAnswers(user.id_siswa, currentAnswers);
-      setLastSync(new Date());
+      try {
+        const res = await syncAnswers(user.id_siswa, currentAnswers);
+        if (res.success) {
+          setLastSync(new Date());
+          setSyncStatus('saved');
+        } else {
+          // ponytail: don't claim saved if sync failed
+          setSyncStatus('failed');
+        }
+      } catch {
+        setSyncStatus('failed');
+      }
       setIsSyncing(false);
-    }, 30000);
-    return () => { if (syncRef.current) clearInterval(syncRef.current); };
+    }, 10000);
+
+    return () => {
+      if (syncRef.current) clearInterval(syncRef.current);
+      window.removeEventListener('online', handleOnline);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, user?.id_siswa]);
 
@@ -275,6 +333,32 @@ export default function ExamPage() {
               </span>
             </div>
             <span className="material-symbols-outlined text-sky-400 text-2xl">schedule</span>
+          </div>
+
+          {/* Sync Status Indicator */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800" title={
+            displayStatus === 'saved' ? 'Jawaban tersimpan' :
+            displayStatus === 'saving' ? 'Menyimpan...' :
+            displayStatus === 'failed' ? 'Gagal menyimpan' :
+            displayStatus === 'offline' ? 'Offline' : 'Menunggu'
+          }>
+            <div className={`w-2 h-2 rounded-full ${
+              displayStatus === 'saved' ? 'bg-emerald-400' :
+              displayStatus === 'saving' ? 'bg-amber-400 animate-pulse' :
+              displayStatus === 'failed' ? 'bg-red-400' :
+              displayStatus === 'offline' ? 'bg-slate-500' : 'bg-slate-600'
+            }`} />
+            <span className={`text-[9px] font-bold uppercase tracking-wider ${
+              displayStatus === 'saved' ? 'text-emerald-400' :
+              displayStatus === 'saving' ? 'text-amber-400' :
+              displayStatus === 'failed' ? 'text-red-400' :
+              displayStatus === 'offline' ? 'text-slate-500' : 'text-slate-500'
+            }`}>
+              {displayStatus === 'saved' ? 'Tersimpan' :
+               displayStatus === 'saving' ? 'Menyimpan...' :
+               displayStatus === 'failed' ? 'Gagal' :
+               displayStatus === 'offline' ? 'Offline' : '—'}
+            </span>
           </div>
         </div>
 
