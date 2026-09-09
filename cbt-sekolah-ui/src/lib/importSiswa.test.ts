@@ -10,7 +10,7 @@ function xlsxBuffer(rows: unknown[][]): ArrayBuffer {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Data Siswa");
   const out = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
 }
 
 const H = [...TEMPLATE_HEADERS];

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types src/lib/importSiswa.test.ts && node --experimental-strip-types src/lib/security.test.ts && node --experimental-strip-types src/lib/proxy.integration.test.ts && node ../backend-script/security.test.cjs"
   },
   "dependencies": {
     "dexie": "^4.4.2",

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getQuestions, getMataPelajaran } from "@/lib/api";
+import { getAdminQuestions, getMataPelajaran, logout } from "@/lib/api";
 import type { Question, MataPelajaran } from "@/types";
 
 // ─── GROQ AI UTILITY ────────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ export default function AnalisisButirSoalPage() {
     if (sessionStorage.getItem("admin_auth") !== "true") router.replace("/admin/login");
   }, [router]);
 
-  const { data: questionsRes, isLoading: questionsLoading } = useSWR("getQuestions", getQuestions);
+  const { data: questionsRes, isLoading: questionsLoading } = useSWR("getAdminQuestions", getAdminQuestions);
   const { data: mapelRes }     = useSWR("getMataPelajaran", getMataPelajaran);
   const questions: Question[]       = questionsRes?.data ?? [];
   const mapelList: MataPelajaran[]  = mapelRes?.data ?? [];
@@ -479,7 +479,7 @@ export default function AnalisisButirSoalPage() {
         {/* Footer Sidebar */}
         <div className="p-6 border-t border-slate-800">
           <button
-            onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
+            onClick={async () => { await logout(); sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
             className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider"
           >
             <span className="material-symbols-outlined text-red-400">logout</span>

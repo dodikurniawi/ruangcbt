@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, type PrintSettings } from "@/lib/api";
+import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, logout, type PrintSettings } from "@/lib/api";
 import type { MataPelajaran } from "@/types";
 import type { User } from "@/types";
 import * as XLSX from "xlsx";
@@ -1115,7 +1115,7 @@ export default function AdminCetak() {
         {/* Footer Sidebar */}
         <div className="p-6 border-t border-slate-800">
           <button
-            onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
+            onClick={async () => { await logout(); sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
             className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider"
           >
             <span className="material-symbols-outlined text-red-400">logout</span>

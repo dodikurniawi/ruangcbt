@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, setExamStatus, resetUserLogin } from "@/lib/api";
+import { getUsers, getConfig, setExamStatus, resetUserLogin, logout } from "@/lib/api";
 import type { User, ExamConfig } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
@@ -239,7 +239,7 @@ export default function AdminDashboard() {
         {/* Footer Sidebar */}
         <div className="p-6 border-t border-slate-100 bg-slate-50/50">
           <button
-            onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
+            onClick={async () => { await logout(); sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
             className="flex items-center gap-3 text-red-600 hover:text-red-700 hover:bg-red-50 p-2.5 rounded-xl transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider"
           >
             <span className="material-symbols-outlined text-red-600 text-[20px]">logout</span>
@@ -265,32 +265,62 @@ export default function AdminDashboard() {
 
         {/* Exam Control Banner */}
         <section className="mb-8">
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="relative flex items-center justify-center shrink-0">
-                {examOpen && <div className="absolute w-10 h-10 bg-emerald-500/20 rounded-full animate-ping"></div>}
-                <div className={`relative w-5 h-5 rounded-full border-2 border-white shadow-sm ${examOpen ? "bg-emerald-600" : "bg-red-600"}`}></div>
+          <div className={`border rounded-3xl p-6 shadow-xs flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 transition-all ${
+            examOpen 
+              ? "bg-white border-emerald-200 shadow-emerald-500/5" 
+              : "bg-amber-50/60 border-amber-300/80 shadow-amber-500/5"
+          }`}>
+            <div className="flex items-start md:items-center gap-4.5 flex-1">
+              <div className="relative flex items-center justify-center shrink-0 mt-1 md:mt-0">
+                {examOpen && <div className="absolute w-14 h-14 bg-emerald-500/20 rounded-full animate-ping"></div>}
+                <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md ${
+                  examOpen ? "bg-gradient-to-br from-emerald-600 to-teal-600 shadow-emerald-600/30" : "bg-gradient-to-br from-red-600 to-rose-600 shadow-red-600/30"
+                }`}>
+                  <span className="material-symbols-outlined text-3xl select-none">
+                    {examOpen ? "lock_open" : "lock"}
+                  </span>
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <span className={`font-black text-[10px] uppercase tracking-widest block ${examOpen ? "text-emerald-700" : "text-red-600"}`}>
-                  {examOpen ? "Status: Aktif Membuka Ujian" : "Status: Ujian Ditutup"}
-                </span>
+              <div className="space-y-1.5 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-xs uppercase tracking-wide shadow-xs ${
+                    examOpen 
+                      ? "bg-emerald-600 text-white shadow-emerald-600/20" 
+                      : "bg-red-600 text-white shadow-red-600/20"
+                  }`}>
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                    {examOpen ? "STATUS: AKTIF MEMBUKA UJIAN" : "STATUS: UJIAN DITUTUP"}
+                  </span>
+                  <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-lg ${
+                    examOpen ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                  }`}>
+                    {examOpen ? "Siswa Bisa Login" : "Siswa GAK BISA Login"}
+                  </span>
+                </div>
                 <h3 className="font-black text-xl text-slate-900">
-                  {examOpen ? "Ujian Sedang Berlangsung" : "Siswa Tidak Bisa Mengakses Ujian"}
+                  {examOpen ? "Ujian Sedang Berlangsung" : "Akses Portal Ujian Terkunci"}
                 </h3>
+                <p className={`text-xs md:text-sm font-bold leading-relaxed ${
+                  examOpen ? "text-slate-600" : "text-slate-800"
+                }`}>
+                  {examOpen 
+                    ? "✓ Siswa DAPAT login menggunakan 6 digit PIN dan langsung mengerjakan ujian."
+                    : "⛔ PENTING: Saat status UJIAN DITUTUP, seluruh siswa TIDAK BISA LOGIN ke portal ujian. Tekan tombol di samping untuk membuka akses."
+                  }
+                </p>
               </div>
             </div>
             <button
               onClick={handleToggleExam}
               disabled={isTogglingStatus}
-              className={`w-full md:w-auto px-7 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-60 hover:scale-105 ${
+              className={`w-full lg:w-auto px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer shrink-0 disabled:opacity-60 hover:scale-105 ${
                 examOpen 
                   ? "bg-red-600 hover:bg-red-700 text-white shadow-red-600/20" 
                   : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
               }`}
             >
-              <span className="material-symbols-outlined text-base">{examOpen ? "do_not_disturb_on" : "play_arrow"}</span>
-              {isTogglingStatus ? "Memproses..." : examOpen ? "Tutup Ujian" : "Buka Akses Ujian"}
+              <span className="material-symbols-outlined text-lg">{examOpen ? "do_not_disturb_on" : "play_circle"}</span>
+              {isTogglingStatus ? "Memproses..." : examOpen ? "Tutup Ujian Sekarang" : "Buka Akses Ujian"}
             </button>
           </div>
         </section>
@@ -426,5 +456,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
 

@@ -6,6 +6,7 @@
 // ===== CONFIGURATION =====
 const CACHE_DURATION = 60; // seconds
 const cache = CacheService.getScriptCache();
+const PROXY_SECRET_PROPERTY = "SHARED_SECRET";
 
 // ===== HELPER FUNCTIONS =====
 
@@ -57,6 +58,24 @@ function createJsonResponse(data) {
   );
 }
 
+function secureEquals(left, right) {
+  left = String(left || "");
+  right = String(right || "");
+  let mismatch = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i++) {
+    mismatch |= (left.charCodeAt(i) || 0) ^ (right.charCodeAt(i) || 0);
+  }
+  return mismatch === 0;
+}
+
+function isAuthorizedProxyRequest(params) {
+  // ponytail: satu secret acak per tenant cukup untuk boundary ini; naikkan ke HMAC
+  // bertimestamp jika secret harus melewati perantara yang tidak sepenuhnya dipercaya.
+  const expected = PropertiesService.getScriptProperties().getProperty(PROXY_SECRET_PROPERTY);
+  return expected && expected.length >= 32 && secureEquals(params && params.proxy_secret, expected);
+}
+
 // Pastikan sheet ada; jika tidak, buat dengan header
 function ensureSheet(tabName, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -72,6 +91,9 @@ function ensureSheet(tabName, headers) {
 
 function doGet(e) {
   try {
+    if (!isAuthorizedProxyRequest(e && e.parameter)) {
+      return createJsonResponse({ success: false, message: "Unauthorized" });
+    }
     const action = e.parameter.action;
     let result;
 
@@ -122,6 +144,9 @@ function doGet(e) {
 function doPost(e) {
   try {
     const params = JSON.parse(e.postData.contents);
+    if (!isAuthorizedProxyRequest(params)) {
+      return createJsonResponse({ success: false, message: "Unauthorized" });
+    }
     const action = params.action;
     let result;
 
@@ -1010,6 +1035,10 @@ function handleSavePrintSettings(params) {
 function handleUpdateConfig(params) {
   const sheet = getSheet("Config");
   const { key, value } = params;
+  const protectedKeys = ["shared_secret", "proxy_secret", "registry_secret", "session_signing_secret"];
+  if (protectedKeys.indexOf(String(key || "").toLowerCase()) !== -1) {
+    return { success: false, message: "Security config tidak dapat diubah melalui API" };
+  }
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents } from "@/lib/api";
+import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
 import type { User, MataPelajaran } from "@/types";
@@ -379,7 +379,7 @@ export default function AdminManagement() {
         {/* Footer Sidebar */}
         <div className="p-6 border-t border-slate-800">
           <button
-            onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
+            onClick={async () => { await logout(); sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
             className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider"
           >
             <span className="material-symbols-outlined text-red-400">logout</span>

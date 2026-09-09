@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getKelas, createKelas, updateKelas, deleteKelas, deleteAllKelas } from "@/lib/api";
+import { getKelas, createKelas, updateKelas, deleteKelas, deleteAllKelas, logout } from "@/lib/api";
 import type { Kelas } from "@/types";
 
 // Jenjang → tingkat options
@@ -238,7 +238,7 @@ export default function DataKelasPage() {
         </nav>
 
         <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-          <button onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
+          <button onClick={async () => { await logout(); sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
             className="flex items-center gap-3 text-red-600 hover:text-red-700 hover:bg-red-50 p-2.5 rounded-xl transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider">
             <span className="material-symbols-outlined text-red-600 text-[20px]">logout</span>
             <span>Keluar Admin</span>

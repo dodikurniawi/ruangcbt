@@ -41,8 +41,8 @@ async function fetchApi<T>(
             },
         };
 
-        if (method === 'POST' && body) {
-            options.body = JSON.stringify({ action, ...body });
+        if (method === 'POST') {
+            options.body = JSON.stringify({ action, ...(body ?? {}) });
         }
 
         const response = await fetch(url, options);
@@ -66,6 +66,10 @@ export async function login(username: string, password: string): Promise<ApiResp
 
 export async function adminLogin(password: string): Promise<ApiResponse> {
     return fetchApi('adminLogin', 'POST', { password });
+}
+
+export async function logout(): Promise<ApiResponse> {
+    return fetchApi('logout', 'POST');
 }
 
 // ===== EXAM APIs =====
@@ -268,5 +272,3 @@ export const getPrintSettings = () =>
 
 export const savePrintSettings = (settings: PrintSettings) =>
   fetchApi('savePrintSettings', 'POST', { settings });
-
-
