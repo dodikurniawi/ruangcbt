@@ -69,6 +69,19 @@ function secureEquals(left, right) {
   return mismatch === 0;
 }
 
+function getExamDeadlineMs(waktuMulai, examDurationMinutes) {
+  if (!waktuMulai) return null;
+  const startMs = new Date(waktuMulai).getTime();
+  const duration = Number(examDurationMinutes);
+  if (!isFinite(startMs) || !isFinite(duration) || duration < 0) return null;
+  return startMs + duration * 60000;
+}
+
+function isExamDeadlinePassed(waktuMulai, examDurationMinutes) {
+  const deadlineMs = getExamDeadlineMs(waktuMulai, examDurationMinutes);
+  return deadlineMs !== null && Date.now() >= deadlineMs;
+}
+
 function isAuthorizedProxyRequest(params) {
   // ponytail: satu secret acak per tenant cukup untuk boundary ini; naikkan ke HMAC
   // bertimestamp jika secret harus melewati perantara yang tidak sepenuhnya dipercaya.
@@ -442,9 +455,10 @@ function handleLogin(params) {
         return { success: false, message: "Akun sudah login di perangkat lain." };
       }
 
+      const waktuMulai = row[6] || new Date();
       sheet.getRange(i + 1, 6).setValue(true);
       if (!row[6]) {
-        sheet.getRange(i + 1, 7).setValue(new Date());
+        sheet.getRange(i + 1, 7).setValue(waktuMulai);
         sheet.getRange(i + 1, 11).setValue("SEDANG");
       }
       sheet.getRange(i + 1, 12).setValue(new Date());
@@ -466,7 +480,7 @@ function handleLogin(params) {
           nama_lengkap: row[3],
           kelas: row[4],
           status_ujian: row[10] || "SEDANG",
-          waktu_mulai: row[6] ? row[6] : new Date().toISOString(),
+          waktu_mulai: waktuMulai,
           exam_duration: parseInt(config.exam_duration) || 90,
           saved_answers: savedAnswers,
         },
@@ -495,6 +509,9 @@ function handleSyncAnswers(params) {
         var status = data[i][10] || "BELUM";
         if (status === "SELESAI" || status === "DISKUALIFIKASI") {
           return { success: false, message: "already_submitted" };
+        }
+        if (isExamDeadlinePassed(data[i][6], getConfig().exam_duration)) {
+          return { success: false, message: "deadline_expired" };
         }
         var serialized = JSON.stringify(answers);
         cache.put("answers_" + id_siswa, serialized, 3600);
@@ -552,6 +569,19 @@ function submitExamLocked(params) {
 
   const config = getConfig();
   const exam_mapel = config.exam_mapel || "";
+  const examDuration = Number(config.exam_duration);
+  let authoritativeStart = null;
+  for (let g = 1; g < guardData.length; g++) {
+    if (guardData[g][0] === id_siswa) {
+      authoritativeStart = guardData[g][6];
+      break;
+    }
+  }
+  const deadlineMs = getExamDeadlineMs(authoritativeStart, examDuration);
+  if (deadlineMs === null) {
+    return { success: false, message: "Waktu mulai ujian tidak valid" };
+  }
+  const isLate = Date.now() >= deadlineMs;
 
   const qSheet = getSheet("Questions");
   const questions = qSheet.getDataRange().getValues();
@@ -617,10 +647,14 @@ function submitExamLocked(params) {
     : 0;
 
   const rSheet = getSheet("Responses");
+  const submissionLog = [
+    forced ? "DISKUALIFIKASI - Auto Submit" : violationLog,
+    isLate ? "TERLAMBAT" : "",
+  ].filter(Boolean).join(" | ");
   rSheet.appendRow([
     new Date(), id_siswa, userName, userClass,
     JSON.stringify(answers), finalScore.toFixed(2), durasiMenit,
-    forced ? "DISKUALIFIKASI - Auto Submit" : violationLog, "",
+    submissionLog, "",
   ]);
 
   cache.remove("questions"); cache.remove("questions_all");
@@ -629,6 +663,7 @@ function submitExamLocked(params) {
     success: true,
     score: finalScore.toFixed(2),
     status: forced ? "DISKUALIFIKASI" : "SELESAI",
+    late: isLate,
   };
 }
 

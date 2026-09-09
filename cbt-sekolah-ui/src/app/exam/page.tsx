@@ -8,6 +8,7 @@ import {
   syncAnswers, submitExam, reportViolation,
 } from "@/lib/api";
 import { useExamSecurity } from "@/hooks/useExamSecurity";
+import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import type { Question, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
@@ -42,8 +43,8 @@ export default function ExamPage() {
   const router = useTenantRouter();
   const {
     user, questions, currentQuestionIndex, answers,
-    timeRemaining, isExamStarted, violations,
-    setQuestions, setTimeRemaining, decrementTime,
+    timeRemaining, violations,
+    setQuestions, setTimeRemaining,
     setAnswer, setCurrentQuestionIndex, nextQuestion, prevQuestion,
     setIsSubmitted, resetExam, setLastSync, setIsSyncing, setIsExamStarted,
   } = useExamStore();
@@ -56,6 +57,7 @@ export default function ExamPage() {
   const [maxViolations, setMaxViolations] = useState(3);
   const [examName, setExamName] = useState("RuangCBT");
   const [subjectName, setSubjectName] = useState("");
+  const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const isOnline = useSyncExternalStore(subscribeOnline, getOnlineSnapshot, getOnlineServerSnapshot);
   // Offline selalu menang atas hasil sinkronisasi terakhir saat ditampilkan.
@@ -143,13 +145,20 @@ export default function ExamPage() {
       }
 
       const cfgRes = await getConfig();
-      if (cfgRes.success && cfgRes.data) {
-        const cfg = cfgRes.data;
+      const cfg = cfgRes.success && cfgRes.data ? cfgRes.data : null;
+      const examDuration = cfg?.exam_duration ?? user.exam_duration ?? 90;
+      const calculatedDeadline = calculateExamDeadline(user.waktu_mulai, examDuration);
+      if (calculatedDeadline === null) {
+        setLoadError("Waktu mulai ujian tidak valid. Silakan login kembali.");
+        setIsLoading(false);
+        return;
+      }
+      setDeadlineMs(calculatedDeadline);
+      setTimeRemaining(remainingExamSeconds(calculatedDeadline, Date.now()));
+
+      if (cfg) {
         setExamName(cfg.exam_name || "RuangCBT");
         setMaxViolations(cfg.max_violations ?? 3);
-        if (!isExamStarted) {
-          setTimeRemaining((cfg.exam_duration || 90) * 60);
-        }
       }
 
       if (questions.length === 0) {
@@ -176,14 +185,18 @@ export default function ExamPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Countdown timer
+  // Countdown display only; deadlineMs remains the source of truth.
   useEffect(() => {
-    if (isLoading || isSubmitting) return;
+    if (isLoading || isSubmitting || deadlineMs === null) return;
+    const refreshRemaining = () => {
+      setTimeRemaining(remainingExamSeconds(deadlineMs, Date.now()));
+    };
+    refreshRemaining();
     timerRef.current = setInterval(() => {
-      decrementTime();
+      refreshRemaining();
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isLoading, isSubmitting, decrementTime]);
+  }, [isLoading, isSubmitting, deadlineMs, setTimeRemaining]);
 
   // Auto-submit at zero (deferred to avoid setState-in-render warning)
   useEffect(() => {

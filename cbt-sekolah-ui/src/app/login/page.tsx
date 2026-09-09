@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
 import { login, getConfig } from "@/lib/api";
 import { useExamStore } from "@/store/examStore";
+import { shouldRecover, deserializeAnswers } from "@/lib/answerRecovery";
 
 function buildWaUrl(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -42,11 +43,9 @@ export default function LoginPage() {
         setUser(res.data);
         // ponytail: recover server-saved answers on re-entry if local store is empty
         const saved = res.data.saved_answers;
-        if (saved && typeof saved === "object" && Object.keys(saved).length > 0) {
-          const local = useExamStore.getState().answers;
-          if (!local || Object.keys(local).length === 0) {
-            useExamStore.getState().setAllAnswers(saved);
-          }
+        const local = useExamStore.getState().answers;
+        if (shouldRecover(local, saved)) {
+          useExamStore.getState().setAllAnswers(deserializeAnswers(saved)!);
         }
         router.push("/pin-verification");
       } else {
