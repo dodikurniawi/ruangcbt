@@ -17,12 +17,12 @@ export async function getTenantRecord(schoolId: string): Promise<TenantRecord | 
     const res = await fetch(url, { next: { revalidate: 300 } });
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data.success) return null;
+    if (!data.success || String(data.school_id) !== schoolId || !data.gas_url) return null;
     return {
-      school_id: data.school_id,
-      school_name: data.school_name,
-      gas_url: data.gas_url,
-      shared_secret: data.shared_secret || '',
+      school_id: String(data.school_id),
+      school_name: String(data.school_name || ''),
+      gas_url: String(data.gas_url),
+      shared_secret: String(data.shared_secret || ''),
     };
   } catch {
     return null;

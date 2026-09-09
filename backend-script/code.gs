@@ -61,10 +61,10 @@ function createJsonResponse(data) {
 function secureEquals(left, right) {
   left = String(left || "");
   right = String(right || "");
-  let mismatch = left.length ^ right.length;
-  const length = Math.max(left.length, right.length);
-  for (let i = 0; i < length; i++) {
-    mismatch |= (left.charCodeAt(i) || 0) ^ (right.charCodeAt(i) || 0);
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < right.length; i++) {
+    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
   }
   return mismatch === 0;
 }
@@ -137,7 +137,8 @@ function doGet(e) {
 
     return createJsonResponse(result);
   } catch (error) {
-    return createJsonResponse({ success: false, message: error.toString() });
+    console.error("doGet failed", error);
+    return createJsonResponse({ success: false, message: "Internal server error" });
   }
 }
 
@@ -248,7 +249,8 @@ function doPost(e) {
 
     return createJsonResponse(result);
   } catch (error) {
-    return createJsonResponse({ success: false, message: error.toString() });
+    console.error("doPost failed", error);
+    return createJsonResponse({ success: false, message: "Internal server error" });
   }
 }
 

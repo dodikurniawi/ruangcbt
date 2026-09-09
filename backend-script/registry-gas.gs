@@ -29,7 +29,8 @@ function doGet(e) {
     }
     return handleGetTenant(schoolId, canReadSecret);
   } catch (error) {
-    return respond({ success: false, message: error.toString() });
+    console.error('Registry lookup failed', error);
+    return respond({ success: false, message: 'Internal server error' });
   }
 }
 
@@ -58,7 +59,7 @@ function handleGetTenant(schoolId, canReadSecret) {
         school_name: rows[i][1],
         gas_url:     rows[i][2],
       };
-      if (canReadSecret) tenant.shared_secret = rows[i][4];
+      if (canReadSecret) tenant.shared_secret = String(rows[i][4]);
       return respond(tenant);
     }
   }
@@ -69,10 +70,10 @@ function handleGetTenant(schoolId, canReadSecret) {
 function secureEquals(left, right) {
   left = String(left || '');
   right = String(right || '');
-  let mismatch = left.length ^ right.length;
-  const length = Math.max(left.length, right.length);
-  for (let i = 0; i < length; i++) {
-    mismatch |= (left.charCodeAt(i) || 0) ^ (right.charCodeAt(i) || 0);
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < right.length; i++) {
+    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
   }
   return mismatch === 0;
 }
