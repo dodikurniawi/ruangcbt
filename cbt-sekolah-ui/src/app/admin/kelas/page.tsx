@@ -172,74 +172,76 @@ export default function DataKelasPage() {
       </div>
 
       {/* Sidebar Panel */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#0F172A] shadow-xl border-r border-slate-800 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="p-6 flex justify-between items-center border-b border-slate-800">
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-white shadow-sm border-r border-slate-200 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-6 flex justify-between items-center border-b border-slate-100">
           <div>
-            <Link href={tenantPath("/")} className="flex items-center gap-2 text-white hover:opacity-90 transition-opacity">
-              <span className="material-symbols-outlined text-sky-400 text-2xl">school</span>
-              <h1 className="font-black text-lg tracking-wider text-white">CBT <span className="text-sky-400">ADMIN</span></h1>
+            <Link href={tenantPath("/")} className="flex items-center gap-2.5 text-slate-900 hover:opacity-95 transition-opacity">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <span className="material-symbols-outlined text-xl">school</span>
+              </div>
+              <h1 className="font-black text-lg tracking-wider text-slate-900">CBT <span className="text-blue-600">ADMIN</span></h1>
             </Link>
-            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Institutional Portal</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Portal Pengawas Ujian</p>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-white p-1 cursor-pointer">
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-500 p-1 cursor-pointer">
             <span className="material-symbols-outlined text-2xl">close</span>
           </button>
         </div>
 
-        <nav className="flex-grow px-4 space-y-1 mt-6">
+        <nav className="flex-grow px-4 space-y-1 mt-6 overflow-y-auto">
           <Link href={tenantPath("/admin")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">dashboard</span>
             <span className="text-sm">Dashboard</span>
           </Link>
 
-          <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold px-4 mb-1 mt-4">Master Data</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold px-4 mb-1 mt-5">Master Data</div>
           <Link href={tenantPath("/admin/kelas")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/kelas") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/kelas") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">class</span>
             <span className="text-sm">Data Kelas</span>
           </Link>
           <Link href={tenantPath("/admin/mata-pelajaran")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/mata-pelajaran") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/mata-pelajaran") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">book_2</span>
             <span className="text-sm">Mata Pelajaran</span>
           </Link>
 
-          <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold px-4 mb-1 mt-4">Administrasi</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold px-4 mb-1 mt-5">Administrasi</div>
           <Link href={tenantPath("/admin/management")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/management") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/management") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">group</span>
             <span className="text-sm">Data Siswa</span>
           </Link>
           <Link href={tenantPath("/admin/questions")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/questions") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/questions") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">inventory_2</span>
             <span className="text-sm">Bank Soal</span>
           </Link>
           <Link href={tenantPath("/admin/cetak")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/cetak") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/cetak") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">print</span>
             <span className="text-sm">Cetak</span>
           </Link>
           <Link href={tenantPath("/admin/analisis")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/analisis") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/analisis") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">analytics</span>
-            <span className="text-sm font-medium">Analisis Soal</span>
+            <span className="text-sm">Analisis Soal</span>
           </Link>
 
-          <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold px-4 mb-1 mt-4">Ujian</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold px-4 mb-1 mt-5">Ujian</div>
           <Link href={tenantPath("/admin")} onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis") ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" : "text-slate-300 hover:text-white hover:bg-white/5"}`}>
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis") ? "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20" : "text-slate-600 hover:text-blue-600 hover:bg-blue-50/60 font-semibold"}`}>
             <span className="material-symbols-outlined text-[20px]">quiz</span>
-            <span className="text-sm">Ujian</span>
+            <span className="text-sm">Monitoring Ujian</span>
           </Link>
         </nav>
 
-        <div className="p-6 border-t border-slate-800">
+        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
           <button onClick={() => { sessionStorage.removeItem("admin_auth"); router.replace("/admin/login"); }}
-            className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider">
-            <span className="material-symbols-outlined text-red-400">logout</span>
-            <span>Keluar</span>
+            className="flex items-center gap-3 text-red-600 hover:text-red-700 hover:bg-red-50 p-2.5 rounded-xl transition-colors cursor-pointer w-full text-left font-bold text-xs uppercase tracking-wider">
+            <span className="material-symbols-outlined text-red-600 text-[20px]">logout</span>
+            <span>Keluar Admin</span>
           </button>
         </div>
       </aside>
@@ -250,22 +252,24 @@ export default function DataKelasPage() {
       <main className="flex-1 md:ml-64 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-[#2563EB] text-3xl">class</span>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#1D4ED8] border border-blue-200/60 flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">class</span>
+            </div>
             <div>
-              <h1 className="font-bold text-2xl text-slate-800">Data Kelas</h1>
-              <p className="text-xs uppercase tracking-widest text-slate-400 font-bold mt-0.5">SISTEM ADMINISTRASI</p>
+              <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Data Kelas</h1>
+              <p className="text-xs uppercase tracking-wider text-slate-400 font-extrabold mt-0.5">SISTEM ADMINISTRASI</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {kelas.length > 0 && (
               <button onClick={handleHapusSemua}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 h-9 text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-colors cursor-pointer">
+                className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-2 text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-colors cursor-pointer">
                 <span className="material-symbols-outlined text-sm">delete</span>
                 Hapus Semua
               </button>
             )}
             <button onClick={handleOpenAdd}
-              className="bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg px-4 h-9 text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-colors cursor-pointer">
+              className="bg-[#1D4ED8] hover:bg-blue-800 text-white rounded-xl px-4 py-2 text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-colors cursor-pointer">
               <span className="material-symbols-outlined text-sm">add</span>
               Tambah Data
             </button>
@@ -275,23 +279,23 @@ export default function DataKelasPage() {
         <div className="relative w-full max-w-sm mb-6">
           <span className="material-symbols-outlined text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px]">search</span>
           <input
-            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-xs font-bold text-slate-600 placeholder-slate-400 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 outline-none transition-all bg-white"
+            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-xs font-bold text-slate-700 placeholder-slate-400 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none transition-all bg-white"
             placeholder="Cari tingkat atau nama kelas..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200">
                 <tr>
-                  <th className="text-[11px] uppercase tracking-widest text-slate-400 font-bold px-6 py-4 w-16 text-center">No</th>
-                  <th className="text-[11px] uppercase tracking-widest text-slate-400 font-bold px-6 py-4 w-40">Jenjang</th>
-                  <th className="text-[11px] uppercase tracking-widest text-slate-400 font-bold px-6 py-4 w-36">Tingkat</th>
-                  <th className="text-[11px] uppercase tracking-widest text-slate-400 font-bold px-6 py-4">Nama Kelas</th>
-                  <th className="text-[11px] uppercase tracking-widest text-slate-400 font-bold px-6 py-4 text-right w-28">Aksi</th>
+                  <th className="font-black text-xs uppercase tracking-wider px-6 py-4 w-16 text-center">No</th>
+                  <th className="font-black text-xs uppercase tracking-wider px-6 py-4 w-40">Jenjang</th>
+                  <th className="font-black text-xs uppercase tracking-wider px-6 py-4 w-36">Tingkat</th>
+                  <th className="font-black text-xs uppercase tracking-wider px-6 py-4">Nama Kelas</th>
+                  <th className="font-black text-xs uppercase tracking-wider px-6 py-4 text-right w-28">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

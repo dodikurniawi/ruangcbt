@@ -205,6 +205,10 @@ export async function importStudents(students: StudentInput[]): Promise<ApiRespo
     return fetchApi<{ added: number; skipped: number }>('importStudents', 'POST', { students });
 }
 
+export async function deleteAllStudents(): Promise<ApiResponse<{ deleted: number }>> {
+    return fetchApi<{ deleted: number }>('deleteAllStudents', 'POST');
+}
+
 // ===== DATA KELAS APIs =====
 
 export const getKelas = () => fetchApi<Kelas[]>('getKelas');

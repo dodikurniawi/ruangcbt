@@ -267,8 +267,8 @@ export default function Home() {
                 <h3 className="font-headline-admin text-headline-admin text-on-surface mb-md">
                   Easy to Use
                 </h3>
-                <p className="font-body-admin text-on-surface-variant">
-                  Antarmuka intuitif yang meminimalisir 'test anxiety'. Setup ujian hanya
+                <p className="font-body-admin text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Antarmuka intuitif yang meminimalisir &apos;test anxiety&apos;. Setup ujian hanya
                   dalam hitungan menit untuk administrator.
                 </p>
               </div>

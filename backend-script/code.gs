@@ -177,6 +177,9 @@ function doPost(e) {
       case "importStudents":
         result = handleImportStudents(params);
         break;
+      case "deleteAllStudents":
+        result = handleDeleteAllStudents();
+        break;
       case "setExamStatus":
         result = handleSetExamStatus(params);
         break;
@@ -1223,6 +1226,17 @@ function handleDeleteStudent(params) {
   }
 
   return { success: false, message: "Siswa tidak ditemukan" };
+}
+
+function handleDeleteAllStudents() {
+  const sheet = getSheet("Users");
+  if (!sheet) return { success: false, message: "Sheet Users tidak ditemukan" };
+
+  const lastRow = sheet.getLastRow();
+  const deleted = lastRow > 1 ? lastRow - 1 : 0;
+  if (deleted > 0) sheet.deleteRows(2, deleted); // baris 1 = header, sisakan
+
+  return { success: true, message: deleted + " siswa dihapus", data: { deleted: deleted } };
 }
 
 function handleImportStudents(params) {

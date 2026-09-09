@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig } from "@/lib/api";
+import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents } from "@/lib/api";
+import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
+import type { ImportPreview } from "@/lib/importSiswa";
 import type { User, MataPelajaran } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
@@ -53,6 +55,9 @@ export default function AdminManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState("");
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [resettingId, setResettingId] = useState<string | null>(null);
@@ -62,6 +67,14 @@ export default function AdminManagement() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editForm, setEditForm] = useState<EditForm>({ id_siswa: "", username: "", password: "", nama_lengkap: "", kelas: "" });
+
+  // Import siswa
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importFileError, setImportFileError] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState("");
+  const [showProblemDetail, setShowProblemDetail] = useState(false);
 
   // Uncontrolled config form
   const configFormRef = useRef<HTMLFormElement>(null);
@@ -110,6 +123,18 @@ export default function AdminManagement() {
     setIsDeleting(false);
   };
 
+  const handleDeleteAll = async () => {
+    setIsDeletingAll(true);
+    const res = await deleteAllStudents();
+    setIsDeletingAll(false);
+    if (res.success) {
+      await mutateUsers();
+      setShowDeleteAllModal(false);
+      setDeleteAllConfirmText("");
+      setImportResult(`${res.data?.deleted ?? 0} siswa berhasil dihapus.`);
+    }
+  };
+
   const handleResetLogin = async (id: string) => {
     setResettingId(id);
     await resetUserLogin(id);
@@ -141,6 +166,55 @@ export default function AdminManagement() {
       setFormError(res.message || "Gagal memperbarui data siswa.");
     }
     setIsUpdating(false);
+  };
+
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // izinkan pilih file yang sama lagi
+    if (!file) return;
+    setImportFileError("");
+    setImportResult("");
+    setShowProblemDetail(false);
+    try {
+      const buf = await file.arrayBuffer();
+      const rows = parseWorkbook(buf);
+      const existing = new Set(users.map((u) => u.username.toLowerCase()));
+      const preview = buildPreview(rows, existing);
+      if (preview.valid.length === 0 && preview.problems.length === 0) {
+        setImportFileError("File tidak berisi data siswa. Isi template lalu coba lagi.");
+        return;
+      }
+      setImportPreview(preview);
+    } catch (err) {
+      setImportPreview(null);
+      setImportFileError(
+        err instanceof Error && err.message.startsWith("Format kolom")
+          ? err.message
+          : "File tidak dapat dibaca. Pastikan file berformat Excel (.xlsx) atau CSV sesuai template."
+      );
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview || importPreview.valid.length === 0) return;
+    setIsImporting(true);
+    const res = await importStudents(importPreview.valid);
+    setIsImporting(false);
+    if (res.success) {
+      const added = res.data?.added ?? importPreview.valid.length;
+      const skippedServer = res.data?.skipped ?? 0;
+      const problemCount = importPreview.problems.length;
+      const totalSkipped = skippedServer + problemCount;
+      setImportResult(
+        totalSkipped > 0
+          ? `${added} siswa berhasil ditambahkan. ${totalSkipped} data tidak diimport karena bermasalah atau sudah terdaftar.`
+          : `${added} siswa berhasil ditambahkan.`
+      );
+      setImportPreview(null);
+      await mutateUsers();
+    } else {
+      setImportFileError(res.message || "Import gagal. Coba lagi beberapa saat.");
+    }
   };
 
   const handleSaveConfig = async () => {
@@ -327,30 +401,34 @@ export default function AdminManagement() {
             </div>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => {
-                  if (confirm("Apakah Anda yakin ingin menghapus seluruh data siswa? Tindakan ini tidak dapat dibatalkan.")) {
-                    alert("Seluruh data siswa berhasil dibersihkan!");
-                  }
-                }}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-rose-500/10 transition-all cursor-pointer"
+                onClick={() => { setDeleteAllConfirmText(""); setShowDeleteAllModal(true); }}
+                disabled={users.length === 0}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-rose-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
                 Hapus Semua
               </button>
               <button
-                onClick={() => alert("Template import data siswa berhasil diunduh!")}
+                onClick={downloadTemplate}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">download</span>
                 Template
               </button>
               <button
-                onClick={() => alert("Silakan unggah berkas excel/csv data siswa Anda.")}
+                onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-emerald-500/10 transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">upload</span>
                 Import
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFilePicked}
+                className="hidden"
+              />
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/10 transition-all cursor-pointer"
@@ -360,6 +438,25 @@ export default function AdminManagement() {
               </button>
             </div>
           </div>
+
+          {importResult && (
+            <div className="mb-6 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-xl border border-emerald-200/50 font-bold text-xs flex items-center gap-2 shadow-sm">
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              <span>{importResult}</span>
+              <button onClick={() => setImportResult("")} className="ml-auto cursor-pointer hover:opacity-70">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          )}
+          {importFileError && !importPreview && (
+            <div className="mb-6 bg-red-50 text-red-700 px-4 py-3 rounded-xl border border-red-200/50 font-bold text-xs flex items-center gap-2 shadow-sm">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              <span>{importFileError}</span>
+              <button onClick={() => setImportFileError("")} className="ml-auto cursor-pointer hover:opacity-70">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          )}
 
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-6">
@@ -592,6 +689,76 @@ export default function AdminManagement() {
         </section>
       </main>
 
+      {/* Import Preview Modal */}
+      {importPreview && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-2xl border border-slate-200/80 max-h-[85vh] flex flex-col">
+            <h3 className="font-extrabold text-lg text-slate-800 mb-1">Import Siswa</h3>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-6">Periksa hasil sebelum menyimpan</p>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl border border-emerald-200/50 font-bold text-xs">
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                {importPreview.valid.length} data siap diimport
+              </span>
+              {importPreview.problems.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-xl border border-amber-200/50 font-bold text-xs">
+                  <span className="material-symbols-outlined text-[16px]">warning</span>
+                  {importPreview.problems.length} data perlu diperbaiki
+                </span>
+              )}
+            </div>
+
+            {importFileError && (
+              <div className="mb-4 bg-red-50 text-red-700 px-4 py-3 rounded-xl border border-red-200/50 font-bold text-xs">
+                {importFileError}
+              </div>
+            )}
+
+            {importPreview.problems.length > 0 && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowProblemDetail((v) => !v)}
+                  className="text-xs font-bold text-[#2563EB] hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[16px]">{showProblemDetail ? "expand_less" : "expand_more"}</span>
+                  {showProblemDetail ? "Sembunyikan detail" : "Lihat detail"}
+                </button>
+                {showProblemDetail && (
+                  <div className="mt-2 border border-slate-200 rounded-xl overflow-y-auto max-h-52 divide-y divide-slate-100">
+                    {importPreview.problems.map((p, i) => (
+                      <div key={i} className="px-4 py-2.5 text-xs">
+                        <span className="font-bold text-slate-700">Baris {p.row}</span>
+                        <span className="text-slate-400"> · </span>
+                        <span className="font-bold text-slate-600 uppercase">{p.nama}</span>
+                        <div className="text-red-600 font-bold mt-0.5">{p.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-auto pt-4">
+              <button
+                onClick={() => { setImportPreview(null); setImportFileError(""); }}
+                disabled={isImporting}
+                className="flex-1 h-12 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-50 cursor-pointer transition-all disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                disabled={isImporting || importPreview.valid.length === 0}
+                className="flex-1 h-12 bg-emerald-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60 hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/10"
+              >
+                {isImporting ? "Menyimpan..." : `Import ${importPreview.valid.length} Siswa`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Student Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
@@ -683,6 +850,50 @@ export default function AdminManagement() {
                 className="flex-1 h-12 bg-[#2563EB] text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60 hover:bg-blue-700 transition-all shadow-md shadow-blue-500/10"
               >
                 {isSaving ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Students Modal */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200/80 animate-scale-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[22px]">warning</span>
+              </div>
+              <h3 className="font-extrabold text-lg text-slate-800">Hapus Semua Siswa?</h3>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed mb-2 font-bold">
+              Seluruh <span className="text-rose-600">{users.length} data siswa</span> beserta status login, skor, dan pelanggaran akan terhapus permanen. Bank soal dan hasil ujian yang sudah diekspor tidak terpengaruh.
+            </p>
+            <p className="text-xs text-slate-500 mb-4 font-bold">Tindakan ini tidak dapat dibatalkan.</p>
+            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">
+              Ketik <span className="text-rose-600 font-mono">HAPUS SEMUA</span> untuk konfirmasi
+            </label>
+            <input
+              autoFocus
+              value={deleteAllConfirmText}
+              onChange={(e) => setDeleteAllConfirmText(e.target.value)}
+              placeholder="HAPUS SEMUA"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowDeleteAllModal(false); setDeleteAllConfirmText(""); }}
+                disabled={isDeletingAll}
+                className="flex-1 h-12 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-50 cursor-pointer transition-all disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={isDeletingAll || deleteAllConfirmText.trim() !== "HAPUS SEMUA"}
+                className="flex-1 h-12 bg-rose-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-700 transition-all shadow-md shadow-rose-600/10"
+              >
+                {isDeletingAll ? "Menghapus..." : "Hapus Semua"}
               </button>
             </div>
           </div>

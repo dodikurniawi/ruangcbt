@@ -14,14 +14,16 @@ interface CardProps {
 
 function HighlightCard({ icon, title, description }: CardProps) {
   return (
-    <div className="bg-[#f8fafc] dark:bg-slate-900 border border-slate-200/60 rounded-2xl p-5 flex flex-col gap-2.5 hover:shadow-md transition-shadow">
-      <span className="material-symbols-outlined text-[#2563EB] text-3xl select-none">
-        {icon}
-      </span>
-      <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wide">
+    <div className="group relative bg-white border border-slate-200/90 rounded-3xl p-6 flex flex-col gap-3 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-500/40 hover:-translate-y-1 transition-all duration-300">
+      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform">
+        <span className="material-symbols-outlined text-2xl select-none">
+          {icon}
+        </span>
+      </div>
+      <h4 className="font-extrabold text-slate-900 text-base uppercase tracking-wide group-hover:text-blue-600 transition-colors">
         {title}
       </h4>
-      <p className="text-slate-600 text-xs leading-relaxed font-semibold">
+      <p className="text-slate-600 text-xs md:text-sm leading-relaxed font-medium">
         {description}
       </p>
     </div>
@@ -32,7 +34,7 @@ export default function PortalSiswaPage() {
   const steps = [
     {
       num: "01",
-      title: "Buka link ujian dari guru",
+      title: "Buka link ujian",
       desc: "Siswa membuka URL portal sekolah di browser perangkat masing-masing.",
     },
     {
@@ -91,44 +93,63 @@ export default function PortalSiswaPage() {
       subtitle="Pengalaman ujian modern yang mulus, ringan, dan fokus 100% pada pengerjaan soal"
       icon="school"
     >
-      <div className="space-y-12">
-        {/* Intro */}
-        <section className="bg-blue-50/50 border border-blue-100 rounded-3xl p-6 md:p-8 space-y-3 text-center">
-          <span className="material-symbols-outlined text-[#2563EB] text-4xl select-none">
-            bolt
-          </span>
-          <p className="text-slate-800 text-sm md:text-base font-bold leading-relaxed max-w-2xl mx-auto">
+      <div className="space-y-16">
+        {/* Intro Banner */}
+        <section className="relative bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-800 text-white border border-blue-600/30 rounded-3xl p-6 md:p-8 space-y-3 text-center shadow-xl overflow-hidden">
+          <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 text-white mx-auto flex items-center justify-center shadow-md">
+            <span className="material-symbols-outlined text-3xl select-none">
+              bolt
+            </span>
+          </div>
+          <p className="text-blue-50 text-sm md:text-base font-semibold leading-relaxed max-w-2xl mx-auto">
             Portal siswa CBT Sekolah dirancang sesederhana mungkin — siswa hanya perlu memasukkan PIN untuk langsung mulai ujian. Tidak ada pembuatan akun mandiri, tidak perlu password rumit, dan sama sekali tidak ada instalasi aplikasi tambahan.
           </p>
         </section>
 
         {/* Steps */}
-        <section className="space-y-6">
-          <h3 className="font-black text-slate-900 text-xl tracking-tight uppercase text-center">
-            Alur Ujian 4 Langkah Mudah
-          </h3>
+        <section className="space-y-8">
+          <div className="text-center space-y-2">
+            <h3 className="font-black text-slate-900 text-2xl tracking-tight uppercase">
+              Alur Ujian 4 Langkah Mudah
+            </h3>
+            <p className="text-slate-600 text-sm font-medium">
+              Proses pengerjaan ujian yang intuitif tanpa kerumitan teknis
+            </p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             {steps.map((s, i) => (
-              <div key={i} className="bg-white border border-slate-150 rounded-2xl p-6 relative flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
-                <span className="font-black text-4xl text-blue-500/20 absolute top-4 right-6 select-none">
-                  {s.num}
-                </span>
-                <h4 className="font-extrabold text-slate-900 text-sm leading-snug uppercase tracking-wide pt-4 max-w-[80%]">
-                  {s.title}
-                </h4>
-                <p className="text-slate-500 text-xs leading-relaxed font-semibold">
-                  {s.desc}
-                </p>
+              <div key={i} className="group bg-white border border-slate-200/90 rounded-3xl p-6 flex flex-col gap-4 shadow-sm hover:shadow-xl hover:border-blue-500/40 hover:-translate-y-1 transition-all duration-300">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-black text-base flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform select-none">
+                    {s.num}
+                  </div>
+                  <span className="material-symbols-outlined text-slate-300 group-hover:text-blue-500 transition-colors text-xl select-none">
+                    arrow_forward
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-900 text-base leading-snug uppercase tracking-wide group-hover:text-blue-600 transition-colors">
+                    {s.title}
+                  </h4>
+                  <p className="text-slate-600 text-xs md:text-sm leading-relaxed font-medium">
+                    {s.desc}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
         {/* Features Highlights */}
-        <section className="space-y-6">
-          <h3 className="font-black text-slate-900 text-xl tracking-tight uppercase text-center">
-            Keunggulan Aplikasi Siswa
-          </h3>
+        <section className="space-y-8">
+          <div className="text-center space-y-2">
+            <h3 className="font-black text-slate-900 text-2xl tracking-tight uppercase">
+              Keunggulan Aplikasi Siswa
+            </h3>
+            <p className="text-slate-600 text-sm font-medium">
+              Dirancang untuk memaksimalkan fokus pengerjaan dan meminimalisir kendala
+            </p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {highlights.map((h, i) => (
               <HighlightCard
@@ -144,3 +165,4 @@ export default function PortalSiswaPage() {
     </PublicPageLayout>
   );
 }
+

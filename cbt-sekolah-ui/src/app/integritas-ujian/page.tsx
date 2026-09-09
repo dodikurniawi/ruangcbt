@@ -8,9 +8,9 @@ export const metadata = {
 
 export default function IntegritasUjianPage() {
   const stats = [
-    { label: "Acak Sempurna", value: "Soal Diacak Otomatis" },
-    { label: "Token Keamanan", value: "PIN Sekali Pakai" },
-    { label: "Anti-manipulasi", value: "Sesi Terkunci" },
+    { label: "Acak Sempurna", value: "Soal Diacak Otomatis", icon: "shuffle" },
+    { label: "Token Keamanan", value: "PIN Sekali Pakai", icon: "key" },
+    { label: "Anti-manipulasi", value: "Sesi Terkunci", icon: "lock" },
   ];
 
   const features = [
@@ -51,38 +51,48 @@ export default function IntegritasUjianPage() {
         {/* Stat Row */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
           {stats.map((s, i) => (
-            <div key={i} className="bg-blue-50/40 border border-blue-100 rounded-2xl p-6">
-              <p className="text-[#2563EB] text-xs font-black uppercase tracking-widest mb-1">
+            <div key={i} className="group bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:border-blue-500/40 hover:-translate-y-1 transition-all duration-300 flex flex-col items-center gap-2">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center group-hover:scale-110 transition-transform mb-1">
+                <span className="material-symbols-outlined text-2xl select-none">
+                  {s.icon}
+                </span>
+              </div>
+              <p className="text-blue-600 text-xs font-black uppercase tracking-widest">
                 {s.label}
               </p>
-              <h4 className="text-slate-900 font-extrabold text-sm md:text-base uppercase tracking-wide">
+              <h4 className="text-slate-900 font-extrabold text-base uppercase tracking-wide">
                 {s.value}
               </h4>
             </div>
           ))}
         </section>
 
-        {/* Alternating Features */}
-        <section className="space-y-12">
+        {/* Features */}
+        <section className="space-y-6">
+          <div className="text-center space-y-2 mb-10">
+            <h3 className="font-black text-slate-900 text-2xl tracking-tight uppercase">
+              Mekanisme Keamanan Berlapis
+            </h3>
+            <p className="text-slate-600 text-sm font-medium">
+              Sistem perlindungan proctoring otomatis untuk menjamin validitas nilai
+            </p>
+          </div>
           {features.map((feat, index) => {
-            const isEven = index % 2 === 0;
             return (
               <div
                 key={index}
-                className={`flex flex-col md:flex-row items-center gap-8 ${
-                  isEven ? "" : "md:flex-row-reverse"
-                }`}
+                className="group bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 shadow-sm hover:shadow-xl hover:border-blue-500/40 transition-all duration-300 flex flex-col md:flex-row items-center md:items-start gap-6"
               >
                 {/* Icon Container */}
-                <div className="w-20 h-20 md:w-24 md:h-24 bg-slate-100 rounded-3xl flex items-center justify-center shrink-0 border border-slate-200/50 shadow-sm select-none">
-                  <span className="material-symbols-outlined text-[#2563EB] text-4xl">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform select-none">
+                  <span className="material-symbols-outlined text-3xl">
                     {feat.icon}
                   </span>
                 </div>
 
                 {/* Content */}
                 <div className="space-y-2 text-center md:text-left flex-1">
-                  <h3 className="font-extrabold text-slate-900 text-lg uppercase tracking-wide">
+                  <h3 className="font-extrabold text-slate-900 text-lg tracking-tight group-hover:text-blue-600 transition-colors">
                     {feat.title}
                   </h3>
                   <p className="text-slate-600 text-sm md:text-base leading-relaxed font-medium">
