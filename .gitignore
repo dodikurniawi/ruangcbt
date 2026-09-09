@@ -87,6 +87,33 @@ web_modules/
 .next
 out
 
+# graphify knowledge-graph output (regenerable, local only)
+graphify-out/
+**/graphify-out/
+.graphify_*
+_panduan.txt
+
+# Editor / OS junk
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-workspace
+
+# Scratch / temp
+/tmp/
+*.tmp
+*.bak
+*.orig
+
 # Nuxt.js build / generate output
 .nuxt
 dist
