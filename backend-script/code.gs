@@ -101,6 +101,9 @@ const QUESTION_STATUS_COL = 15;
 const QUESTION_ORIGIN_COL = 16;
 const QUESTION_STATUS_ACTIVE = "AKTIF";
 const QUESTION_STATUS_ARCHIVED = "ARSIP";
+// Seluruh tipe yang dikenal model canonical (lihat question-contract.json).
+const CANONICAL_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];
+// Tipe yang benar-benar didukung end-to-end. Sisanya ditolak sampai dikerjakan.
 const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];
 const OPTION_LETTERS = ["A", "B", "C", "D", "E"];
 const QUESTION_ALLOWED_FIELDS = [
@@ -168,6 +171,39 @@ function parseAnswerKeys(rawKey) {
   return keys;
 }
 
+// Validasi opsi A–E dan kunci untuk tipe berbasis pilihan (SINGLE/COMPLEX).
+// minKeys/maxKeys yang membedakan keduanya; sisanya identik.
+function validateChoiceQuestion(data, minKeys, maxKeys, keyCountMessage) {
+  const available = [];
+  for (let i = 0; i < OPTION_LETTERS.length; i++) {
+    const letter = OPTION_LETTERS[i];
+    const value = String(data["opsi_" + letter.toLowerCase()] || "").replace(/<[^>]*>/g, "").trim();
+    if (value !== "") available.push(letter);
+    else if (i < 4) return "Opsi A sampai D wajib diisi";
+  }
+
+  const keys = parseAnswerKeys(data.kunci_jawaban);
+  if (keys.length === 0) return "Kunci jawaban wajib diisi";
+  if (keys.length < minKeys || (maxKeys > 0 && keys.length > maxKeys)) return keyCountMessage;
+  for (let k = 0; k < keys.length; k++) {
+    if (available.indexOf(keys[k]) === -1) {
+      return "Kunci jawaban " + keys[k] + " menunjuk opsi yang tidak tersedia";
+    }
+  }
+  return null;
+}
+
+// Validator per tipe. Tipe baru menambah satu entri di sini, bukan menumbuhkan
+// satu conditional raksasa. Hanya tipe yang ada di tabel ini yang diterima.
+const QUESTION_TYPE_VALIDATORS = {
+  SINGLE: function (data) {
+    return validateChoiceQuestion(data, 1, 1, "Soal SINGLE hanya boleh punya satu kunci jawaban");
+  },
+  COMPLEX: function (data) {
+    return validateChoiceQuestion(data, 2, 0, "Soal COMPLEX minimal punya dua kunci jawaban");
+  },
+};
+
 // Validasi otoritatif di boundary GAS. Client boleh punya validasi sendiri, tetapi
 // request dapat datang tanpa melewatinya.
 function validateQuestionPayload(data) {
@@ -180,28 +216,15 @@ function validateQuestionPayload(data) {
   }
 
   const tipe = String(data.tipe || "").toUpperCase();
-  if (VALID_QUESTION_TYPES.indexOf(tipe) === -1) return "Tipe soal harus SINGLE atau COMPLEX";
+  if (CANONICAL_QUESTION_TYPES.indexOf(tipe) === -1) return "Tipe soal tidak dikenal: " + tipe;
+  const typeValidator = QUESTION_TYPE_VALIDATORS[tipe];
+  if (!typeValidator) return "Tipe soal " + tipe + " belum didukung";
 
   const plainText = String(data.pertanyaan || "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
   if (!plainText) return "Redaksi soal wajib diisi";
 
-  const available = [];
-  for (let i = 0; i < OPTION_LETTERS.length; i++) {
-    const letter = OPTION_LETTERS[i];
-    const value = String(data["opsi_" + letter.toLowerCase()] || "").replace(/<[^>]*>/g, "").trim();
-    if (value !== "") available.push(letter);
-    else if (i < 4) return "Opsi A sampai D wajib diisi";
-  }
-
-  const keys = parseAnswerKeys(data.kunci_jawaban);
-  if (keys.length === 0) return "Kunci jawaban wajib diisi";
-  if (tipe === "SINGLE" && keys.length !== 1) return "Soal SINGLE hanya boleh punya satu kunci jawaban";
-  if (tipe === "COMPLEX" && keys.length < 2) return "Soal COMPLEX minimal punya dua kunci jawaban";
-  for (let k = 0; k < keys.length; k++) {
-    if (available.indexOf(keys[k]) === -1) {
-      return "Kunci jawaban " + keys[k] + " menunjuk opsi yang tidak tersedia";
-    }
-  }
+  const typeError = typeValidator(data);
+  if (typeError) return typeError;
 
   const bobot = Number(data.bobot);
   if (!isFinite(bobot) || bobot <= 0 || bobot > 100) return "Bobot harus angka antara 1 dan 100";

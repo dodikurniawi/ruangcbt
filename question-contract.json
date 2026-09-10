@@ -1,0 +1,72 @@
+{
+  "_comment": "Kontrak Question yang dipakai bersama TypeScript (Next.js) dan Google Apps Script. GAS tidak dapat mengimpor TypeScript, jadi berkas ini adalah satu-satunya definisi bersama; kedua sisi punya test yang membandingkan konstanta mereka dengan berkas ini. Ubah berkas ini hanya bersamaan dengan kedua sisi.",
+
+  "types_canonical": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
+  "types_implemented": ["SINGLE", "COMPLEX"],
+
+  "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini.",
+  "write_fields": [
+    "id_soal",
+    "nomor_urut",
+    "tipe",
+    "pertanyaan",
+    "gambar_url",
+    "opsi_a",
+    "opsi_b",
+    "opsi_c",
+    "opsi_d",
+    "opsi_e",
+    "kunci_jawaban",
+    "bobot",
+    "kategori",
+    "id_mapel"
+  ],
+
+  "_comment_student_fields": "Bentuk persis yang diterima siswa dari getQuestions. Tidak boleh bertambah tanpa audit kebocoran kunci.",
+  "student_fields": [
+    "id_soal",
+    "nomor_urut",
+    "tipe",
+    "pertanyaan",
+    "gambar_url",
+    "opsi_a",
+    "opsi_b",
+    "opsi_c",
+    "opsi_d",
+    "opsi_e",
+    "bobot",
+    "kategori",
+    "id_mapel",
+    "nama_mapel"
+  ],
+
+  "_comment_admin_only": "Tidak boleh pernah muncul pada proyeksi siswa.",
+  "admin_only_fields": ["kunci_jawaban", "status_soal", "versi_dari"],
+
+  "_comment_rich_text": "Field yang wajib melewati sanitizer. Jalur data_soal ditulis relatif terhadap objek data_soal.",
+  "rich_text": {
+    "base": ["pertanyaan"],
+    "legacy_options": ["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"],
+    "data_soal": {
+      "SINGLE": [],
+      "COMPLEX": [],
+      "TRUE_FALSE": ["pernyataan[].teks"],
+      "MATCHING": ["kiri[].teks", "kanan[].teks"],
+      "FILL_IN": ["petunjuk"]
+    }
+  },
+
+  "_comment_answer_key": "kunci_jawaban adalah satu-satunya pembawa kunci dan hanya untuk admin. Format legacy tetap string; tipe masa depan memakai JSON. Tidak ada kolom kunci kedua, dan data_soal tidak boleh berisi kunci.",
+  "answer_key": {
+    "carrier": "kunci_jawaban",
+    "legacy_format": "string",
+    "formats": {
+      "SINGLE": "string",
+      "COMPLEX": "string",
+      "TRUE_FALSE": "json_object",
+      "MATCHING": "json_object",
+      "FILL_IN": "json_object"
+    },
+    "forbidden_in_data_soal": ["kunci", "kunci_jawaban", "jawaban", "benar", "answer", "key"]
+  }
+}

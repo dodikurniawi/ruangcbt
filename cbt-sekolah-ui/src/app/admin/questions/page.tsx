@@ -254,7 +254,9 @@ export default function QuestionBankPage() {
   const openEdit = (q: Question) => {
     setEditingId(q.id_soal);
     setForm({
-      tipe: q.tipe,
+      // Form ini baru mendukung dua tipe berbasis pilihan; tipe canonical lain
+      // belum punya field di sini (pekerjaan task tipe soal berikutnya).
+      tipe: q.tipe === "COMPLEX" ? "COMPLEX" : "SINGLE",
       kategori: q.kategori ?? "Mudah",
       bobot: q.bobot,
       pertanyaan: q.pertanyaan,

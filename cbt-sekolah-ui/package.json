@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types src/lib/importSiswa.test.ts && node --experimental-strip-types src/lib/security.test.ts && node --experimental-strip-types src/lib/proxy.integration.test.ts && node --experimental-strip-types src/lib/answerPersistence.test.ts && node --experimental-strip-types src/lib/examTimer.test.ts && node --experimental-strip-types src/lib/questionSanitize.test.ts && node --experimental-strip-types src/lib/answerSemantics.test.ts && node ../backend-script/security.test.cjs && node ../backend-script/questionBank.test.cjs"
+    "test": "node --experimental-strip-types src/lib/importSiswa.test.ts && node --experimental-strip-types src/lib/security.test.ts && node --experimental-strip-types src/lib/proxy.integration.test.ts && node --experimental-strip-types src/lib/answerPersistence.test.ts && node --experimental-strip-types src/lib/examTimer.test.ts && node --experimental-strip-types src/lib/questionSanitize.test.ts && node --experimental-strip-types src/lib/answerSemantics.test.ts && node --experimental-strip-types src/lib/questionModel.test.ts && node ../backend-script/security.test.cjs && node ../backend-script/questionBank.test.cjs"
   },
   "dependencies": {
     "dexie": "^4.4.2",

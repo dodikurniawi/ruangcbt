@@ -64,6 +64,8 @@ function loadGas(sheetRows) {
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "code.gs"), "utf8"), context);
   context.__sheets = sheets;
+  // `const` di top-level script vm tidak menjadi properti context, jadi baca lewat eval.
+  context.__eval = function (expr) { return vm.runInContext(expr, context); };
   return context;
 }
 
@@ -592,5 +594,119 @@ function scoringState() {
 }
 
 console.log("questionBank421: isAnswerFilled + regresi scoring PASS");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.2.2 — parity kontrak GAS + proyeksi siswa (tidak boleh bocor kunci)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const contract = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "question-contract.json"), "utf8")
+);
+
+// ── 27. Konstanta GAS sama dengan kontrak bersama ──────────────────────────
+{
+  const gas = loadGas(baseState());
+
+  assert.deepEqual(
+    Array.from(gas.__eval("CANONICAL_QUESTION_TYPES")).sort(),
+    contract.types_canonical.slice().sort(),
+    "CANONICAL_QUESTION_TYPES menyimpang dari question-contract.json"
+  );
+  assert.deepEqual(
+    Array.from(gas.__eval("VALID_QUESTION_TYPES")).sort(),
+    contract.types_implemented.slice().sort(),
+    "VALID_QUESTION_TYPES menyimpang dari kontrak"
+  );
+  assert.deepEqual(
+    Array.from(gas.__eval("QUESTION_ALLOWED_FIELDS")).sort(),
+    contract.write_fields.slice().sort(),
+    "QUESTION_ALLOWED_FIELDS menyimpang dari kontrak"
+  );
+  // Tabel validator harus persis menutupi tipe yang diklaim didukung.
+  assert.deepEqual(
+    Object.keys(gas.__eval("QUESTION_TYPE_VALIDATORS")).sort(),
+    contract.types_implemented.slice().sort(),
+    "tabel validator tidak sama dengan types_implemented"
+  );
+  for (const t of contract.types_implemented) {
+    assert.ok(contract.types_canonical.indexOf(t) !== -1, "implemented harus subset canonical");
+  }
+}
+
+// ── 28. Tipe canonical yang belum didukung ditolak, bukan diam-diam diterima ─
+{
+  const gas = loadGas(baseState());
+  for (const tipe of ["TRUE_FALSE", "MATCHING", "FILL_IN"]) {
+    const res = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: tipe }) });
+    assert.equal(res.success, false, tipe + " belum boleh diterima");
+    assert.match(res.message, /belum didukung/);
+  }
+  const unknown = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: "ESSAY" }) });
+  assert.equal(unknown.success, false);
+  assert.match(unknown.message, /tidak dikenal/);
+
+  // data_soal belum boleh masuk Sheet: kolom 17 adalah pekerjaan task berikutnya.
+  const withData = post(gas, "createQuestion", {
+    data: Object.assign({}, validSingle, { data_soal: { pernyataan: [{ id: "1", teks: "x" }] } }),
+  });
+  assert.equal(withData.success, false);
+  assert.match(withData.message, /Field tidak dikenal/);
+}
+
+// ── 29. Proyeksi siswa persis sesuai kontrak, tanpa field admin ─────────────
+{
+  const state = baseState();
+  // Baris lengkap 16 kolom dengan kunci, status, dan lineage terisi.
+  state.Questions = [
+    QUESTION_HEADER,
+    ["Q1", 1, "SINGLE", "Soal", "", "A", "B", "C", "D", "E", "A", 1, "Mudah", "MAPEL_A", "AKTIF", "Q0"],
+  ];
+  const gas = loadGas(state);
+
+  const student = get(gas, "getQuestions").data;
+  assert.equal(student.length, 1);
+  assert.deepEqual(
+    Object.keys(student[0]).sort(),
+    contract.student_fields.slice().sort(),
+    "bentuk soal untuk siswa menyimpang dari kontrak"
+  );
+  for (const forbidden of contract.admin_only_fields) {
+    assert.equal(forbidden in student[0], false, "field admin " + forbidden + " bocor ke siswa");
+  }
+  // Jaring pengaman terakhir: kunci "A" tidak boleh muncul di serialisasi apa pun.
+  const serialized = JSON.stringify(student[0]);
+  assert.equal(serialized.indexOf("kunci") === -1, true, "kata kunci muncul di payload siswa");
+
+  // Admin tetap menerima kunci dan metadata historis.
+  const admin = get(gas, "getAdminQuestions").data[0];
+  assert.equal(admin.kunci_jawaban, "A");
+  assert.equal(admin.status_soal, "AKTIF");
+  assert.equal(admin.versi_dari, "Q0");
+}
+
+// ── 30. SINGLE/COMPLEX tetap lolos validator setelah refactor per-tipe ──────
+{
+  const gas = loadGas(baseState());
+  assert.equal(post(gas, "createQuestion", { data: validSingle }).success, true);
+  assert.equal(
+    post(gas, "createQuestion", {
+      data: Object.assign({}, validSingle, { tipe: "COMPLEX", kunci_jawaban: "A,C" }),
+    }).success,
+    true
+  );
+  // Aturan jumlah kunci per tipe tidak berubah.
+  assert.match(
+    post(gas, "createQuestion", { data: Object.assign({}, validSingle, { kunci_jawaban: "A,B" }) }).message,
+    /satu kunci jawaban/
+  );
+  assert.match(
+    post(gas, "createQuestion", {
+      data: Object.assign({}, validSingle, { tipe: "COMPLEX", kunci_jawaban: "A" }),
+    }).message,
+    /dua kunci jawaban/
+  );
+}
+
+console.log("questionBank422: parity kontrak + proyeksi siswa PASS");
 
 console.log("questionBank: validasi, integritas historis, safe edit/delete PASS");
