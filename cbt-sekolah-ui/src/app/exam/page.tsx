@@ -10,6 +10,7 @@ import {
 import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
+import { isAnswered, countAnswered } from "@/lib/answerSemantics";
 import type { Question, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
@@ -285,10 +286,7 @@ export default function ExamPage() {
   }
 
   const currentQuestion = questions[currentQuestionIndex];
-  const answeredCount = Object.keys(answers).filter((id) => {
-    const a = answers[id];
-    return Array.isArray(a) ? a.length > 0 : !!a;
-  }).length;
+  const answeredCount = countAnswered(answers);
   const totalQuestions = questions.length;
   const isTimeWarning = timeRemaining <= 300;
 
@@ -531,8 +529,7 @@ export default function ExamPage() {
             <div className="grid grid-cols-5 gap-2">
               {questions.map((q, idx) => {
                 const isCurrent = idx === currentQuestionIndex;
-                const ans = answers[q.id_soal];
-                const isAnswered = Array.isArray(ans) ? ans.length > 0 : !!ans;
+                const answered = isAnswered(answers[q.id_soal]);
                 const isRaguragu = raguraguSet.has(q.id_soal);
 
                 let btnClass = "";
@@ -540,7 +537,7 @@ export default function ExamPage() {
                   btnClass = "border-2 border-[#2563EB] text-[#2563EB] bg-white ring-2 ring-blue-500/10";
                 } else if (isRaguragu) {
                   btnClass = "bg-orange-400 text-white shadow-sm shadow-orange-400/20";
-                } else if (isAnswered) {
+                } else if (answered) {
                   btnClass = "bg-blue-600 text-white shadow-sm shadow-blue-500/20";
                 } else {
                   btnClass = "bg-white border border-slate-300 text-slate-500 hover:bg-slate-50";

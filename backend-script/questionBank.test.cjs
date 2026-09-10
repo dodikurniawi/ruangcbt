@@ -506,4 +506,91 @@ function answeredState(answers) {
   assert.equal(gas.__sheets.Questions.rows[1][10], "A", "kunci historis tetap setelah kolom baru ditulis");
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.2.1 — semantik "answered": isAnswerFilled + regresi scoring SINGLE/COMPLEX
+// ═══════════════════════════════════════════════════════════════════════════
+
+// State ujian berjalan dengan dua soal: Q1 SINGLE (kunci B), Q2 COMPLEX (kunci A,C).
+function scoringState() {
+  const s = baseState();
+  s.Config = [["key", "value"], ["exam_mapel", ""], ["exam_duration", 90]];
+  s.Questions = [
+    QUESTION_HEADER.slice(0, 14),
+    ["Q1", 1, "SINGLE", "PG", "", "A", "B", "C", "D", "", "B", 2, "Mudah", "MAPEL_A"],
+    ["Q2", 2, "COMPLEX", "PGK", "", "A", "B", "C", "D", "", "A,C", 3, "Sedang", "MAPEL_A"],
+  ];
+  s.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+  ];
+  return s;
+}
+
+// ── 23. isAnswerFilled: falsy bukan lagi "kosong" ──────────────────────────
+{
+  const gas = loadGas(baseState());
+  const f = gas.isAnswerFilled;
+  assert.equal(typeof f, "function", "isAnswerFilled wajib ada di code.gs");
+
+  assert.equal(f("A"), true);
+  assert.equal(f(["A"]), true);
+  assert.equal(f(["A", "C"]), true);
+  assert.equal(f({ "1": "SALAH" }), true);
+  assert.equal(f({ "1": "A" }), true);
+  assert.equal(f("Jakarta"), true);
+  assert.equal(f(false), true, "false wajib answered (regresi TRUE_FALSE)");
+  assert.equal(f(true), true);
+  assert.equal(f(0), true, "0 wajib answered");
+
+  assert.equal(f(""), false);
+  assert.equal(f("   "), false);
+  assert.equal(f(null), false);
+  assert.equal(f(undefined), false);
+  assert.equal(f([]), false);
+  assert.equal(f({}), false);
+}
+
+// ── 24. SINGLE scoring tidak berubah ───────────────────────────────────────
+{
+  const correct = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q1: "B" } });
+  // Q1 benar (2), Q2 kosong. maxScore = 2 + 3 = 5. score = 2/5*100 = 40.00
+  assert.equal(correct.score, "40.00", "SINGLE benar + PGK kosong");
+
+  const wrong = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q1: "A" } });
+  assert.equal(wrong.score, "0.00", "SINGLE salah");
+
+  const blank = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: {} });
+  assert.equal(blank.score, "0.00", "semua kosong");
+}
+
+// ── 25. COMPLEX scoring tidak berubah ──────────────────────────────────────
+{
+  const correct = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q2: ["A", "C"] } });
+  // Q2 benar (3) dari max 5 → 60.00
+  assert.equal(correct.score, "60.00", "PGK benar");
+
+  const wrongOrder = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q2: ["C", "A"] } });
+  assert.equal(wrongOrder.score, "60.00", "PGK benar walau urutan beda");
+
+  const partial = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q2: ["A"] } });
+  assert.equal(partial.score, "0.00", "PGK tidak lengkap = salah (all-or-nothing tetap)");
+
+  const emptyArr = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q2: [] } });
+  assert.equal(emptyArr.score, "0.00", "PGK array kosong = tidak dijawab");
+}
+
+// ── 26. maxScore (denominator) tetap memasukkan bobot soal unanswered ──────
+{
+  // Hanya Q1 dijawab benar (2). Q2 tidak dikirim sama sekali. Kalau denominator
+  // ikut menyusut jadi 2, score keliru jadi 100.00. Harus 40.00.
+  const r = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q1: "B" } });
+  assert.equal(r.score, "40.00", "bobot soal unanswered tetap di denominator");
+
+  // Semua benar → 100.00
+  const full = post(loadGas(scoringState()), "submitExam", { id_siswa: "S1", answers: { Q1: "B", Q2: ["A", "C"] } });
+  assert.equal(full.score, "100.00");
+}
+
+console.log("questionBank421: isAnswerFilled + regresi scoring PASS");
+
 console.log("questionBank: validasi, integritas historis, safe edit/delete PASS");

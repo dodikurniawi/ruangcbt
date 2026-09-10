@@ -82,6 +82,17 @@ function isExamDeadlinePassed(waktuMulai, examDurationMinutes) {
   return deadlineMs !== null && Date.now() >= deadlineMs;
 }
 
+// Satu-satunya pemeriksa "jawaban sudah diisi" untuk scoring. Tidak memakai
+// truthiness: string "0" dan (kelak) boolean false adalah jawaban valid, bukan
+// kosong. Kosong = undefined | null | "" | [] | {}.
+function isAnswerFilled(answer) {
+  if (answer === undefined || answer === null) return false;
+  if (typeof answer === "string") return answer.trim() !== "";
+  if (Array.isArray(answer)) return answer.length > 0;
+  if (typeof answer === "object") return Object.keys(answer).length > 0;
+  return true; // boolean / number — defensif, tidak pernah truthiness bug
+}
+
 // ===== BANK SOAL — INTEGRITAS HISTORIS =====
 // Questions kolom 15 = status_soal. Kosong dibaca sebagai AKTIF sehingga sheet
 // lama (14 kolom) tetap terbaca tanpa migrasi.
@@ -776,7 +787,7 @@ function submitExamLocked(params) {
     const jawaban = answers[id_soal];
 
     maxScore += bobot;
-    if (!jawaban) continue;
+    if (!isAnswerFilled(jawaban)) continue;
 
     if (tipe === "SINGLE") {
       if (jawaban === kunci) totalScore += bobot;

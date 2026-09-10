@@ -36,7 +36,33 @@ export interface User {
 }
 
 // Question types
-export type QuestionType = 'SINGLE' | 'COMPLEX';
+//
+// QUESTION_TYPES adalah daftar canonical seluruh tipe soal yang dikenal model.
+// QUESTION_TYPES_IMPLEMENTED adalah bagian yang benar-benar sudah didukung
+// end-to-end (form, renderer, scoring GAS). Tipe canonical yang belum
+// terimplementasi sengaja tetap tercantum agar kontrak dan sanitizer sudah punya
+// bentuk yang benar; GAS tetap menolaknya sampai tipe tersebut dikerjakan.
+export const QUESTION_TYPES = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'MATCHING', 'FILL_IN'] as const;
+export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX'] as const;
+
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+export type ImplementedQuestionType = (typeof QUESTION_TYPES_IMPLEMENTED)[number];
+
+/** Item bernomor pada data soal terstruktur. `teks` adalah rich text. */
+export interface QuestionDataItem {
+    id: string;
+    teks: string;
+}
+
+/**
+ * Isi soal terstruktur untuk tipe yang tidak muat di kolom opsi_a..opsi_e.
+ * SELALU student-visible — kunci jawaban tidak boleh pernah masuk ke sini.
+ * Belum ditulis ke Sheet; kolom 17 adalah pekerjaan Task 4.2.3.
+ */
+export type QuestionData =
+    | { pernyataan: QuestionDataItem[] }              // TRUE_FALSE
+    | { kiri: QuestionDataItem[]; kanan: QuestionDataItem[] } // MATCHING
+    | { petunjuk?: string };                          // FILL_IN
 
 export interface Question {
     id_soal: string;
@@ -53,6 +79,7 @@ export interface Question {
     kategori?: string | null;
     id_mapel?: string | null;
     nama_mapel?: string | null;
+    data_soal?: QuestionData | null; // isi terstruktur, student-visible, tanpa kunci
     kunci_jawaban?: string; // hanya ada di respons admin (getAdminQuestions)
     status_soal?: 'AKTIF' | 'ARSIP'; // hanya ada di respons admin; ARSIP = soal historis
     versi_dari?: string | null; // id_soal asal bila baris ini versi baru dari soal lain
