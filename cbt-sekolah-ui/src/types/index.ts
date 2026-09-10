@@ -55,6 +55,7 @@ export interface Question {
     nama_mapel?: string | null;
     kunci_jawaban?: string; // hanya ada di respons admin (getAdminQuestions)
     status_soal?: 'AKTIF' | 'ARSIP'; // hanya ada di respons admin; ARSIP = soal historis
+    versi_dari?: string | null; // id_soal asal bila baris ini versi baru dari soal lain
 }
 
 // Answer types
@@ -104,6 +105,9 @@ export interface ApiResponse<T = unknown> {
     violations?: number;
     disqualified?: boolean;
     archived?: boolean; // deleteQuestion: soal diarsipkan, bukan dihapus
+    versioned?: boolean; // updateQuestion: perubahan disimpan sebagai versi baru
+    id_soal?: string; // id soal hasil create atau versi baru
+    previous_id_soal?: string; // id soal versi historis yang diarsipkan
 }
 
 // Exam State (for Zustand/IndexedDB)

@@ -70,7 +70,7 @@ function loadGas(sheetRows) {
 const QUESTION_HEADER = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
   "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
-  "kunci_jawaban", "bobot", "kategori", "id_mapel", "status_soal",
+  "kunci_jawaban", "bobot", "kategori", "id_mapel", "status_soal", "versi_dari",
 ];
 const USER_HEADER = [
   "id_siswa", "username", "password", "nama", "kelas", "login",
@@ -207,6 +207,8 @@ const validSingle = {
   const gas = loadGas(baseState());
   const res = post(gas, "updateQuestion", { id_soal: "Q1", data: Object.assign({}, validSingle, { kunci_jawaban: "C" }) });
   assert.equal(res.success, true, res.message);
+  assert.equal(res.versioned, false, "soal tanpa histori diperbarui di tempat");
+  assert.equal(gas.__sheets.Questions.rows.length, 2, "tidak ada baris baru untuk soal tanpa histori");
   assert.equal(gas.__sheets.Questions.rows[1][10], "C");
   assert.equal(gas.__sheets.Questions.rows[1][0], "Q1", "id_soal harus dipertahankan");
   assert.equal(post(gas, "updateQuestion", { id_soal: "TIDAK_ADA", data: validSingle }).success, false);
@@ -297,6 +299,211 @@ const validSingle = {
   const noSecret = JSON.parse(gas.doPost({ postData: { contents: JSON.stringify({ action: "createQuestion", data: validSingle }) } }).text);
   assert.equal(noSecret.success, false);
   assert.equal(noSecret.message, "Unauthorized");
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGRITAS HISTORIS — soal yang jawabannya sudah tercatat tidak boleh ditimpa
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Ujian yang sudah selesai: satu response memakai Q1 dan menjawabnya.
+function answeredState(answers) {
+  const state = baseState();
+  state.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", false, new Date(), new Date(), "100.00", 0, "SELESAI", "", "MAPEL_A", ""],
+  ];
+  state.Responses.push([
+    new Date(), "S1", "Siswa", "6A",
+    JSON.stringify(answers || { Q1: "A" }), "100.00", 12, "", "",
+  ]);
+  return state;
+}
+
+// ── 15. MUTATION TEST: baris soal historis tidak boleh ditimpa ──────────────
+// Test ini gagal bila implementasi kembali menulis ulang baris lama memakai
+// id_soal yang sama setelah soal punya response historis.
+{
+  const gas = loadGas(answeredState());
+  const before = gas.__sheets.Questions.rows[1].slice(0, 14);
+
+  const res = post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, validSingle, { pertanyaan: "<p>3 + 3 = ?</p>", kunci_jawaban: "C", bobot: 5 }),
+  });
+  assert.equal(res.success, true, res.message);
+  assert.equal(res.versioned, true, "perubahan soal historis wajib jadi versi baru");
+  assert.notEqual(res.id_soal, "Q1", "versi baru wajib punya id_soal baru");
+  assert.equal(res.previous_id_soal, "Q1");
+
+  const rows = gas.__sheets.Questions.rows;
+  const historical = rows.find((r) => r[0] === "Q1");
+  assert.deepEqual(
+    historical.slice(0, 14), before,
+    "isi soal historis berubah — response lama jadi menunjuk soal yang berbeda"
+  );
+  assert.equal(historical[10], "A", "kunci historis wajib tetap A");
+  assert.equal(historical[3], "Soal lama", "redaksi historis wajib tetap");
+  assert.equal(historical[11], 1, "bobot historis wajib tetap");
+  assert.equal(historical[14], "ARSIP", "baris historis diarsipkan");
+  assert.equal(historical[15], "Q1", "lineage versi tercatat");
+
+  const fresh = rows.find((r) => r[0] === res.id_soal);
+  assert.equal(fresh[3], "<p>3 + 3 = ?</p>");
+  assert.equal(fresh[10], "C");
+  assert.equal(fresh[11], 5);
+  assert.equal(fresh[14], "AKTIF");
+  assert.equal(fresh[15], "Q1", "versi baru menunjuk soal asal");
+}
+
+// ── 16. Response historis tidak berubah dan tetap menunjuk soal versi lama ──
+{
+  const gas = loadGas(answeredState());
+  const responseBefore = gas.__sheets.Responses.rows[1].slice();
+
+  post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, validSingle, { pertanyaan: "<p>3 + 3 = ?</p>", kunci_jawaban: "C" }),
+  });
+
+  assert.deepEqual(gas.__sheets.Responses.rows[1], responseBefore, "baris Responses tidak boleh tersentuh");
+
+  // Menelusuri jawaban lama: id_soal pada response masih menemukan soal lama,
+  // bukan kunci terbaru. Inilah yang membuat hasil lama tetap dapat dipahami.
+  const historicalAnswers = JSON.parse(gas.__sheets.Responses.rows[1][4]);
+  const admin = get(gas, "getAdminQuestions").data;
+  for (const id of Object.keys(historicalAnswers)) {
+    const soal = admin.find((q) => q.id_soal === id);
+    assert.ok(soal, "soal historis " + id + " hilang dari bank soal");
+    assert.equal(soal.kunci_jawaban, "A", "kunci historis tidak boleh ikut berubah");
+    assert.equal(soal.pertanyaan, "Soal lama", "redaksi historis tidak boleh ikut berubah");
+    assert.equal(historicalAnswers[id], soal.kunci_jawaban, "jawaban benar jadi salah setelah edit");
+  }
+}
+
+// ── 17. Scoring ujian berikutnya memakai versi baru, bukan versi historis ───
+{
+  const gas = loadGas(answeredState());
+  const versioned = post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, validSingle, { kunci_jawaban: "C" }),
+  });
+
+  // Siswa berikutnya hanya menerima versi aktif.
+  gas.__sheets.Users.rows.push(
+    ["S2", "siswa2", "pw", "Siswa Dua", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""]
+  );
+  const delivered = get(gas, "getQuestions").data;
+  assert.equal(delivered.length, 1, "hanya versi aktif yang dikirim ke siswa");
+  assert.equal(delivered[0].id_soal, versioned.id_soal);
+
+  // Kunci lama (A) sekarang salah untuk versi baru; kunci baru (C) yang benar.
+  const wrongAnswers = {};
+  wrongAnswers[versioned.id_soal] = "A";
+  const wrong = post(gas, "submitExam", { id_siswa: "S2", answers: wrongAnswers });
+  assert.equal(wrong.score, "0.00", "kunci versi baru yang dipakai untuk ujian baru");
+
+  const gas2 = loadGas(answeredState());
+  const v2 = post(gas2, "updateQuestion", { id_soal: "Q1", data: Object.assign({}, validSingle, { kunci_jawaban: "C" }) });
+  gas2.__sheets.Users.rows.push(
+    ["S2", "siswa2", "pw", "Siswa Dua", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""]
+  );
+  const rightAnswers = {};
+  rightAnswers[v2.id_soal] = "C";
+  const right = post(gas2, "submitExam", { id_siswa: "S2", answers: rightAnswers });
+  assert.equal(right.score, "100.00");
+}
+
+// ── 18. Menyimpan tanpa perubahan tidak membuat versi baru ──────────────────
+{
+  const gas = loadGas(answeredState());
+  const unchanged = {
+    nomor_urut: 1, tipe: "SINGLE", pertanyaan: "Soal lama", gambar_url: "",
+    opsi_a: "A", opsi_b: "B", opsi_c: "C", opsi_d: "D", opsi_e: "",
+    kunci_jawaban: "A", bobot: 1, kategori: "Mudah", id_mapel: "MAPEL_A",
+  };
+  const res = post(gas, "updateQuestion", { id_soal: "Q1", data: unchanged });
+  assert.equal(res.success, true, res.message);
+  assert.equal(res.versioned, false, "menyimpan tanpa perubahan tidak boleh menggandakan soal");
+  assert.equal(gas.__sheets.Questions.rows.length, 2);
+}
+
+// ── 19. Mengurutkan ulang soal historis bukan perubahan isi ─────────────────
+{
+  const gas = loadGas(answeredState());
+  const reordered = {
+    nomor_urut: 7, tipe: "SINGLE", pertanyaan: "Soal lama", gambar_url: "",
+    opsi_a: "A", opsi_b: "B", opsi_c: "C", opsi_d: "D", opsi_e: "",
+    kunci_jawaban: "A", bobot: 1, kategori: "Mudah", id_mapel: "MAPEL_A",
+  };
+  const res = post(gas, "updateQuestion", { id_soal: "Q1", data: reordered });
+  assert.equal(res.versioned, false, "urutan tampil tidak tercatat di Responses, jadi bukan isi historis");
+  assert.equal(gas.__sheets.Questions.rows.length, 2);
+  assert.equal(gas.__sheets.Questions.rows[1][1], 7);
+  assert.equal(gas.__sheets.Questions.rows[1][10], "A", "kunci tetap tidak tersentuh");
+}
+
+// ── 20. Regresi PG dan PGK setelah versioning ───────────────────────────────
+{
+  const state = answeredState({ Q1: "A", Q2: ["A", "C"] });
+  state.Questions.push(
+    ["Q2", 2, "COMPLEX", "Soal kompleks lama", "", "A", "B", "C", "D", "", "A,C", 2, "Sedang", "MAPEL_A"]
+  );
+  const gas = loadGas(state);
+
+  // PGK historis juga wajib versioned, bukan ditimpa.
+  const complexEdit = post(gas, "updateQuestion", {
+    id_soal: "Q2",
+    data: Object.assign({}, validSingle, { tipe: "COMPLEX", kunci_jawaban: "B,D", nomor_urut: 2 }),
+  });
+  assert.equal(complexEdit.versioned, true);
+  const oldComplex = gas.__sheets.Questions.rows.find((r) => r[0] === "Q2");
+  assert.equal(oldComplex[10], "A,C", "kunci PGK historis wajib tetap");
+  assert.equal(oldComplex[2], "COMPLEX", "tipe PGK historis wajib tetap");
+
+  // PG dan PGK versi aktif tetap dinilai seperti biasa.
+  gas.__sheets.Users.rows.push(
+    ["S3", "siswa3", "pw", "Siswa Tiga", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""]
+  );
+  const active = get(gas, "getQuestions").data;
+  const pg = active.find((q) => q.tipe === "SINGLE");
+  const pgk = active.find((q) => q.tipe === "COMPLEX");
+  assert.ok(pg && pgk, "PG dan PGK aktif harus terkirim");
+  const answers = {};
+  answers[pg.id_soal] = "A";
+  answers[pgk.id_soal] = ["B", "D"];
+  const submit = post(gas, "submitExam", { id_siswa: "S3", answers: answers });
+  assert.equal(submit.success, true, submit.message);
+  assert.equal(submit.score, "100.00", "PG + PGK versi aktif tetap dinilai benar");
+}
+
+// ── 21. Delete soal historis tetap mengarsipkan, tidak menghapus baris ──────
+{
+  const gas = loadGas(answeredState());
+  const before = gas.__sheets.Questions.rows[1].slice(0, 14);
+  const res = post(gas, "deleteQuestion", { id_soal: "Q1" });
+  assert.equal(res.success, true);
+  assert.equal(res.archived, true);
+  assert.deepEqual(
+    gas.__sheets.Questions.rows[1].slice(0, 14), before,
+    "arsip tidak boleh mengubah isi soal historis"
+  );
+  assert.equal(get(gas, "getAdminQuestions").data.length, 1, "soal historis tetap dapat ditelusuri admin");
+}
+
+// ── 22. Sheet lama 14 kolom: versioning tetap bekerja tanpa migrasi ─────────
+{
+  const gas = loadGas(answeredState());
+  assert.equal(gas.__sheets.Questions.rows[1].length, 14, "baris awal memang hanya 14 kolom");
+
+  const res = post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, validSingle, { kunci_jawaban: "C" }),
+  });
+  assert.equal(res.versioned, true);
+  assert.equal(gas.__sheets.Questions.rows[1][14], "ARSIP");
+  assert.equal(gas.__sheets.Questions.rows[1][15], "Q1");
+  assert.equal(gas.__sheets.Questions.rows[1][10], "A", "kunci historis tetap setelah kolom baru ditulis");
 }
 
 console.log("questionBank: validasi, integritas historis, safe edit/delete PASS");

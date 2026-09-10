@@ -159,7 +159,8 @@ export default function QuestionBankPage() {
   const [saveError, setSaveError] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
-  const [deleteNotice, setDeleteNotice] = useState("");
+  const [notice, setNotice] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [filterMapel, setFilterMapel] = useState("");
@@ -188,7 +189,11 @@ export default function QuestionBankPage() {
   // Search mencocokkan teks soal tanpa tag, kategori, serta kode/nama mapel —
   // sesuai yang dijanjikan placeholder. Kode mapel diambil dari daftar mapel.
   const term = search.trim().toLowerCase();
+  const archivedCount = questions.filter((q) => q.status_soal === "ARSIP").length;
   const filtered = questions.filter((q) => {
+    // Versi historis disembunyikan secara default supaya daftar kerja guru tetap
+    // berisi soal yang aktif saja; arsipnya tetap dapat dibuka lewat toggle.
+    if (!showArchived && q.status_soal === "ARSIP") return false;
     if (filterMapel !== "" && q.id_mapel !== filterMapel) return false;
     if (term === "") return true;
     const kodeMapel = mapelList.find((m) => m.id_mapel === q.id_mapel)?.kode_mapel ?? "";
@@ -314,6 +319,8 @@ export default function QuestionBankPage() {
 
     if (res.success) {
       await mutate();
+      // GAS menyimpan perubahan soal yang sudah pernah dijawab sebagai versi baru.
+      setNotice(res.versioned ? (res.message ?? "") : "");
       setShowModal(false);
     } else {
       setSaveError(res.message || "Gagal menyimpan soal.");
@@ -332,7 +339,7 @@ export default function QuestionBankPage() {
       return;
     }
     await mutate();
-    setDeleteNotice(res.message && res.archived ? res.message : "");
+    setNotice(res.message && res.archived ? res.message : "");
     setDeleteConfirmId(null);
     setIsDeleting(false);
   };
@@ -569,11 +576,11 @@ export default function QuestionBankPage() {
           </button>
         </div>
 
-        {deleteNotice && (
+        {notice && (
           <div className="mb-md flex items-start gap-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-md py-sm font-body-admin text-sm">
             <span className="material-symbols-outlined text-[18px] mt-0.5">inventory_2</span>
-            <span className="flex-1">{deleteNotice}</span>
-            <button onClick={() => setDeleteNotice("")} className="cursor-pointer text-amber-500 hover:text-amber-700">
+            <span className="flex-1">{notice}</span>
+            <button onClick={() => setNotice("")} className="cursor-pointer text-amber-500 hover:text-amber-700">
               <span className="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
@@ -603,6 +610,18 @@ export default function QuestionBankPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-md font-body-admin text-sm text-slate-600">
+            {archivedCount > 0 && (
+              <label className="flex items-center gap-xs text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                Tampilkan arsip ({archivedCount})
+              </label>
+            )}
+
             <select
               value={filterMapel}
               onChange={(e) => setFilterMapel(e.target.value)}

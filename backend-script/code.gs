@@ -85,8 +85,9 @@ function isExamDeadlinePassed(waktuMulai, examDurationMinutes) {
 // ===== BANK SOAL — INTEGRITAS HISTORIS =====
 // Questions kolom 15 = status_soal. Kosong dibaca sebagai AKTIF sehingga sheet
 // lama (14 kolom) tetap terbaca tanpa migrasi.
-const QUESTION_COLUMNS = 15;
+const QUESTION_COLUMNS = 16;
 const QUESTION_STATUS_COL = 15;
+const QUESTION_ORIGIN_COL = 16;
 const QUESTION_STATUS_ACTIVE = "AKTIF";
 const QUESTION_STATUS_ARCHIVED = "ARSIP";
 const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];
@@ -210,7 +211,7 @@ function validateQuestionPayload(data) {
   return null;
 }
 
-function questionRowValues(id_soal, data, statusValue) {
+function questionRowValues(id_soal, data, statusValue, originId) {
   return [
     id_soal,
     data.nomor_urut,
@@ -227,7 +228,20 @@ function questionRowValues(id_soal, data, statusValue) {
     data.kategori || "",
     String(data.id_mapel || "").trim(),
     statusValue || QUESTION_STATUS_ACTIVE,
+    originId || "",
   ];
+}
+
+// Bandingkan isi soal yang menentukan makna jawaban historis: tipe, redaksi,
+// gambar, opsi, kunci, bobot, kategori, mapel. nomor_urut sengaja dikecualikan —
+// urutan tampil tidak pernah tercatat pada Responses, jadi mengurutkan ulang soal
+// tidak mengubah arti hasil lama dan tidak perlu memicu versi baru.
+function questionContentEquals(row, data) {
+  const next = questionRowValues(row[0], data, QUESTION_STATUS_ACTIVE, "");
+  for (let c = 2; c <= 13; c++) {           // kolom 3..14
+    if (String(row[c] == null ? "" : row[c]) !== String(next[c] == null ? "" : next[c])) return false;
+  }
+  return true;
 }
 
 function isAuthorizedProxyRequest(params) {
@@ -491,6 +505,7 @@ function handleGetQuestions(skipMapelFilter) {
     if (skipMapelFilter) {
       entry.kunci_jawaban = row[10] || "";
       entry.status_soal = archived ? QUESTION_STATUS_ARCHIVED : QUESTION_STATUS_ACTIVE;
+      entry.versi_dari = row[QUESTION_ORIGIN_COL - 1] || null;
     }
     questions.push(entry);
   }
@@ -863,6 +878,59 @@ function handleAdminLogin(params) {
 //  1=id_soal  2=nomor_urut  3=tipe  4=pertanyaan  5=gambar_url
 //  6=opsi_a   7=opsi_b      8=opsi_c  9=opsi_d    10=opsi_e
 //  11=kunci_jawaban  12=bobot  13=kategori  14=id_mapel
+//  15=status_soal (AKTIF/ARSIP)  16=versi_dari (id_soal asal untuk versi baru)
+
+function collectQuestionIds(sheetValues) {
+  const taken = {};
+  for (let i = 1; i < sheetValues.length; i++) {
+    if (sheetValues[i][0]) taken[String(sheetValues[i][0])] = true;
+  }
+  return taken;
+}
+
+// Q + base36 timestamp dipertahankan agar format id lama tidak berubah; suffix
+// acak hanya dipakai saat id ternyata sudah terpakai.
+function generateQuestionId(takenIds) {
+  let id_soal = "Q" + Date.now().toString(36).toUpperCase();
+  while (takenIds[id_soal]) {
+    id_soal = "Q" + Date.now().toString(36).toUpperCase() +
+      Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase();
+  }
+  return id_soal;
+}
+
+// Tulis isi baru sebagai baris baru dan arsipkan baris lama tanpa menyentuh
+// isinya. Setelah ini, Responses lama tetap menunjuk id_soal lama yang isinya
+// persis seperti saat dikerjakan, sementara ujian berikutnya memakai versi baru.
+function createQuestionVersion(sheet, oldRowNumber, currentRow, data, originId) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+
+  try {
+    const taken = collectQuestionIds(sheet.getDataRange().getValues());
+    const newId = generateQuestionId(taken);
+
+    sheet.appendRow(questionRowValues(newId, data, QUESTION_STATUS_ACTIVE, originId));
+    sheet.getRange(oldRowNumber, QUESTION_STATUS_COL).setValue(QUESTION_STATUS_ARCHIVED);
+    if (!currentRow[QUESTION_ORIGIN_COL - 1]) {
+      sheet.getRange(oldRowNumber, QUESTION_ORIGIN_COL).setValue(originId);
+    }
+
+    cache.remove("questions"); cache.remove("questions_all");
+    return {
+      success: true,
+      versioned: true,
+      id_soal: newId,
+      previous_id_soal: currentRow[0],
+      message: "Soal ini sudah pernah dijawab siswa. Perubahan disimpan sebagai versi baru; " +
+        "versi lama diarsipkan agar hasil ujian yang sudah berjalan tetap utuh.",
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 function handleCreateQuestion(params) {
   const { data } = params;
@@ -878,26 +946,16 @@ function handleCreateQuestion(params) {
 
   try {
     const sheet = getSheet("Questions");
-    const existing = sheet.getDataRange().getValues();
-    const takenIds = {};
-    for (let i = 1; i < existing.length; i++) {
-      if (existing[i][0]) takenIds[String(existing[i][0])] = true;
-    }
+    const takenIds = collectQuestionIds(sheet.getDataRange().getValues());
 
     let id_soal = String(data.id_soal || "").trim();
     if (id_soal) {
       if (takenIds[id_soal]) return { success: false, message: "id_soal sudah digunakan" };
     } else {
-      // Q + base36 timestamp masih dipakai agar format id lama tidak berubah;
-      // suffix acak hanya ditambahkan bila ternyata bentrok.
-      id_soal = "Q" + Date.now().toString(36).toUpperCase();
-      while (takenIds[id_soal]) {
-        id_soal = "Q" + Date.now().toString(36).toUpperCase() +
-          Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase();
-      }
+      id_soal = generateQuestionId(takenIds);
     }
 
-    sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE));
+    sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, ""));
     cache.remove("questions"); cache.remove("questions_all");
     return { success: true, message: "Question created", id_soal: id_soal };
   } finally {
@@ -929,11 +987,29 @@ function handleUpdateQuestion(params) {
       }
 
       const status = current[QUESTION_STATUS_COL - 1] || QUESTION_STATUS_ACTIVE;
+      const origin = current[QUESTION_ORIGIN_COL - 1] || "";
+
+      // Soal yang jawabannya sudah tercatat pada Responses tidak boleh ditimpa:
+      // baris lama adalah satu-satunya rekaman soal seperti yang dikerjakan siswa.
+      // Perubahan isi ditulis sebagai versi baru dengan id_soal baru, baris lama
+      // diarsipkan apa adanya.
+      if (isQuestionAnsweredInHistory(id_soal)) {
+        if (questionContentEquals(current, data)) {
+          // Hanya urutan yang berubah: metadata tampilan, bukan isi historis.
+          if (String(current[1]) !== String(data.nomor_urut)) {
+            sheet.getRange(i + 1, 2).setValue(data.nomor_urut);
+            cache.remove("questions"); cache.remove("questions_all");
+          }
+          return { success: true, message: "Question updated", versioned: false };
+        }
+        return createQuestionVersion(sheet, i + 1, current, data, origin || id_soal);
+      }
+
       sheet.getRange(i + 1, 1, 1, QUESTION_COLUMNS)
-        .setValues([questionRowValues(id_soal, data, status)]);
+        .setValues([questionRowValues(id_soal, data, status, origin)]);
 
       cache.remove("questions"); cache.remove("questions_all");
-      return { success: true, message: "Question updated" };
+      return { success: true, message: "Question updated", versioned: false };
     }
   }
 
