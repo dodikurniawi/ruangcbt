@@ -2168,3 +2168,432 @@ function historicalMatchingState() {
 }
 
 console.log("questionBank426: MATCHING E2E 48 cases + mutations A/B/D/E/G PASS");
+
+// Soal canonical untuk scorer, dibangun dari payload admin per tipe.
+function scoringQuestionFixtureFor(tipe, payload) {
+  return scoreFixture(tipe, typeof payload.kunci_jawaban === "string"
+    ? payload.kunci_jawaban
+    : JSON.stringify(payload.kunci_jawaban), payload.bobot, payload.data_soal || null);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.3 — Audit & hardening lintas 5 tipe
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Satu payload sah per tipe aktif, dipakai ulang di seluruh matrix di bawah.
+const TYPE_FIXTURES = {
+  SINGLE: () => Object.assign({}, validSingle, { nomor_urut: 1 }),
+  COMPLEX: () => Object.assign({}, validSingle, { nomor_urut: 1, tipe: "COMPLEX", kunci_jawaban: "A,C" }),
+  TRUE_FALSE: () => trueFalsePayload({ nomor_urut: 1 }),
+  MATCHING: () => matchingPayload({ nomor_urut: 1 }),
+  FILL_IN: () => fillInPayload({ nomor_urut: 1 }),
+};
+const ACTIVE_TYPES = Object.keys(TYPE_FIXTURES);
+
+// Jawaban benar penuh dan jawaban salah per tipe, untuk matrix scoring/recovery.
+const TYPE_ANSWERS = {
+  SINGLE: { correct: "B", wrong: "A", shape: "string" },
+  COMPLEX: { correct: ["A", "C"], wrong: ["A"], shape: "array" },
+  TRUE_FALSE: { correct: { "1": "BENAR", "2": "SALAH" }, wrong: { "1": "SALAH", "2": "BENAR" }, shape: "object" },
+  MATCHING: { correct: { "1": "B", "2": "A" }, wrong: { "1": "A", "2": "B" }, shape: "object" },
+  FILL_IN: { correct: "Jakarta", wrong: "Bandung", shape: "string" },
+};
+
+// ── MATRIX: create + persistence round-trip + projection untuk 5 tipe ───────
+{
+  assert.deepEqual(ACTIVE_TYPES.slice().sort(), contract.types_implemented.slice().sort(),
+    "fixture matrix tidak menutupi seluruh tipe aktif");
+
+  for (const tipe of ACTIVE_TYPES) {
+    const gas = loadGas(baseState());
+    const payload = TYPE_FIXTURES[tipe]();
+    const created = post(gas, "createQuestion", { data: payload });
+    assert.equal(created.success, true, tipe + " gagal dibuat: " + created.message);
+
+    const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
+    assert.equal(row.length, 17, tipe + ": baris wajib 17 kolom");
+    assert.equal(row[2], tipe, tipe + ": kolom tipe bergeser");
+    assert.equal(String(row[14]), "AKTIF", tipe + ": status_soal bukan AKTIF");
+
+    // Isi terstruktur hanya untuk tipe yang memang punya data_soal.
+    const structured = tipe === "TRUE_FALSE" || tipe === "MATCHING" || tipe === "FILL_IN";
+    assert.equal(row[16] !== "", structured, tipe + ": isi kolom 17 tidak sesuai tipe");
+    if (structured) assert.deepEqual(JSON.parse(row[16]), payload.data_soal, tipe + ": data_soal round-trip rusak");
+
+    // Kunci: legacy huruf untuk SINGLE/COMPLEX, JSON untuk tipe terstruktur.
+    if (tipe === "SINGLE" || tipe === "COMPLEX") {
+      assert.equal(row[10], payload.kunci_jawaban, tipe + ": kunci legacy berubah bentuk");
+    } else {
+      assert.deepEqual(JSON.parse(row[10]), payload.kunci_jawaban, tipe + ": kunci JSON round-trip rusak");
+    }
+
+    // Admin melihat kunci; siswa tidak pernah.
+    const admin = get(gas, "getAdminQuestions").data.find((q) => q.id_soal === created.id_soal);
+    assert.equal(admin.tipe, tipe);
+    assert.ok(admin.kunci_jawaban, tipe + ": admin kehilangan kunci");
+
+    const student = get(gas, "getQuestions").data.find((q) => q.id_soal === created.id_soal);
+    assert.ok(student, tipe + ": soal hilang dari daftar siswa");
+    for (const forbidden of contract.admin_only_fields) {
+      assert.equal(forbidden in student, false, tipe + ": field admin " + forbidden + " bocor");
+    }
+    assert.equal(Object.keys(student).every((f) => contract.student_fields.includes(f)), true,
+      tipe + ": proyeksi memuat field di luar allowlist");
+    // Opsi A-E hanya milik tipe pilihan; tipe lain tidak boleh dikonversi ke sana.
+    const hasOptions = ["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"].some((f) => f in student);
+    assert.equal(hasOptions, tipe === "SINGLE" || tipe === "COMPLEX", tipe + ": bentuk opsi legacy salah");
+
+    // Serialized payload siswa tidak boleh memuat isi kunci apa pun.
+    const serialized = JSON.stringify(student);
+    for (const secret of ['"kunci_jawaban"', "accepted_answers", "case_sensitive", '"trim"', '"1":"BENAR"', '"1":"B"']) {
+      assert.equal(serialized.indexOf(secret), -1, tipe + ": rahasia " + secret + " bocor ke siswa");
+    }
+    if (tipe === "SINGLE" || tipe === "COMPLEX") {
+      assert.equal(serialized.indexOf('"A,C"'), -1, tipe + ": kunci legacy bocor ke siswa");
+    }
+  }
+}
+
+// ── MATRIX: scoring + submit + recovery shape untuk 5 tipe ─────────────────
+{
+  const gas = loadGas(baseState());
+  for (const tipe of ACTIVE_TYPES) {
+    const payload = TYPE_FIXTURES[tipe]();
+    const answers = TYPE_ANSWERS[tipe];
+    const question = scoringQuestionFixtureFor(tipe, payload);
+
+    assert.equal(gas.scoreQuestion(question, answers.correct), question.bobot, tipe + ": jawaban benar bukan bobot penuh");
+    assert.equal(gas.scoreQuestion(question, answers.wrong) < question.bobot, true, tipe + ": jawaban salah dinilai penuh");
+    assert.equal(gas.scoreQuestion(question, undefined), 0, tipe + ": jawaban kosong bukan nol");
+
+    // Bentuk jawaban tipe lain tidak boleh mendapat skor.
+    for (const other of ACTIVE_TYPES) {
+      if (other === tipe) continue;
+      const foreign = TYPE_ANSWERS[other].correct;
+      if (TYPE_ANSWERS[other].shape === answers.shape) continue;
+      assert.equal(gas.scoreQuestion(question, foreign), 0,
+        tipe + ": jawaban berbentuk " + other + " tidak boleh mendapat skor");
+    }
+  }
+
+  // Tipe tak dikenal tidak pernah memakai scorer tipe lain.
+  assert.equal(gas.scoreQuestion(scoreFixture("ESSAY", "B", 10, null), "B"), 0, "tipe tak dikenal wajib nol");
+  assert.equal(gas.scoreQuestion(scoreFixture("", "B", 10, null), "B"), 0, "tipe kosong wajib nol");
+
+  // FILL_IN normalization tidak boleh merembes ke tipe lain.
+  assert.equal(gas.scoreQuestion(scoreFixture("SINGLE", "B", 10, null), "b"), 0, "SINGLE tetap case-sensitive");
+  assert.equal(gas.scoreQuestion(scoreFixture("SINGLE", "B", 10, null), " B "), 0, "SINGLE tidak boleh di-trim");
+  assert.equal(gas.scoreQuestion(scoreFixture("COMPLEX", "A,C", 10, null), ["a", "c"]), 0, "COMPLEX tetap case-sensitive");
+}
+
+// ── MATRIX: autosave + recovery mempertahankan bentuk jawaban tiap tipe ────
+{
+  const answers = {};
+  for (const tipe of ACTIVE_TYPES) answers["Q_" + tipe] = TYPE_ANSWERS[tipe].correct;
+
+  const state = baseState();
+  state.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+  ];
+  const gas = loadGas(state);
+  assert.equal(post(gas, "syncAnswers", { id_siswa: "S1", answers: answers }).success, true);
+  assert.deepEqual(JSON.parse(gas.__sheets.Users.rows[1][13]), answers,
+    "autosave mengubah bentuk jawaban salah satu tipe");
+
+  // Login mengembalikan bentuk yang sama persis (jalur recovery existing).
+  const recoveryState = baseState();
+  recoveryState.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", false, new Date(), "", "", 0, "SEDANG", "", "", JSON.stringify(answers)],
+  ];
+  const recovered = post(loadGas(recoveryState), "login", { username: "siswa", password: "pw" });
+  assert.equal(recovered.success, true, recovered.message);
+  assert.deepEqual(recovered.data.saved_answers, answers, "recovery mengubah bentuk jawaban");
+  assert.equal(typeof recovered.data.saved_answers.Q_SINGLE, "string");
+  assert.equal(Array.isArray(recovered.data.saved_answers.Q_COMPLEX), true);
+  assert.equal(typeof recovered.data.saved_answers.Q_TRUE_FALSE, "object");
+  assert.equal(typeof recovered.data.saved_answers.Q_MATCHING, "object");
+  assert.equal(typeof recovered.data.saved_answers.Q_FILL_IN, "string");
+}
+
+// ── TYPE TRANSITION: perubahan tipe adalah content change ─────────────────
+{
+  // Soal historis: ganti tipe wajib membuat versi baru dan meninggalkan baris lama utuh.
+  const historicalFor = (tipe) => {
+    const state = baseState();
+    const rows = {
+      SINGLE: ["QX", 1, "SINGLE", "Soal lama", "", "A", "B", "C", "D", "", "A", 1, "Mudah", "MAPEL_A", "AKTIF", "", ""],
+      TRUE_FALSE: trueFalseRow("QX"),
+      MATCHING: matchingRow("QX"),
+      FILL_IN: fillInRow("QX"),
+    };
+    state.Questions = [QUESTION_HEADER, rows[tipe]];
+    state.Responses.push([new Date(), "S1", "Siswa", "6A", JSON.stringify({ QX: "A" }), "100.00", 10, "", ""]);
+    return state;
+  };
+
+  const transitions = [
+    ["SINGLE", "TRUE_FALSE"], ["SINGLE", "MATCHING"], ["SINGLE", "FILL_IN"],
+    ["TRUE_FALSE", "MATCHING"], ["TRUE_FALSE", "FILL_IN"], ["MATCHING", "FILL_IN"],
+    ["FILL_IN", "SINGLE"], ["MATCHING", "TRUE_FALSE"],
+  ];
+  for (const [from, to] of transitions) {
+    const gas = loadGas(historicalFor(from));
+    const before = gas.__sheets.Questions.rows[1].slice();
+    const result = post(gas, "updateQuestion", { id_soal: "QX", data: TYPE_FIXTURES[to]() });
+    assert.equal(result.success, true, from + "→" + to + ": " + result.message);
+    assert.equal(result.versioned, true, from + "→" + to + " wajib membuat versi baru");
+    assert.deepEqual(gas.__sheets.Questions.rows[1].slice(0, 14), before.slice(0, 14),
+      from + "→" + to + ": baris historis ikut berubah");
+    assert.equal(gas.__sheets.Questions.rows[1][16], before[16], "data_soal historis ikut berubah");
+    assert.equal(gas.__sheets.Questions.rows[1][14], "ARSIP");
+
+    // Versi baru tidak boleh membawa sisa isi tipe lama.
+    const fresh = gas.__sheets.Questions.rows.find((r) => r[0] === result.id_soal);
+    assert.equal(fresh[2], to);
+    const structured = to === "TRUE_FALSE" || to === "MATCHING" || to === "FILL_IN";
+    assert.equal(fresh[16] !== "", structured, from + "→" + to + ": kolom 17 tidak sesuai tipe baru");
+    if (!structured) {
+      assert.equal(fresh[16], "", from + "→" + to + ": data_soal lama tertinggal");
+      assert.equal(fresh[10], TYPE_FIXTURES[to]().kunci_jawaban, "kunci lama tertinggal");
+    }
+  }
+}
+
+// ── TYPE TRANSITION non-historis: in-place, tanpa sisa tipe lama ──────────
+{
+  for (const [from, to] of [["MATCHING", "FILL_IN"], ["TRUE_FALSE", "SINGLE"], ["FILL_IN", "MATCHING"]]) {
+    const gas = loadGas(baseState());
+    const created = post(gas, "createQuestion", { data: TYPE_FIXTURES[from]() });
+    assert.equal(created.success, true, created.message);
+
+    const changed = post(gas, "updateQuestion", { id_soal: created.id_soal, data: TYPE_FIXTURES[to]() });
+    assert.equal(changed.success, true, from + "→" + to + ": " + changed.message);
+    assert.equal(changed.versioned, false, "soal tanpa histori diperbarui di tempat");
+
+    const row = gas.__sheets.Questions.rows.find((r) => r[0] === created.id_soal);
+    assert.equal(row[2], to);
+    const structured = to === "TRUE_FALSE" || to === "MATCHING" || to === "FILL_IN";
+    assert.equal(row[16] !== "", structured, from + "→" + to + ": stale data_soal lintas tipe");
+    if (structured) assert.deepEqual(JSON.parse(row[16]), TYPE_FIXTURES[to]().data_soal);
+    // Opsi legacy hanya terisi untuk tipe pilihan.
+    if (to === "SINGLE") {
+      assert.equal(row[5], TYPE_FIXTURES.SINGLE().opsi_a);
+    } else {
+      assert.equal(String(row[5] || ""), "", from + "→" + to + ": opsi legacy tertinggal");
+    }
+  }
+}
+
+// ── LEGACY SHEET: 14 / 16 / 17 kolom hidup berdampingan ───────────────────
+{
+  const state = baseState();
+  state.Questions = [
+    QUESTION_HEADER.slice(0, 14),
+    ["L14", 1, "SINGLE", "Legacy 14", "", "A", "B", "C", "D", "", "A", 1, "Mudah", "MAPEL_A"],
+    ["L16", 2, "COMPLEX", "Legacy 16", "", "A", "B", "C", "D", "", "A,C", 1, "Mudah", "MAPEL_A", "AKTIF", ""],
+    trueFalseRow("L17"),
+  ];
+  const gas = loadGas(state);
+
+  const students = get(gas, "getQuestions").data;
+  assert.equal(students.length, 3, "baris legacy hilang dari daftar siswa");
+  assert.equal(students.find((q) => q.id_soal === "L14").opsi_a, "A", "kolom legacy bergeser");
+  assert.equal("data_soal" in students.find((q) => q.id_soal === "L14"), false);
+  assert.equal("data_soal" in students.find((q) => q.id_soal === "L16"), false);
+  assert.deepEqual(students.find((q) => q.id_soal === "L17").data_soal, trueFalsePayload().data_soal);
+  for (const q of students) {
+    for (const forbidden of contract.admin_only_fields) assert.equal(forbidden in q, false);
+  }
+
+  // Edit baris 14 kolom tetap aman dan melebarkan baris ke 17 kolom.
+  const edited = post(gas, "updateQuestion", {
+    id_soal: "L14", data: Object.assign({}, validSingle, { nomor_urut: 1 }),
+  });
+  assert.equal(edited.success, true, edited.message);
+  assert.equal(gas.__sheets.Questions.rows[1].length, 17);
+  assert.equal(gas.__sheets.Questions.rows[2][10], "A,C", "baris tetangga ikut tertimpa");
+}
+
+// ── VERSIONING: kunci/data_soal urutan field bukan perubahan isi ──────────
+{
+  const cases = [
+    ["TRUE_FALSE", trueFalseRow("QV"), trueFalsePayload({ nomor_urut: 1, kunci_jawaban: { "2": "SALAH", "1": "BENAR" } }), false],
+    ["MATCHING", matchingRow("QV"), matchingPayload({ nomor_urut: 1, data_soal: {
+      kanan: matchingData().kanan, kiri: matchingData().kiri,
+    } }), false],
+    ["FILL_IN", fillInRow("QV"), fillInPayload({ nomor_urut: 1, kunci_jawaban: {
+      trim: true, case_sensitive: false, accepted_answers: ["Jakarta", "DKI Jakarta"],
+    } }), false],
+    ["TRUE_FALSE", trueFalseRow("QV"), trueFalsePayload({ nomor_urut: 8 }), false],
+    ["MATCHING", matchingRow("QV"), matchingPayload({ nomor_urut: 1, kunci_jawaban: { "1": "A", "2": "B" } }), true],
+    ["FILL_IN", fillInRow("QV"), fillInPayload({ nomor_urut: 1, data_soal: { petunjuk: "<p>Baru.</p>" } }), true],
+  ];
+  for (const [label, row, payload, expected] of cases) {
+    const state = baseState();
+    state.Questions = [QUESTION_HEADER, row];
+    state.Responses.push([new Date(), "S1", "Siswa", "6A", JSON.stringify({ QV: "x" }), "100.00", 10, "", ""]);
+    const gas = loadGas(state);
+    const result = post(gas, "updateQuestion", { id_soal: "QV", data: payload });
+    assert.equal(result.success, true, label + ": " + result.message);
+    assert.equal(result.versioned, expected, label + ": keputusan versioning salah");
+  }
+}
+
+// ── DELETE / ARCHIVE guard berlaku untuk seluruh tipe ─────────────────────
+{
+  for (const [tipe, row] of [["TRUE_FALSE", trueFalseRow("QD")], ["MATCHING", matchingRow("QD")], ["FILL_IN", fillInRow("QD")]]) {
+    // Pernah dijawab → diarsipkan, bukan dihapus.
+    const historical = baseState();
+    historical.Questions = [QUESTION_HEADER, row.slice()];
+    historical.Responses.push([new Date(), "S1", "Siswa", "6A", JSON.stringify({ QD: "x" }), "100.00", 10, "", ""]);
+    const gasHistorical = loadGas(historical);
+    const archived = post(gasHistorical, "deleteQuestion", { id_soal: "QD" });
+    assert.equal(archived.archived, true, tipe + ": soal historis wajib diarsipkan");
+    assert.equal(gasHistorical.__sheets.Questions.rows.length, 2, tipe + ": baris historis terhapus");
+    assert.equal(gasHistorical.__sheets.Questions.rows[1][14], "ARSIP");
+
+    // Belum pernah dijawab → boleh dihapus.
+    const unused = baseState();
+    unused.Questions = [QUESTION_HEADER, row.slice()];
+    const gasUnused = loadGas(unused);
+    assert.equal(post(gasUnused, "deleteQuestion", { id_soal: "QD" }).archived, false, tipe + ": hapus biasa berubah");
+    assert.equal(gasUnused.__sheets.Questions.rows.length, 1);
+
+    // Ujian berjalan → dilindungi untuk seluruh tipe.
+    const running = baseState();
+    running.Questions = [QUESTION_HEADER, row.slice()];
+    running.Users = [USER_HEADER, ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""]];
+    const gasRunning = loadGas(running);
+    assert.equal(post(gasRunning, "deleteQuestion", { id_soal: "QD" }).success, false, tipe + ": guard ujian bocor");
+    assert.equal(post(gasRunning, "updateQuestion", {
+      id_soal: "QD", data: TYPE_FIXTURES[tipe](),
+    }).success, false, tipe + ": edit saat ujian berjalan lolos");
+  }
+
+  // Soal arsip tidak pernah masuk ujian maupun perhitungan skor.
+  const archivedState = baseState();
+  archivedState.Questions = [QUESTION_HEADER, matchingRow("QA", "ARSIP")];
+  const gasArchived = loadGas(archivedState);
+  assert.equal(get(gasArchived, "getQuestions").data.length, 0, "soal arsip terkirim ke siswa");
+  assert.equal(get(gasArchived, "getAdminQuestions").data.length, 1, "soal arsip hilang dari admin");
+}
+
+// ── MUTATION A/B/E/F/G/H lintas tipe ──────────────────────────────────────
+{
+  // A. Satu tipe aktif dicabut dari whitelist → create tipe itu gagal.
+  for (const tipe of ["TRUE_FALSE", "MATCHING", "FILL_IN"]) {
+    const mutation = (source) => {
+      const mutated = source.replace(
+        'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];',
+        'const VALID_QUESTION_TYPES = ' + JSON.stringify(ACTIVE_TYPES.filter((t) => t !== tipe)) + ';',
+      );
+      assert.notEqual(mutated, source, "titik mutation A tidak ditemukan");
+      return mutated;
+    };
+    assert.throws(() => assert.equal(
+      post(loadGas(baseState(), mutation), "createQuestion", { data: TYPE_FIXTURES[tipe]() }).success, true,
+    ), undefined, "mutation A (" + tipe + ") tidak terdeteksi");
+    assert.equal(post(loadGas(baseState()), "createQuestion", { data: TYPE_FIXTURES[tipe]() }).success, true);
+  }
+
+  // B. Proyeksi siswa ikut membawa kunci.
+  const projectionMutation = (source) => {
+    const mutated = source.replace("    if (skipMapelFilter) {", "    if (true) {");
+    assert.notEqual(mutated, source, "titik mutation B tidak ditemukan");
+    return mutated;
+  };
+  const assertNoKeyLeak = (gas) => {
+    for (const q of get(gas, "getQuestions").data) {
+      assert.equal("kunci_jawaban" in q, false);
+    }
+  };
+  const leakState = baseState();
+  leakState.Questions = [QUESTION_HEADER, trueFalseRow("K1"), matchingRow("K2"), fillInRow("K3")];
+  assert.throws(() => assertNoKeyLeak(loadGas(leakState, projectionMutation)), undefined,
+    "mutation B tidak terdeteksi");
+  assertNoKeyLeak(loadGas(leakState));
+
+  // E. Kolom tipe tidak ikut dibandingkan saat menilai perubahan isi.
+  // Diuji langsung pada questionContentEquals: lewat API, mengubah tipe selalu
+  // memaksa kunci ikut berubah (COMPLEX butuh >=2 kunci), jadi hanya pemanggilan
+  // langsung yang benar-benar mengisolasi kolom tipe.
+  const typeBlindMutation = (source) => {
+    const mutated = source.replace("  for (let c = 2; c <= 13; c++) {", "  for (let c = 3; c <= 13; c++) {");
+    assert.notEqual(mutated, source, "titik mutation E tidak ditemukan");
+    return mutated;
+  };
+  const onlyTypeChanged = Object.assign({}, validSingle, { tipe: "COMPLEX" });
+  const brokenType = loadGas(baseState(), typeBlindMutation);
+  const brokenRow = brokenType.questionRowValues("QX", validSingle, "AKTIF", "");
+  assert.throws(() => assert.equal(brokenType.questionContentEquals(brokenRow, onlyTypeChanged), false),
+    undefined, "mutation E tidak terdeteksi");
+
+  const intactType = loadGas(baseState());
+  const intactRow = intactType.questionRowValues("QX", validSingle, "AKTIF", "");
+  assert.equal(intactType.questionContentEquals(intactRow, onlyTypeChanged), false,
+    "perubahan tipe wajib terbaca sebagai perubahan isi");
+  assert.equal(intactType.questionContentEquals(intactRow, validSingle), true,
+    "payload identik tidak boleh dianggap berubah");
+
+  // F. data_soal diabaikan saat membandingkan isi.
+  const dataBlindMutation = (source) => {
+    const mutated = source.replace(
+      "  const d = QUESTION_DATA_COL - 1;\n  return canonicalDataSoalCell(row[d]) === canonicalDataSoalCell(next[d]);",
+      "  return true;",
+    );
+    assert.notEqual(mutated, source, "titik mutation F tidak ditemukan");
+    return mutated;
+  };
+  const historicalTF = () => {
+    const state = baseState();
+    state.Questions = [QUESTION_HEADER, trueFalseRow("QT")];
+    state.Responses.push([new Date(), "S1", "Siswa", "6A", JSON.stringify({ QT: "x" }), "100.00", 10, "", ""]);
+    return state;
+  };
+  const editedStatement = trueFalsePayload({ nomor_urut: 1, data_soal: { pernyataan: [
+    { id: "1", teks: "Teks berubah" }, { id: "2", teks: "Air membeku pada 100°C" },
+  ] } });
+  assert.throws(() => assert.equal(
+    post(loadGas(historicalTF(), dataBlindMutation), "updateQuestion", {
+      id_soal: "QT", data: editedStatement,
+    }).versioned, true,
+  ), undefined, "mutation F tidak terdeteksi");
+  assert.equal(post(loadGas(historicalTF()), "updateQuestion", {
+    id_soal: "QT", data: editedStatement,
+  }).versioned, true);
+
+  // G. Tipe baru memakai scorer SINGLE.
+  const scoringGas = loadGas(baseState());
+  const registry = scoringGas.__eval("QUESTION_SCORERS");
+  for (const tipe of ["TRUE_FALSE", "MATCHING", "FILL_IN"]) {
+    const original = registry[tipe];
+    const payload = TYPE_FIXTURES[tipe]();
+    const question = scoringQuestionFixtureFor(tipe, payload);
+    try {
+      registry[tipe] = registry.SINGLE;
+      assert.throws(() => assert.equal(
+        scoringGas.scoreQuestion(question, TYPE_ANSWERS[tipe].correct), question.bobot,
+      ), undefined, "mutation G (" + tipe + ") tidak terdeteksi");
+    } finally {
+      registry[tipe] = original;
+    }
+    assert.equal(scoringGas.scoreQuestion(question, TYPE_ANSWERS[tipe].correct), question.bobot);
+  }
+
+  // H. Normalisasi FILL_IN merembes ke SINGLE.
+  const singleQuestion = scoreFixture("SINGLE", "B", 10, null);
+  const originalSingle = registry.SINGLE;
+  try {
+    registry.SINGLE = (q, answer) =>
+      String(answer).trim().toLowerCase() === String(q.kunci_jawaban).trim().toLowerCase() ? q.bobot : 0;
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(singleQuestion, " b "), 0),
+      undefined, "mutation H tidak terdeteksi");
+  } finally {
+    registry.SINGLE = originalSingle;
+  }
+  assert.equal(scoringGas.scoreQuestion(singleQuestion, " b "), 0);
+}
+
+console.log("questionBank43: audit matrix 5 tipe + mutations A/B/E/F/G/H PASS");

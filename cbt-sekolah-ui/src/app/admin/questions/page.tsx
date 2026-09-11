@@ -79,6 +79,15 @@ function questionTypeLabel(tipe: QuestionForm["tipe"]): string {
   return tipe === "SINGLE" ? "Pilihan Ganda" : "Pilihan Kompleks";
 }
 
+/** Keterangan bentuk kunci per tipe; tidak ada tipe yang jatuh ke label tipe lain. */
+const ANSWER_KEY_HINT: Record<QuestionForm["tipe"], string> = {
+  SINGLE: "1 Pilihan Kunci",
+  COMPLEX: "Multi Pilihan Kunci",
+  TRUE_FALSE: "Kunci per Pernyataan",
+  MATCHING: "Kunci per Pasangan",
+  FILL_IN: "Jawaban Diterima",
+};
+
 /** Tipe yang isinya hidup di data_soal, bukan di opsi A–E. */
 function usesLegacyOptions(tipe: QuestionForm["tipe"]): boolean {
   return tipe === "SINGLE" || tipe === "COMPLEX";
@@ -924,11 +933,11 @@ export default function QuestionBankPage() {
                         <td className="px-4 py-4 text-center">
                           <div className="font-bold text-slate-800 text-xs mb-1">
                             {q.tipe === "TRUE_FALSE"
-                              ? `TRUE/FALSE (${q.data_soal.pernyataan.length} Pernyataan)`
+                              ? `TRUE/FALSE (${q.data_soal?.pernyataan?.length ?? 0} Pernyataan)`
                               : q.tipe === "FILL_IN"
                                 ? "ISIAN SINGKAT"
                                 : q.tipe === "MATCHING"
-                                  ? `MENJODOHKAN (${q.data_soal.kiri.length} Pasangan)`
+                                  ? `MENJODOHKAN (${q.data_soal?.kiri?.length ?? 0} Pasangan)`
                                   : `PG (${isE ? "5 Opsi" : "4 Opsi"})`}
                           </div>
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase border border-emerald-200">
@@ -1231,7 +1240,7 @@ export default function QuestionBankPage() {
                     <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">Tipe Jawaban</label>
                     <div className="h-11 border border-slate-200 rounded-xl px-3.5 bg-slate-100/80 flex items-center gap-2 text-xs font-bold text-slate-700">
                       <span className={`w-2.5 h-2.5 rounded-full ${form.tipe === "SINGLE" ? "bg-blue-600" : form.tipe === "COMPLEX" ? "bg-purple-600" : "bg-emerald-600"}`}></span>
-                      <span>{form.tipe === "SINGLE" ? "1 Pilihan Kunci" : form.tipe === "COMPLEX" ? "Multi Pilihan Kunci" : "Kunci per Pernyataan"}</span>
+                      <span>{ANSWER_KEY_HINT[form.tipe]}</span>
                     </div>
                   </div>
                 </div>

@@ -116,6 +116,16 @@ function saveCache(cache: Record<string, AnalysisResult>) {
   } catch { /* quota exceeded — ignore */ }
 }
 
+// Label per tipe. Sebelumnya semua tipe selain SINGLE disebut "Pilihan Kompleks",
+// sehingga prompt analisis salah mendeskripsikan TRUE_FALSE/MATCHING/FILL_IN.
+const JENIS_SOAL_LABEL: Record<string, string> = {
+  SINGLE: "Pilihan Ganda (1 jawaban)",
+  COMPLEX: "Pilihan Kompleks (multi jawaban)",
+  TRUE_FALSE: "Benar/Salah per pernyataan",
+  MATCHING: "Menjodohkan",
+  FILL_IN: "Isian singkat",
+};
+
 function buildPrompts(q: ImplementedAdminQuestion, mapelNama: string): { system: string; user: string } {
   const system = `Kamu adalah ahli evaluasi pendidikan Indonesia yang menganalisis 
 kualitas butir soal CBT (Computer Based Test). 
@@ -133,7 +143,7 @@ Gunakan Bahasa Indonesia yang formal dan akademis.`;
   const user = `Analisis kualitas butir soal CBT berikut:
 
 Mata Pelajaran : ${mapelNama || "Tidak diketahui"}
-Jenis Soal     : ${q.tipe === "SINGLE" ? "Pilihan Ganda (1 jawaban)" : "Pilihan Kompleks (multi jawaban)"}
+Jenis Soal     : ${JENIS_SOAL_LABEL[q.tipe] ?? q.tipe}
 Kategori       : ${q.kategori ?? "Tidak diketahui"}
 Bobot          : ${q.bobot}
 

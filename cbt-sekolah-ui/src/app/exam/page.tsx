@@ -13,6 +13,12 @@ import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
 import { updateTrueFalseAnswer } from "@/lib/trueFalse";
 import { updateMatchingAnswer } from "@/lib/matching";
+import {
+  fillInPetunjuk,
+  matchingColumns,
+  questionRenderKind,
+  trueFalseStatements,
+} from "@/lib/questionRender";
 import type { ImplementedStudentQuestion, TrueFalseValue, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
@@ -288,6 +294,7 @@ export default function ExamPage() {
   }
 
   const currentQuestion = questions[currentQuestionIndex];
+  const renderKind = currentQuestion ? questionRenderKind(currentQuestion) : "UNSUPPORTED";
   const answeredCount = countAnswered(answers);
   const totalQuestions = questions.length;
   const isTimeWarning = timeRemaining <= 300;
@@ -305,9 +312,9 @@ export default function ExamPage() {
     }
   };
 
+  // Tanpa truthiness: bentuk jawaban yang menentukan, bukan "kosong berarti false".
   const isOptionSelected = (questionId: string, opt: string): boolean => {
     const ans = answers[questionId];
-    if (!ans) return false;
     const upper = opt.toUpperCase();
     return Array.isArray(ans) ? ans.includes(upper) : ans === upper;
   };
@@ -509,10 +516,11 @@ export default function ExamPage() {
                 />
               )}
 
-              {/* Options list */}
-              {currentQuestion.tipe === "MATCHING" ? (
+              {/* Options list — bentuk UI ditentukan questionRenderKind, bukan
+                  tebakan "selain X berarti pilihan ganda". */}
+              {renderKind === "MATCHING" ? (
                 <div className="flex flex-col gap-3">
-                  {currentQuestion.data_soal.kiri.map((item) => {
+                  {matchingColumns(currentQuestion)!.kiri.map((item) => {
                     const current = answers[currentQuestion.id_soal];
                     const selected = current !== null && typeof current === "object" && !Array.isArray(current)
                       ? (current as Record<string, string>)[item.id] ?? ""
@@ -539,7 +547,7 @@ export default function ExamPage() {
                           }`}
                         >
                           <option value="">Pilih pasangan</option>
-                          {currentQuestion.data_soal.kanan.map((right) => (
+                          {matchingColumns(currentQuestion)!.kanan.map((right) => (
                             <option key={right.id} value={right.id}>
                               {right.id}. {right.teks.replace(/<[^>]*>/g, "")}
                             </option>
@@ -549,12 +557,12 @@ export default function ExamPage() {
                     );
                   })}
                 </div>
-              ) : currentQuestion.tipe === "FILL_IN" ? (
+              ) : renderKind === "FILL_IN" ? (
                 <div className="flex flex-col gap-4">
-                  {currentQuestion.data_soal.petunjuk && (
+                  {fillInPetunjuk(currentQuestion) && (
                     <div
                       className={`text-slate-600 font-medium leading-relaxed border-l-4 border-sky-300 bg-sky-50/60 rounded-r-xl px-4 py-3 ${fontSizeClass}`}
-                      dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(currentQuestion.data_soal.petunjuk) }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(fillInPetunjuk(currentQuestion) ?? "") }}
                     />
                   )}
                   <input
@@ -568,9 +576,9 @@ export default function ExamPage() {
                     className={`w-full border-2 border-slate-300 focus:border-[#2563EB] rounded-xl px-4 py-3 text-slate-800 font-medium outline-none transition-colors ${fontSizeClass}`}
                   />
                 </div>
-              ) : currentQuestion.tipe === "TRUE_FALSE" ? (
+              ) : renderKind === "TRUE_FALSE" ? (
                 <div className="flex flex-col gap-4">
-                  {currentQuestion.data_soal.pernyataan.map((statement, index) => {
+                  {trueFalseStatements(currentQuestion)!.map((statement, index) => {
                     const current = answers[currentQuestion.id_soal];
                     const selected = current !== null && typeof current === "object" && !Array.isArray(current)
                       ? (current as Record<string, string>)[statement.id]
@@ -605,7 +613,7 @@ export default function ExamPage() {
                     );
                   })}
                 </div>
-              ) : (
+              ) : renderKind === "CHOICE" ? (
                 <div className="flex flex-col gap-3">
                   {OPTIONS.map((opt) => {
                     const label = getOptionText(opt, currentQuestion);
@@ -634,6 +642,15 @@ export default function ExamPage() {
                       </button>
                     );
                   })}
+                </div>
+              ) : (
+                // Tipe tidak dikenal atau data soal rusak: jangan tawarkan UI jawaban
+                // yang salah bentuk. Soal lain tetap dapat dikerjakan.
+                <div className="border-2 border-dashed border-amber-300 bg-amber-50/70 rounded-xl p-5 text-amber-800">
+                  <p className="font-bold text-sm mb-1">Soal ini belum dapat ditampilkan.</p>
+                  <p className="text-xs font-medium">
+                    Lewati soal ini dan laporkan ke pengawas ujian. Jawaban soal lain tetap tersimpan.
+                  </p>
                 </div>
               )}
             </div>

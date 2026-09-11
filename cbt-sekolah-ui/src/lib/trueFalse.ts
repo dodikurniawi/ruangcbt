@@ -32,7 +32,10 @@ export function toTrueFalseDraft(
   serializedKey: unknown,
 ): TrueFalseDraftStatement[] {
   const key = parseKey(serializedKey);
-  return data.pernyataan.map((statement) => ({
+  // data_soal bisa hilang/rusak (GAS membuang sel kolom 17 yang tidak bisa diparse);
+  // form admin harus tetap terbuka, bukan crash.
+  const statements = Array.isArray(data?.pernyataan) ? data.pernyataan : [];
+  return statements.map((statement) => ({
     id: statement.id,
     teks: statement.teks,
     kunci: key[statement.id] === "SALAH" ? "SALAH" : "BENAR",
