@@ -45,6 +45,20 @@ export interface User {
 export const QUESTION_TYPES = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'MATCHING', 'FILL_IN'] as const;
 export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX'] as const;
 
+export const QUESTION_WRITE_FIELDS = [
+    'id_soal', 'nomor_urut', 'tipe', 'pertanyaan', 'gambar_url',
+    'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e',
+    'kunci_jawaban', 'bobot', 'kategori', 'id_mapel', 'data_soal',
+] as const;
+
+export const STUDENT_QUESTION_FIELDS = [
+    'id_soal', 'nomor_urut', 'tipe', 'pertanyaan', 'gambar_url',
+    'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e',
+    'bobot', 'kategori', 'id_mapel', 'nama_mapel', 'data_soal',
+] as const;
+
+export const ADMIN_ONLY_QUESTION_FIELDS = ['kunci_jawaban', 'status_soal', 'versi_dari'] as const;
+
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type ImplementedQuestionType = (typeof QUESTION_TYPES_IMPLEMENTED)[number];
 
@@ -54,36 +68,98 @@ export interface QuestionDataItem {
     teks: string;
 }
 
-/**
- * Isi soal terstruktur untuk tipe yang tidak muat di kolom opsi_a..opsi_e.
- * SELALU student-visible — kunci jawaban tidak boleh pernah masuk ke sini.
- * Belum ditulis ke Sheet; kolom 17 adalah pekerjaan Task 4.2.3.
- */
-export type QuestionData =
-    | { pernyataan: QuestionDataItem[] }              // TRUE_FALSE
-    | { kiri: QuestionDataItem[]; kanan: QuestionDataItem[] } // MATCHING
-    | { petunjuk?: string };                          // FILL_IN
+export interface TrueFalseQuestionData {
+    pernyataan: QuestionDataItem[];
+}
 
-export interface Question {
+export interface MatchingQuestionData {
+    kiri: QuestionDataItem[];
+    kanan: QuestionDataItem[];
+}
+
+export interface FillInQuestionData {
+    petunjuk: string;
+}
+
+/** SELALU student-visible; kunci jawaban tidak boleh masuk ke sini. */
+export type QuestionData = TrueFalseQuestionData | MatchingQuestionData | FillInQuestionData;
+
+export interface QuestionBase {
     id_soal: string;
     nomor_urut: number;
-    tipe: QuestionType;
     pertanyaan: string;
     gambar_url?: string | null;
+    bobot: number;
+    kategori?: string | null;
+    id_mapel?: string | null;
+    nama_mapel?: string | null;
+}
+
+export interface LegacyQuestionOptions {
     opsi_a: string;
     opsi_b: string;
     opsi_c: string;
     opsi_d: string;
     opsi_e?: string | null;
-    bobot: number;
-    kategori?: string | null;
-    id_mapel?: string | null;
-    nama_mapel?: string | null;
-    data_soal?: QuestionData | null; // isi terstruktur, student-visible, tanpa kunci
-    kunci_jawaban?: string; // hanya ada di respons admin (getAdminQuestions)
-    status_soal?: 'AKTIF' | 'ARSIP'; // hanya ada di respons admin; ARSIP = soal historis
-    versi_dari?: string | null; // id_soal asal bila baris ini versi baru dari soal lain
 }
+
+export interface SingleQuestion extends QuestionBase, LegacyQuestionOptions {
+    tipe: 'SINGLE';
+    data_soal?: never;
+}
+
+export interface ComplexQuestion extends QuestionBase, LegacyQuestionOptions {
+    tipe: 'COMPLEX';
+    data_soal?: never;
+}
+
+export interface TrueFalseQuestion extends QuestionBase {
+    tipe: 'TRUE_FALSE';
+    data_soal: TrueFalseQuestionData;
+}
+
+export interface MatchingQuestion extends QuestionBase {
+    tipe: 'MATCHING';
+    data_soal: MatchingQuestionData;
+}
+
+export interface FillInQuestion extends QuestionBase {
+    tipe: 'FILL_IN';
+    data_soal: FillInQuestionData;
+}
+
+/** Canonical student-visible model, discriminated by `tipe`. */
+export type StudentQuestion =
+    | SingleQuestion
+    | ComplexQuestion
+    | TrueFalseQuestion
+    | MatchingQuestion
+    | FillInQuestion;
+
+/** Nama lama dipertahankan sebagai alias student-safe. */
+export type Question = StudentQuestion;
+export type ImplementedStudentQuestion = Extract<StudentQuestion, { tipe: ImplementedQuestionType }>;
+
+/** Carrier Sheet/API tetap string: legacy (`B`, `A,C`) atau JSON ter-serialisasi. */
+export type SerializedQuestionAnswerKey = string;
+
+export interface QuestionAdminFields {
+    kunci_jawaban: SerializedQuestionAnswerKey;
+    status_soal: 'AKTIF' | 'ARSIP';
+    versi_dari: string | null;
+}
+
+export type AdminQuestion<T extends StudentQuestion = StudentQuestion> =
+    T extends StudentQuestion ? T & QuestionAdminFields : never;
+export type ImplementedAdminQuestion = AdminQuestion<ImplementedStudentQuestion>;
+
+/**
+ * Payload create/update. `data_soal` writeable dan tersimpan pada Questions kolom
+ * 17; untuk SINGLE/COMPLEX tipenya tetap `never` karena keduanya tidak punya isi
+ * terstruktur.
+ */
+export type QuestionWritePayload =
+    Omit<ImplementedAdminQuestion, 'nama_mapel' | 'status_soal' | 'versi_dari'>;
 
 // Answer types
 export type Answer = string | string[];
@@ -184,4 +260,3 @@ export interface PhaseData {
     mapel: Record<string, CPElement>;
     mata_pelajaran_pilihan?: Record<string, CPElement>;
 }
-

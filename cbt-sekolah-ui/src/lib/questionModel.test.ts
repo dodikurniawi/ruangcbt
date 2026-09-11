@@ -7,13 +7,24 @@ import {
   LEGACY_OPTION_FIELDS,
   DATA_SOAL_TEXT_PATHS,
 } from "./questionSanitize.ts";
-import { QUESTION_TYPES, QUESTION_TYPES_IMPLEMENTED } from "../types/index.ts";
+import {
+  QUESTION_TYPES,
+  QUESTION_TYPES_IMPLEMENTED,
+  QUESTION_WRITE_FIELDS,
+  STUDENT_QUESTION_FIELDS,
+  ADMIN_ONLY_QUESTION_FIELDS,
+  type StudentQuestion,
+  type QuestionAdminFields,
+  type QuestionWritePayload,
+} from "../types/index.ts";
 
 const contract = JSON.parse(
   readFileSync(new URL("../../../question-contract.json", import.meta.url), "utf8")
 ) as {
   types_canonical: string[];
   types_implemented: string[];
+  write_fields: string[];
+  student_fields: string[];
   rich_text: { base: string[]; legacy_options: string[]; data_soal: Record<string, string[]> };
   admin_only_fields: string[];
   answer_key: { forbidden_in_data_soal: string[] };
@@ -22,6 +33,9 @@ const contract = JSON.parse(
 // ── Parity TS ↔ kontrak ─────────────────────────────────────────────────────
 assert.deepEqual([...QUESTION_TYPES], contract.types_canonical, "QUESTION_TYPES menyimpang dari kontrak");
 assert.deepEqual([...QUESTION_TYPES_IMPLEMENTED], contract.types_implemented, "types_implemented menyimpang");
+assert.deepEqual([...QUESTION_WRITE_FIELDS], contract.write_fields, "write_fields TS menyimpang");
+assert.deepEqual([...STUDENT_QUESTION_FIELDS], contract.student_fields, "student_fields TS menyimpang");
+assert.deepEqual([...ADMIN_ONLY_QUESTION_FIELDS], contract.admin_only_fields, "admin_only_fields TS menyimpang");
 assert.deepEqual([...BASE_RICH_TEXT_FIELDS], contract.rich_text.base);
 assert.deepEqual([...LEGACY_OPTION_FIELDS], contract.rich_text.legacy_options);
 assert.deepEqual(
@@ -44,6 +58,45 @@ assert.ok(
   contract.types_implemented.every((t) => contract.types_canonical.includes(t)),
   "types_implemented harus subset types_canonical"
 );
+
+type KeysOfUnion<T> = T extends T ? keyof T : never;
+type SameKeys<A, B> = Exclude<A, B> extends never
+  ? Exclude<B, A> extends never ? true : false
+  : false;
+
+const studentFieldsMatchType: SameKeys<
+  KeysOfUnion<StudentQuestion>,
+  (typeof STUDENT_QUESTION_FIELDS)[number]
+> = true;
+const adminFieldsMatchType: SameKeys<
+  keyof QuestionAdminFields,
+  (typeof ADMIN_ONLY_QUESTION_FIELDS)[number]
+> = true;
+const writeFieldsMatchType: SameKeys<
+  KeysOfUnion<QuestionWritePayload>,
+  (typeof QUESTION_WRITE_FIELDS)[number]
+> = true;
+assert.equal(studentFieldsMatchType && adminFieldsMatchType && writeFieldsMatchType, true);
+
+const futureCanonicalSamples: StudentQuestion[] = [
+  {
+    id_soal: "TF1", nomor_urut: 1, tipe: "TRUE_FALSE", pertanyaan: "Nilai pernyataan",
+    bobot: 1, data_soal: { pernyataan: [{ id: "1", teks: "Jakarta adalah ibu kota" }] },
+  },
+  {
+    id_soal: "M1", nomor_urut: 2, tipe: "MATCHING", pertanyaan: "Jodohkan",
+    bobot: 1,
+    data_soal: {
+      kiri: [{ id: "1", teks: "Jakarta" }],
+      kanan: [{ id: "A", teks: "Ibu kota Indonesia" }],
+    },
+  },
+  {
+    id_soal: "F1", nomor_urut: 3, tipe: "FILL_IN", pertanyaan: "Isi jawaban",
+    bobot: 1, data_soal: { petunjuk: "Nama kota" },
+  },
+];
+assert.deepEqual(futureCanonicalSamples.map((question) => question.tipe), ["TRUE_FALSE", "MATCHING", "FILL_IN"]);
 
 // ── Backward compatibility: payload SINGLE/COMPLEX lama tidak berubah bentuk ─
 const legacySingle = {

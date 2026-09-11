@@ -11,7 +11,7 @@ import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
-import type { Question, ViolationType } from "@/types";
+import type { ImplementedStudentQuestion, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -21,7 +21,7 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function getOptionText(opt: string, q: Question): string {
+function getOptionText(opt: string, q: ImplementedStudentQuestion): string {
   return (q as unknown as Record<string, string>)[`opsi_${opt}`] ?? "";
 }
 
@@ -169,7 +169,7 @@ export default function ExamPage() {
           setQuestions(qRes.data);
           setIsExamStarted(true);
           // Derive subject name from the first question that has nama_mapel
-          const firstMapel = qRes.data.find((q: Question) => q.nama_mapel);
+          const firstMapel = qRes.data.find((q: ImplementedStudentQuestion) => q.nama_mapel);
           if (firstMapel?.nama_mapel) {
             setSubjectName(firstMapel.nama_mapel);
           }

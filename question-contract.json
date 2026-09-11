@@ -4,7 +4,7 @@
   "types_canonical": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
   "types_implemented": ["SINGLE", "COMPLEX"],
 
-  "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini.",
+  "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini. data_soal disimpan pada Questions kolom 17 sebagai JSON string.",
   "write_fields": [
     "id_soal",
     "nomor_urut",
@@ -19,10 +19,11 @@
     "kunci_jawaban",
     "bobot",
     "kategori",
-    "id_mapel"
+    "id_mapel",
+    "data_soal"
   ],
 
-  "_comment_student_fields": "Bentuk persis yang diterima siswa dari getQuestions. Tidak boleh bertambah tanpa audit kebocoran kunci.",
+  "_comment_student_fields": "Allowlist canonical field yang boleh diterima siswa. data_soal diproyeksikan dari Questions kolom 17 bila terisi.",
   "student_fields": [
     "id_soal",
     "nomor_urut",
@@ -37,7 +38,8 @@
     "bobot",
     "kategori",
     "id_mapel",
-    "nama_mapel"
+    "nama_mapel",
+    "data_soal"
   ],
 
   "_comment_admin_only": "Tidak boleh pernah muncul pada proyeksi siswa.",

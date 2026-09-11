@@ -10,10 +10,15 @@ const vm = require("node:vm");
 const tenantSecret = "tenant-shared-secret-32-characters-minimum";
 
 function makeSheet(rows) {
+  // Sheet baru Apps Script punya 26 kolom; grid tiruan mengikuti itu agar tulisan
+  // ke kolom 15-17 berperilaku sama seperti di Sheets sungguhan.
+  let maxColumns = rows.reduce((n, r) => Math.max(n, r.length), 26);
   const sheet = {
     rows,
     getDataRange: () => ({ getValues: () => rows }),
     getLastRow: () => rows.length,
+    getMaxColumns: () => maxColumns,
+    insertColumnsAfter(after, howMany) { maxColumns = after + howMany; },
     appendRow(values) { rows.push(values.slice()); },
     deleteRow(rowNumber) { rows.splice(rowNumber - 1, 1); },
     getRange(row, col, numRows, numCols) {
@@ -36,7 +41,7 @@ function makeSheet(rows) {
   return sheet;
 }
 
-function loadGas(sheetRows) {
+function loadGas(sheetRows, mutateSource) {
   const sheets = {};
   for (const name of Object.keys(sheetRows)) sheets[name] = makeSheet(sheetRows[name]);
 
@@ -62,7 +67,11 @@ function loadGas(sheetRows) {
     console,
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "code.gs"), "utf8"), context);
+  let source = fs.readFileSync(path.join(__dirname, "code.gs"), "utf8");
+  // mutateSource dipakai mutation test: implementasi sengaja dirusak untuk
+  // memastikan test benar-benar mendeteksi regresi, bukan lolos karena kebetulan.
+  if (mutateSource) source = mutateSource(source);
+  vm.runInContext(source, context);
   context.__sheets = sheets;
   // `const` di top-level script vm tidak menjadi properti context, jadi baca lewat eval.
   context.__eval = function (expr) { return vm.runInContext(expr, context); };
@@ -72,7 +81,7 @@ function loadGas(sheetRows) {
 const QUESTION_HEADER = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
   "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
-  "kunci_jawaban", "bobot", "kategori", "id_mapel", "status_soal", "versi_dari",
+  "kunci_jawaban", "bobot", "kategori", "id_mapel", "status_soal", "versi_dari", "data_soal",
 ];
 const USER_HEADER = [
   "id_siswa", "username", "password", "nama", "kelas", "login",
@@ -622,6 +631,16 @@ const contract = JSON.parse(
     contract.write_fields.slice().sort(),
     "QUESTION_ALLOWED_FIELDS menyimpang dari kontrak"
   );
+  assert.deepEqual(
+    Array.from(gas.__eval("STUDENT_QUESTION_FIELDS")).sort(),
+    contract.student_fields.slice().sort(),
+    "STUDENT_QUESTION_FIELDS menyimpang dari kontrak"
+  );
+  assert.deepEqual(
+    Array.from(gas.__eval("ADMIN_ONLY_QUESTION_FIELDS")).sort(),
+    contract.admin_only_fields.slice().sort(),
+    "ADMIN_ONLY_QUESTION_FIELDS menyimpang dari kontrak"
+  );
   // Tabel validator harus persis menutupi tipe yang diklaim didukung.
   assert.deepEqual(
     Object.keys(gas.__eval("QUESTION_TYPE_VALIDATORS")).sort(),
@@ -645,12 +664,19 @@ const contract = JSON.parse(
   assert.equal(unknown.success, false);
   assert.match(unknown.message, /tidak dikenal/);
 
-  // data_soal belum boleh masuk Sheet: kolom 17 adalah pekerjaan task berikutnya.
+  // data_soal kini field tulis yang sah, tetapi tidak boleh membawa kunci jawaban.
   const withData = post(gas, "createQuestion", {
     data: Object.assign({}, validSingle, { data_soal: { pernyataan: [{ id: "1", teks: "x" }] } }),
   });
-  assert.equal(withData.success, false);
-  assert.match(withData.message, /Field tidak dikenal/);
+  assert.equal(withData.success, true, withData.message);
+
+  const smuggled = post(gas, "createQuestion", {
+    data: Object.assign({}, validSingle, {
+      data_soal: { pernyataan: [{ id: "1", teks: "x", kunci: "BENAR" }] },
+    }),
+  });
+  assert.equal(smuggled.success, false, "kunci jawaban tidak boleh diselundupkan lewat data_soal");
+  assert.match(smuggled.message, /kunci jawaban/);
 }
 
 // ── 29. Proyeksi siswa persis sesuai kontrak, tanpa field admin ─────────────
@@ -665,11 +691,15 @@ const contract = JSON.parse(
 
   const student = get(gas, "getQuestions").data;
   assert.equal(student.length, 1);
-  assert.deepEqual(
-    Object.keys(student[0]).sort(),
-    contract.student_fields.slice().sort(),
-    "bentuk soal untuk siswa menyimpang dari kontrak"
+  assert.equal(
+    Object.keys(student[0]).every((field) => contract.student_fields.includes(field)),
+    true,
+    "proyeksi siswa memuat field di luar allowlist kontrak"
   );
+  for (const field of contract.student_fields.filter((name) => name !== "data_soal")) {
+    assert.equal(field in student[0], true, "field siswa hilang: " + field);
+  }
+  assert.equal("data_soal" in student[0], false, "kolom 17 kosong tidak boleh memunculkan data_soal");
   for (const forbidden of contract.admin_only_fields) {
     assert.equal(forbidden in student[0], false, "field admin " + forbidden + " bocor ke siswa");
   }
@@ -708,5 +738,285 @@ const contract = JSON.parse(
 }
 
 console.log("questionBank422: parity kontrak + proyeksi siswa PASS");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.2.3 — data_soal sebagai kolom 17
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DATA_SOAL_SAMPLE = { pernyataan: [{ id: "1", teks: "Jakarta ibu kota" }] };
+const DATA_SOAL_JSON = '{"pernyataan":[{"id":"1","teks":"Jakarta ibu kota"}]}';
+
+// Baris 17 kolom lengkap dengan data_soal terisi.
+function stateWithDataSoal(cell) {
+  const state = baseState();
+  state.Questions = [
+    QUESTION_HEADER,
+    ["Q1", 1, "SINGLE", "Soal lama", "", "A", "B", "C", "D", "", "A", 1, "Mudah", "MAPEL_A", "AKTIF", "",
+      cell === undefined ? DATA_SOAL_JSON : cell],
+  ];
+  return state;
+}
+
+const unchangedQ1 = {
+  nomor_urut: 1, tipe: "SINGLE", pertanyaan: "Soal lama", gambar_url: "",
+  opsi_a: "A", opsi_b: "B", opsi_c: "C", opsi_d: "D", opsi_e: "",
+  kunci_jawaban: "A", bobot: 1, kategori: "Mudah", id_mapel: "MAPEL_A",
+};
+
+// ── 31. A. Baris legacy (14/16 kolom) tetap terbaca, data_soal kosong ───────
+{
+  const gas = loadGas(baseState());                    // Questions 14 kolom
+  const legacy14 = get(gas, "getQuestions").data[0];
+  assert.equal(legacy14.id_soal, "Q1");
+  assert.equal("data_soal" in legacy14, false, "baris 14 kolom tidak boleh memunculkan data_soal");
+
+  const state16 = baseState();
+  state16.Questions = [
+    QUESTION_HEADER.slice(0, 16),
+    ["Q1", 1, "SINGLE", "Soal lama", "", "A", "B", "C", "D", "", "A", 1, "Mudah", "MAPEL_A", "AKTIF", ""],
+  ];
+  const gas16 = loadGas(state16);
+  const legacy16 = get(gas16, "getQuestions").data[0];
+  assert.equal(legacy16.bobot, 1, "kolom 1-16 tidak boleh bergeser");
+  assert.equal(legacy16.kategori, "Mudah");
+  assert.equal("data_soal" in legacy16, false);
+  // Soal legacy tetap dapat diedit.
+  const edit = post(gas16, "updateQuestion", { id_soal: "Q1", data: unchangedQ1 });
+  assert.equal(edit.success, true, edit.message);
+  assert.equal(gas16.__sheets.Questions.rows[1][16], "", "edit tanpa data_soal tetap menulis kolom 17 kosong");
+}
+
+// ── 32. B. Baris 17 kolom: data_soal terbaca sebagai objek ─────────────────
+{
+  const gas = loadGas(stateWithDataSoal());
+  const student = get(gas, "getQuestions").data[0];
+  assert.deepEqual(student.data_soal, DATA_SOAL_SAMPLE);
+  const admin = get(gas, "getAdminQuestions").data[0];
+  assert.deepEqual(admin.data_soal, DATA_SOAL_SAMPLE);
+}
+
+// ── 33. C. questionRowValues() menghasilkan 17 kolom, posisi 1-16 tetap ────
+{
+  const gas = loadGas(baseState());
+  const legacyRow = gas.questionRowValues("Q9", validSingle, "AKTIF", "Q0");
+  const withData = gas.questionRowValues(
+    "Q9", Object.assign({}, validSingle, { data_soal: DATA_SOAL_SAMPLE }), "AKTIF", "Q0"
+  );
+
+  assert.equal(legacyRow.length, 17, "questionRowValues wajib 17 kolom");
+  assert.deepEqual(legacyRow.slice(0, 16), withData.slice(0, 16), "kolom 1-16 tidak boleh berubah");
+  assert.deepEqual(Array.from(legacyRow).slice(0, 16), [
+    "Q9", 2, "SINGLE", "<p>Berapa 2+2?</p>", "", "3", "4", "5", "6", "",
+    "B", 1, "Mudah", "MAPEL_A", "AKTIF", "Q0",
+  ], "urutan kolom 1-16 menyimpang");
+  assert.equal(legacyRow[16], "", "tanpa data_soal kolom 17 kosong");
+  assert.equal(withData[16], DATA_SOAL_JSON, "data_soal harus berada di index 16 sebagai JSON string");
+}
+
+// ── 34. D. questionContentEquals() membandingkan data_soal secara semantik ──
+{
+  const gas = loadGas(baseState());
+  const row = gas.questionRowValues("Q1", Object.assign({}, unchangedQ1, { data_soal: { a: 1, b: 2 } }),
+    "AKTIF", "");
+
+  assert.equal(
+    gas.questionContentEquals(row, Object.assign({}, unchangedQ1, { data_soal: { b: 2, a: 1 } })),
+    true,
+    "urutan kunci JSON berbeda bukan perubahan isi"
+  );
+  assert.equal(
+    gas.questionContentEquals(row, Object.assign({}, unchangedQ1, { data_soal: { a: 1, b: 3 } })),
+    false,
+    "nilai data_soal berbeda wajib terbaca sebagai perubahan isi"
+  );
+  assert.equal(
+    gas.questionContentEquals(row, unchangedQ1),
+    false,
+    "menghapus data_soal juga perubahan isi"
+  );
+  // Metadata versioning dan nomor_urut tetap bukan isi.
+  const meta = gas.questionRowValues("Q1", Object.assign({}, unchangedQ1, { data_soal: { a: 1, b: 2 } }),
+    "ARSIP", "Q0");
+  assert.equal(
+    gas.questionContentEquals(meta, Object.assign({}, unchangedQ1, { nomor_urut: 9, data_soal: { b: 2, a: 1 } })),
+    true,
+    "status_soal/versi_dari/nomor_urut bukan isi historis"
+  );
+}
+
+// ── 35. E. Edit data_soal pada soal historis wajib menjadi versi baru ───────
+{
+  const state = answeredState();
+  state.Questions = stateWithDataSoal("").Questions;      // Q1 17 kolom, data_soal kosong
+  const gas = loadGas(state);
+
+  const res = post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, unchangedQ1, { data_soal: DATA_SOAL_SAMPLE }),
+  });
+  assert.equal(res.success, true, res.message);
+  assert.equal(res.versioned, true, "perubahan data_soal wajib memicu versi baru");
+  assert.equal(res.previous_id_soal, "Q1");
+
+  const rows = gas.__sheets.Questions.rows;
+  const old = rows.find((r) => r[0] === "Q1");
+  const fresh = rows.find((r) => r[0] === res.id_soal);
+  assert.equal(old[14], "ARSIP", "versi lama wajib diarsipkan");
+  assert.equal(old[16], "", "isi historis tidak boleh tersentuh");
+  assert.equal(fresh[16], DATA_SOAL_JSON, "versi baru menyimpan data_soal di kolom 17");
+  assert.equal(fresh[15], "Q1", "versi_dari menunjuk soal asal");
+}
+
+// ── 36. F. Edit nomor_urut saja tetap in-place walau data_soal terisi ───────
+{
+  const state = answeredState();
+  state.Questions = stateWithDataSoal().Questions;
+  const gas = loadGas(state);
+
+  const res = post(gas, "updateQuestion", {
+    id_soal: "Q1",
+    // data_soal identik, hanya urutan kunci JSON dan nomor_urut yang berbeda.
+    data: Object.assign({}, unchangedQ1, {
+      nomor_urut: 7,
+      data_soal: { pernyataan: [{ teks: "Jakarta ibu kota", id: "1" }] },
+    }),
+  });
+  assert.equal(res.versioned, false, "nomor_urut bukan isi historis");
+  assert.equal(gas.__sheets.Questions.rows.length, 2, "tidak boleh ada versi baru");
+  assert.equal(gas.__sheets.Questions.rows[1][1], 7);
+  assert.equal(gas.__sheets.Questions.rows[1][16], DATA_SOAL_JSON, "data_soal tidak berubah");
+}
+
+// ── 37. G/H. Regresi SINGLE dan COMPLEX legacy tanpa data_soal ─────────────
+{
+  const gas = loadGas(baseState());
+  const single = post(gas, "createQuestion", { data: validSingle });
+  assert.equal(single.success, true, single.message);
+  const complex = post(gas, "createQuestion", {
+    data: Object.assign({}, validSingle, { tipe: "COMPLEX", kunci_jawaban: "A,C", nomor_urut: 3 }),
+  });
+  assert.equal(complex.success, true, complex.message);
+
+  const rows = gas.__sheets.Questions.rows;
+  assert.equal(rows[1].length, 14, "baris lama tidak boleh dimigrasi");
+  assert.equal(rows[2].length, 17);
+  assert.equal(rows[3].length, 17);
+  assert.equal(rows[3][16], "", "SINGLE/COMPLEX tidak menulis data_soal");
+  assert.equal(rows[3][10], "A,C", "kunci COMPLEX tetap di kolom 11");
+
+  const student = get(gas, "getQuestions").data;
+  assert.equal(student.length, 3);
+  assert.equal(student.every((q) => !("data_soal" in q)), true);
+}
+
+// ── 38. I. Proyeksi siswa: data_soal boleh, field admin tidak ──────────────
+{
+  const state = stateWithDataSoal();
+  state.Questions[1][10] = "A";
+  state.Questions[1][15] = "Q0";
+  const gas = loadGas(state);
+
+  const student = get(gas, "getQuestions").data[0];
+  assert.equal(
+    Object.keys(student).every((field) => contract.student_fields.includes(field)),
+    true,
+    "proyeksi siswa memuat field di luar allowlist"
+  );
+  assert.deepEqual(student.data_soal, DATA_SOAL_SAMPLE);
+  for (const forbidden of contract.admin_only_fields) {
+    assert.equal(forbidden in student, false, "field admin " + forbidden + " bocor ke siswa");
+  }
+  assert.equal(JSON.stringify(student).indexOf("kunci") === -1, true, "kunci muncul di payload siswa");
+}
+
+// ── 39. J. data_soal rusak: ditangani defensif, tidak crash diam-diam ───────
+{
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(String(message));
+  try {
+    const state = answeredState();
+    state.Questions = stateWithDataSoal("{bukan json").Questions;
+    const gas = loadGas(state);
+
+    const student = get(gas, "getQuestions");
+    assert.equal(student.success, true, "data_soal rusak tidak boleh menggagalkan seluruh request");
+    assert.equal("data_soal" in student.data[0], false, "isi rusak tidak boleh diteruskan ke siswa");
+    assert.equal(warnings.some((w) => w.indexOf("data_soal tidak valid") !== -1), true,
+      "data_soal rusak wajib tercatat, bukan gagal diam-diam");
+
+    // Menyimpan ulang soal historis dengan data_soal sah = perubahan isi.
+    const res = post(gas, "updateQuestion", {
+      id_soal: "Q1",
+      data: Object.assign({}, unchangedQ1, { data_soal: DATA_SOAL_SAMPLE }),
+    });
+    assert.equal(res.versioned, true, "sel rusak tidak boleh dianggap sama dengan data_soal sah");
+
+    // Payload data_soal yang bukan objek ditolak di boundary.
+    const bad = post(gas, "createQuestion", {
+      data: Object.assign({}, validSingle, { data_soal: "{bukan json" }),
+    });
+    assert.equal(bad.success, false);
+    assert.match(bad.message, /data_soal harus berupa objek/);
+  } finally {
+    console.warn = originalWarn;
+  }
+}
+
+// ── 40. Sheet yang kolomnya dipangkas diperlebar sebelum menulis 17 kolom ──
+{
+  const gas = loadGas(baseState());
+  const sheet = gas.__sheets.Questions;
+  sheet.insertColumnsAfter(0, 16);                      // pangkas grid tiruan ke 16 kolom
+  assert.equal(sheet.getMaxColumns(), 16);
+  gas.ensureQuestionColumns(sheet);
+  assert.equal(sheet.getMaxColumns(), 17, "grid wajib diperlebar sebelum menulis kolom 17");
+}
+
+// ── 41. MUTATION TEST: questionContentEquals() wajib melihat kolom 17 ───────
+// Implementasi sengaja dibuat mengabaikan data_soal. Bila test 35 benar, build
+// cacat ini harus berperilaku berbeda (menimpa baris historis, tanpa versi baru).
+{
+  const mutate = (source) => {
+    const mutated = source.replace(
+      "  const d = QUESTION_DATA_COL - 1;\n  return canonicalDataSoalCell(row[d]) === canonicalDataSoalCell(next[d]);",
+      "  return true;"
+    );
+    assert.notEqual(mutated, source, "titik mutasi tidak ditemukan — mutation test kedaluwarsa");
+    return mutated;
+  };
+
+  const state = answeredState();
+  state.Questions = stateWithDataSoal("").Questions;
+  const broken = loadGas(state, mutate);
+  const res = post(broken, "updateQuestion", {
+    id_soal: "Q1",
+    data: Object.assign({}, unchangedQ1, { data_soal: DATA_SOAL_SAMPLE }),
+  });
+  assert.equal(res.versioned, false, "mutasi tidak mengubah perilaku — test 35 tidak mendeteksi regresi");
+  assert.equal(
+    broken.__sheets.Questions.rows.length, 2,
+    "build cacat tidak membuat versi baru — inilah regresi yang dijaga test 35"
+  );
+  assert.equal(
+    broken.__sheets.Questions.rows[1][16], "",
+    "build cacat membuang perubahan data_soal tanpa jejak"
+  );
+
+  // Implementasi asli pada state identik tetap membuat versi baru.
+  const fixedState = answeredState();
+  fixedState.Questions = stateWithDataSoal("").Questions;
+  const fixed = loadGas(fixedState);
+  assert.equal(
+    post(fixed, "updateQuestion", {
+      id_soal: "Q1",
+      data: Object.assign({}, unchangedQ1, { data_soal: DATA_SOAL_SAMPLE }),
+    }).versioned,
+    true
+  );
+}
+
+console.log("questionBank423: data_soal kolom 17 + integritas historis PASS");
+
 
 console.log("questionBank: validasi, integritas historis, safe edit/delete PASS");

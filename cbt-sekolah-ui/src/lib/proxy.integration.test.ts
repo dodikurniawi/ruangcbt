@@ -111,6 +111,36 @@ try {
   assert.equal(forwarded.kunci_jawaban, "A");
   assert.equal(forwarded.bobot, 1);
 
+  const nestedQuestion = await handleProxyRequest(
+    request("POST", "updateQuestion", adminCookie, {
+      id_soal: "Q1",
+      data: {
+        tipe: "MATCHING",
+        pertanyaan: "Jodohkan",
+        data_soal: {
+          kiri: [{ id: "1", teks: '<script>alert(1)</script>Jakarta' }],
+          kanan: [{ id: "A", teks: '<img src=x onerror="alert(1)">Ibukota' }],
+        },
+      },
+    }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(nestedQuestion.status, 200);
+  const nestedData = (lastBody.data as Record<string, unknown>).data_soal as {
+    kiri: { teks: string }[];
+    kanan: { teks: string }[];
+  };
+  assert.equal(nestedData.kiri[0].teks, "Jakarta");
+  assert.equal(nestedData.kanan[0].teks, "Ibukota");
+
+  const callsBeforeMalformedQuestion = upstreamCalls;
+  const malformedQuestion = await handleProxyRequest(
+    request("POST", "createQuestion", adminCookie, { data: [] }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(malformedQuestion.status, 400);
+  assert.equal(upstreamCalls, callsBeforeMalformedQuestion, "shape soal rusak tidak boleh mencapai GAS");
+
   const studentLogin = await handleProxyRequest(
     request("POST", "login", undefined, { username: "student", password: "student-pass" }),
     "POST", "tenant-a", resolveTarget

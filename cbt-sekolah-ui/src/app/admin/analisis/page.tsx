@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getAdminQuestions, getMataPelajaran, logout } from "@/lib/api";
-import type { Question, MataPelajaran } from "@/types";
+import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
 
 // ─── GROQ AI UTILITY ────────────────────────────────────────────────────────
 
@@ -116,7 +116,7 @@ function saveCache(cache: Record<string, AnalysisResult>) {
   } catch { /* quota exceeded — ignore */ }
 }
 
-function buildPrompts(q: Question, mapelNama: string): { system: string; user: string } {
+function buildPrompts(q: ImplementedAdminQuestion, mapelNama: string): { system: string; user: string } {
   const system = `Kamu adalah ahli evaluasi pendidikan Indonesia yang menganalisis 
 kualitas butir soal CBT (Computer Based Test). 
 Selalu respons dalam format JSON valid sesuai schema yang diminta.
@@ -236,10 +236,10 @@ export default function AnalisisButirSoalPage() {
 
   const { data: questionsRes, isLoading: questionsLoading } = useSWR("getAdminQuestions", getAdminQuestions);
   const { data: mapelRes }     = useSWR("getMataPelajaran", getMataPelajaran);
-  const questions: Question[]       = questionsRes?.data ?? [];
+  const questions: ImplementedAdminQuestion[] = questionsRes?.data ?? [];
   const mapelList: MataPelajaran[]  = mapelRes?.data ?? [];
 
-  const getMapelNama = (q: Question) =>
+  const getMapelNama = (q: ImplementedAdminQuestion) =>
     mapelList.find(m => m.id_mapel === q.id_mapel)?.nama_mapel ?? "Umum";
 
   const filtered = questions.filter(q => {
@@ -250,7 +250,7 @@ export default function AnalisisButirSoalPage() {
     return matchMapel && matchRating && matchSearch;
   });
 
-  const handleAnalyze = async (q: Question) => {
+  const handleAnalyze = async (q: ImplementedAdminQuestion) => {
     if (!apiKey) {
       setKeyInput("");
       setInlineKeyError("");

@@ -96,9 +96,12 @@ function isAnswerFilled(answer) {
 // ===== BANK SOAL — INTEGRITAS HISTORIS =====
 // Questions kolom 15 = status_soal. Kosong dibaca sebagai AKTIF sehingga sheet
 // lama (14 kolom) tetap terbaca tanpa migrasi.
-const QUESTION_COLUMNS = 16;
+const QUESTION_COLUMNS = 17;
 const QUESTION_STATUS_COL = 15;
 const QUESTION_ORIGIN_COL = 16;
+// Kolom 17 = data_soal (JSON string). Baris lama 14/16 kolom tetap sah: sel yang
+// tidak ada dibaca sebagai kosong, bukan error, dan tidak menggeser kolom lain.
+const QUESTION_DATA_COL = 17;
 const QUESTION_STATUS_ACTIVE = "AKTIF";
 const QUESTION_STATUS_ARCHIVED = "ARSIP";
 // Seluruh tipe yang dikenal model canonical (lihat question-contract.json).
@@ -109,8 +112,19 @@ const OPTION_LETTERS = ["A", "B", "C", "D", "E"];
 const QUESTION_ALLOWED_FIELDS = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
   "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
-  "kunci_jawaban", "bobot", "kategori", "id_mapel",
+  "kunci_jawaban", "bobot", "kategori", "id_mapel", "data_soal",
 ];
+// Allowlist proyeksi siswa canonical. data_soal student-visible dan bukan tempat
+// kunci jawaban — lihat FORBIDDEN_DATA_SOAL_KEYS.
+const STUDENT_QUESTION_FIELDS = [
+  "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
+  "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
+  "bobot", "kategori", "id_mapel", "nama_mapel", "data_soal",
+];
+const ADMIN_ONLY_QUESTION_FIELDS = ["kunci_jawaban", "status_soal", "versi_dari"];
+// kunci_jawaban adalah satu-satunya pembawa kunci. data_soal ikut ke siswa, jadi
+// nama field yang menyerupai kunci ditolak di boundary (lihat question-contract.json).
+const FORBIDDEN_DATA_SOAL_KEYS = ["kunci", "kunci_jawaban", "jawaban", "benar", "answer", "key"];
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
 
@@ -242,7 +256,99 @@ function validateQuestionPayload(data) {
   const gambar = String(data.gambar_url || "").trim();
   if (gambar && !/^(https?:\/\/|data:image\/)/i.test(gambar)) return "URL gambar tidak valid";
 
+  // data_soal boleh absen (soal legacy dan SINGLE/COMPLEX). Bila ada, bentuknya
+  // wajib objek — string JSON mentah tidak diterima supaya hanya ada satu jalur
+  // serialisasi, yaitu serializeDataSoal().
+  if (data.data_soal !== undefined && data.data_soal !== null && data.data_soal !== "") {
+    if (!isPlainQuestionObject(data.data_soal)) return "data_soal harus berupa objek";
+    const leaked = findForbiddenDataSoalKey(data.data_soal);
+    if (leaked) return "data_soal tidak boleh memuat kunci jawaban: " + leaked;
+  }
+
   return null;
+}
+
+// ===== data_soal (Questions kolom 17) =====
+// Serialisasi stabil: kunci objek diurutkan supaya {"a":1,"b":2} dan {"b":2,"a":1}
+// menghasilkan string identik. Tanpa ini, reorder kunci saja sudah terbaca sebagai
+// perubahan isi dan memicu versi baru yang tidak perlu.
+function stableStringify(value) {
+  if (value === null || value === undefined) return "null";
+  if (typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    const items = [];
+    for (let i = 0; i < value.length; i++) items.push(stableStringify(value[i]));
+    return "[" + items.join(",") + "]";
+  }
+  const keys = Object.keys(value).sort();
+  const parts = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (value[keys[i]] === undefined) continue;
+    parts.push(JSON.stringify(keys[i]) + ":" + stableStringify(value[keys[i]]));
+  }
+  return "{" + parts.join(",") + "}";
+}
+
+function isPlainQuestionObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// Cari nama field yang menyerupai kunci jawaban, di kedalaman berapa pun.
+function findForbiddenDataSoalKey(value) {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const found = findForbiddenDataSoalKey(value[i]);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isPlainQuestionObject(value)) return null;
+  const keys = Object.keys(value);
+  for (let i = 0; i < keys.length; i++) {
+    if (FORBIDDEN_DATA_SOAL_KEYS.indexOf(String(keys[i]).toLowerCase()) !== -1) return keys[i];
+    const found = findForbiddenDataSoalKey(value[keys[i]]);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Payload → sel kolom 17. Kosong/absen tetap menulis "" sehingga soal legacy dan
+// SINGLE/COMPLEX tidak mendapat isi baru.
+function serializeDataSoal(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (!isPlainQuestionObject(value) || Object.keys(value).length === 0) return "";
+  return stableStringify(value);
+}
+
+// Sel kolom 17 → objek. null = kosong (termasuk baris 14/16 kolom lama),
+// undefined = isi rusak dan tidak boleh dipakai diam-diam.
+function parseDataSoalCell(raw) {
+  const text = String(raw === null || raw === undefined ? "" : raw).trim();
+  if (text === "") return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!isPlainQuestionObject(parsed)) return undefined;
+    return Object.keys(parsed).length === 0 ? null : parsed;
+  } catch (err) {
+    return undefined;
+  }
+}
+
+// Bentuk kanonik untuk perbandingan isi. Sel rusak dibandingkan apa adanya dan
+// tidak pernah sama dengan data_soal yang sah — perubahan tetap memicu versi baru.
+function canonicalDataSoalCell(raw) {
+  const parsed = parseDataSoalCell(raw);
+  if (parsed === null) return "";
+  if (parsed === undefined) return "malformed:" + String(raw);
+  return stableStringify(parsed);
+}
+
+// Sheet lama bisa punya lebih sedikit kolom daripada QUESTION_COLUMNS; menulis
+// 17 kolom ke sheet 16 kolom adalah error di Apps Script, bukan auto-expand.
+function ensureQuestionColumns(sheet) {
+  if (!sheet || typeof sheet.getMaxColumns !== "function") return;
+  const current = sheet.getMaxColumns();
+  if (current < QUESTION_COLUMNS) sheet.insertColumnsAfter(current, QUESTION_COLUMNS - current);
 }
 
 function questionRowValues(id_soal, data, statusValue, originId) {
@@ -263,19 +369,23 @@ function questionRowValues(id_soal, data, statusValue, originId) {
     String(data.id_mapel || "").trim(),
     statusValue || QUESTION_STATUS_ACTIVE,
     originId || "",
+    serializeDataSoal(data.data_soal),
   ];
 }
 
 // Bandingkan isi soal yang menentukan makna jawaban historis: tipe, redaksi,
-// gambar, opsi, kunci, bobot, kategori, mapel. nomor_urut sengaja dikecualikan —
-// urutan tampil tidak pernah tercatat pada Responses, jadi mengurutkan ulang soal
-// tidak mengubah arti hasil lama dan tidak perlu memicu versi baru.
+// gambar, opsi, kunci, bobot, kategori, mapel, data_soal. nomor_urut sengaja
+// dikecualikan — urutan tampil tidak pernah tercatat pada Responses, jadi
+// mengurutkan ulang soal tidak mengubah arti hasil lama dan tidak perlu memicu
+// versi baru. status_soal dan versi_dari adalah metadata versioning, bukan isi.
 function questionContentEquals(row, data) {
   const next = questionRowValues(row[0], data, QUESTION_STATUS_ACTIVE, "");
   for (let c = 2; c <= 13; c++) {           // kolom 3..14
     if (String(row[c] == null ? "" : row[c]) !== String(next[c] == null ? "" : next[c])) return false;
   }
-  return true;
+  // Kolom 17 dibandingkan secara semantik, bukan string mentah.
+  const d = QUESTION_DATA_COL - 1;
+  return canonicalDataSoalCell(row[d]) === canonicalDataSoalCell(next[d]);
 }
 
 function isAuthorizedProxyRequest(params) {
@@ -535,6 +645,14 @@ function handleGetQuestions(skipMapelFilter) {
       id_mapel: id_mapel,
       nama_mapel: id_mapel ? (mapelLookup[id_mapel] || null) : null,
     };
+    // data_soal hanya diikutkan bila kolom 17 berisi JSON objek yang sah. Sel rusak
+    // dicatat dan dilewati, bukan menggagalkan seluruh request.
+    const dataSoal = parseDataSoalCell(row[QUESTION_DATA_COL - 1]);
+    if (dataSoal === undefined) {
+      console.warn("data_soal tidak valid pada soal " + row[0] + "; field dilewati");
+    } else if (dataSoal !== null) {
+      entry.data_soal = dataSoal;
+    }
     // Kirim kunci_jawaban hanya untuk admin (skipMapelFilter=true)
     if (skipMapelFilter) {
       entry.kunci_jawaban = row[10] || "";
@@ -913,6 +1031,7 @@ function handleAdminLogin(params) {
 //  6=opsi_a   7=opsi_b      8=opsi_c  9=opsi_d    10=opsi_e
 //  11=kunci_jawaban  12=bobot  13=kategori  14=id_mapel
 //  15=status_soal (AKTIF/ARSIP)  16=versi_dari (id_soal asal untuk versi baru)
+//  17=data_soal (JSON string; kosong untuk soal legacy dan SINGLE/COMPLEX)
 
 function collectQuestionIds(sheetValues) {
   const taken = {};
@@ -946,6 +1065,7 @@ function createQuestionVersion(sheet, oldRowNumber, currentRow, data, originId) 
     const taken = collectQuestionIds(sheet.getDataRange().getValues());
     const newId = generateQuestionId(taken);
 
+    ensureQuestionColumns(sheet);
     sheet.appendRow(questionRowValues(newId, data, QUESTION_STATUS_ACTIVE, originId));
     sheet.getRange(oldRowNumber, QUESTION_STATUS_COL).setValue(QUESTION_STATUS_ARCHIVED);
     if (!currentRow[QUESTION_ORIGIN_COL - 1]) {
@@ -989,6 +1109,7 @@ function handleCreateQuestion(params) {
       id_soal = generateQuestionId(takenIds);
     }
 
+    ensureQuestionColumns(sheet);
     sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, ""));
     cache.remove("questions"); cache.remove("questions_all");
     return { success: true, message: "Question created", id_soal: id_soal };
@@ -1039,6 +1160,7 @@ function handleUpdateQuestion(params) {
         return createQuestionVersion(sheet, i + 1, current, data, origin || id_soal);
       }
 
+      ensureQuestionColumns(sheet);
       sheet.getRange(i + 1, 1, 1, QUESTION_COLUMNS)
         .setValues([questionRowValues(id_soal, data, status, origin)]);
 

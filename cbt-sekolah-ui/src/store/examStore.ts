@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { User, Question, AnswersRecord } from '@/types';
+import type { User, ImplementedStudentQuestion, AnswersRecord } from '@/types';
 
 interface ExamStore {
     // User data
@@ -8,8 +8,8 @@ interface ExamStore {
     setUser: (user: User | null) => void;
 
     // Questions
-    questions: Question[];
-    setQuestions: (questions: Question[]) => void;
+    questions: ImplementedStudentQuestion[];
+    setQuestions: (questions: ImplementedStudentQuestion[]) => void;
 
     // Current question index
     currentQuestionIndex: number;

@@ -22,6 +22,10 @@ type TargetResolver = () => Promise<ProxyTarget | null>;
 const STUDENT_IDENTITY_ACTIONS = new Set(["syncAnswers", "submitExam", "reportViolation"]);
 const QUESTION_WRITE_ACTIONS = new Set(["createQuestion", "updateQuestion"]);
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export async function handleProxyRequest(
   request: NextRequest,
   method: ProxyMethod,
@@ -73,8 +77,11 @@ export async function handleProxyRequest(
 
   // Rich text soal masuk lewat request, jadi disanitasi di boundary server sebelum
   // pernah tersimpan. Renderer tetap menyanitasi ulang untuk data lama.
-  if (QUESTION_WRITE_ACTIONS.has(parsed.action) && body.data && typeof body.data === "object") {
-    body = { ...body, data: sanitizeQuestionPayload(body.data as Record<string, unknown>) };
+  if (QUESTION_WRITE_ACTIONS.has(parsed.action)) {
+    if (!isPlainObject(body.data)) {
+      return NextResponse.json({ success: false, message: "Data soal tidak valid" }, { status: 400 });
+    }
+    body = { ...body, data: sanitizeQuestionPayload(body.data) };
   }
 
   const target = await resolveTarget();

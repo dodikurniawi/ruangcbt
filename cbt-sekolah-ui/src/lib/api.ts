@@ -1,7 +1,9 @@
 import type {
     ApiResponse,
     User,
-    Question,
+    ImplementedStudentQuestion,
+    ImplementedAdminQuestion,
+    QuestionWritePayload,
     LiveScoreEntry,
     LiveScoreStats,
     ExamConfig,
@@ -74,12 +76,12 @@ export async function logout(): Promise<ApiResponse> {
 
 // ===== EXAM APIs =====
 
-export async function getQuestions(): Promise<ApiResponse<Question[]>> {
-    return fetchApi<Question[]>('getQuestions');
+export async function getQuestions(): Promise<ApiResponse<ImplementedStudentQuestion[]>> {
+    return fetchApi<ImplementedStudentQuestion[]>('getQuestions');
 }
 
-export async function getAdminQuestions(): Promise<ApiResponse<Question[]>> {
-    return fetchApi<Question[]>('getAdminQuestions');
+export async function getAdminQuestions(): Promise<ApiResponse<ImplementedAdminQuestion[]>> {
+    return fetchApi<ImplementedAdminQuestion[]>('getAdminQuestions');
 }
 
 export async function getConfig(): Promise<ApiResponse<ExamConfig>> {
@@ -127,13 +129,13 @@ export async function resetUserLogin(id_siswa: string): Promise<ApiResponse> {
     return fetchApi('resetUserLogin', 'POST', { id_siswa });
 }
 
-export async function createQuestion(data: Partial<Question> & { kunci_jawaban: string }): Promise<ApiResponse> {
+export async function createQuestion(data: Partial<QuestionWritePayload> & { kunci_jawaban: string }): Promise<ApiResponse> {
     return fetchApi('createQuestion', 'POST', { data });
 }
 
 export async function updateQuestion(
     id_soal: string,
-    data: Partial<Question> & { kunci_jawaban: string }
+    data: Partial<QuestionWritePayload> & { kunci_jawaban: string }
 ): Promise<ApiResponse> {
     return fetchApi('updateQuestion', 'POST', { id_soal, data });
 }
