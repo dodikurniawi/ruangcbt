@@ -75,6 +75,13 @@ export async function handleProxyRequest(
     body = bound.body;
   }
 
+  // Soal dilayani per attempt, jadi GAS perlu tahu siswanya. Identitas selalu
+  // diambil dari sesi bertanda tangan — siswa tidak pernah dapat memilih attempt,
+  // exam, atau daftar soal milik orang lain lewat query.
+  if (parsed.action === "getQuestions" && session) {
+    body = { ...body, id_siswa: session.subject };
+  }
+
   // Rich text soal masuk lewat request, jadi disanitasi di boundary server sebelum
   // pernah tersimpan. Renderer tetap menyanitasi ulang untuk data lama.
   if (QUESTION_WRITE_ACTIONS.has(parsed.action)) {
@@ -165,6 +172,11 @@ async function callGas(
 
   if (method === "GET") {
     gasUrl.searchParams.set("action", action);
+    // Hanya nilai yang sudah diturunkan server (mis. id_siswa dari sesi) yang sampai
+    // di sini; body GET selalu dimulai kosong, bukan dari query milik klien.
+    for (const [key, value] of Object.entries(body)) {
+      if (typeof value === "string" && value) gasUrl.searchParams.set(key, value);
+    }
     gasUrl.searchParams.set("proxy_secret", target.sharedSecret);
     response = await fetch(gasUrl, { method: "GET", cache: "no-store" });
   } else {

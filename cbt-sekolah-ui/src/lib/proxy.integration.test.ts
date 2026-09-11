@@ -10,6 +10,7 @@ process.env.SESSION_SIGNING_SECRET = "session-signing-secret-32-characters-minim
 
 let upstreamCalls = 0;
 let lastBody: Record<string, unknown> = {};
+let lastQuery: URLSearchParams = new URLSearchParams();
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || "/", "http://127.0.0.1");
@@ -29,6 +30,7 @@ const server = createServer(async (request, response) => {
 
   upstreamCalls++;
   lastBody = body;
+  lastQuery = url.searchParams;
   const result: Record<string, unknown> = action === "adminLogin"
     ? { success: body.password === "admin-pass", message: "Login" }
     : action === "login"
@@ -199,6 +201,19 @@ try {
   const questions = await handleProxyRequest(request("GET", "getQuestions", studentCookie), "GET", "tenant-a", resolveTarget);
   assert.equal(questions.status, 200);
   assert.equal(JSON.stringify(await questions.json()).includes("kunci_jawaban"), false);
+  // Soal dilayani per attempt: GAS harus menerima identitas siswa, dan identitas itu
+  // berasal dari sesi bertanda tangan, bukan dari query yang dikirim klien.
+  assert.equal(lastQuery.get("id_siswa"), "S001", "getQuestions wajib membawa id_siswa dari sesi");
+
+  const spoofed = await handleProxyRequest(
+    new NextRequest("http://app.test/api/tenant-a/proxy?action=getQuestions&id_siswa=S999", {
+      method: "GET",
+      headers: { cookie: studentCookie },
+    }),
+    "GET", "tenant-a", resolveTarget
+  );
+  assert.equal(spoofed.status, 200);
+  assert.equal(lastQuery.get("id_siswa"), "S001", "id_siswa dari query siswa tidak boleh dipakai");
 
   const ownSync = await handleProxyRequest(
     request("POST", "syncAnswers", studentCookie, { id_siswa: "S001", answers: {} }),

@@ -156,7 +156,10 @@ export default function ExamPage() {
 
       const cfgRes = await getConfig();
       const cfg = cfgRes.success && cfgRes.data ? cfgRes.data : null;
-      const examDuration = cfg?.exam_duration ?? user.exam_duration ?? 90;
+      // Durasi beku milik attempt menang atas Config: admin yang mengubah durasi
+      // di tengah ujian tidak boleh menggeser deadline siswa yang sudah mulai.
+      // Config hanya dipakai bila attempt belum membawa durasinya sendiri.
+      const examDuration = user.exam_duration ?? cfg?.exam_duration ?? 90;
       const calculatedDeadline = calculateExamDeadline(user.waktu_mulai, examDuration);
       if (calculatedDeadline === null) {
         setLoadError("Waktu mulai ujian tidak valid. Silakan login kembali.");

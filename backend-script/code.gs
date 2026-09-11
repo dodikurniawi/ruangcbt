@@ -136,16 +136,22 @@ function isQuestionArchived(row) {
 
 // Ujian dianggap berlangsung bila ada siswa berstatus SEDANG. Soal yang mapel-nya
 // sedang diujikan tidak boleh berubah atau hilang selama itu.
+// Mapel yang sedang diujikan dibaca dari binding attempt, bukan dari Config:
+// mengganti Config.exam_mapel di tengah ujian dulu membuka kunci soal yang justru
+// sedang dikerjakan siswa.
 function isExamRunningForMapel(id_mapel) {
-  const config = getConfig();
-  const exam_mapel = config.exam_mapel || "";
-  if (exam_mapel && String(id_mapel || "") !== exam_mapel) return false;
-
   const sheet = getSheet("Users");
   if (!sheet) return false;
+  const mapel = String(id_mapel || "");
+  const fallbackMapel = String(getConfig().exam_mapel || "");
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] && data[i][10] === "SEDANG") return true;
+    if (!data[i][0] || data[i][10] !== "SEDANG") continue;
+    const binding = parseExamBinding(data[i]);
+    // Attempt lama tanpa binding: Config adalah perkiraan terbaik yang tersedia.
+    const attemptMapel = binding ? binding.exam_mapel : fallbackMapel;
+    if (attemptMapel && attemptMapel !== mapel) continue;
+    return true;
   }
   return false;
 }
@@ -163,6 +169,144 @@ function isQuestionAnsweredInHistory(id_soal) {
     if (raw && String(raw).indexOf(needle) !== -1) return true;
   }
   return false;
+}
+
+// ===== ACTIVE EXAM — SNAPSHOT & ATTEMPT BINDING =====
+// Tetap satu ujian aktif per tenant. Yang berubah: begitu siswa mulai, identitas
+// ujian + mapel + durasi + daftar id_soal dibekukan pada baris Users kolom 15.
+// Config global boleh berubah setelah itu; attempt yang sedang berjalan tidak ikut
+// berubah karena tidak lagi membaca Config sama sekali.
+//
+// Snapshot sengaja tidak disimpan sebagai entitas global: satu-satunya pemilik
+// binding adalah baris siswa, sehingga tidak ada state global yang bisa setengah
+// jadi dan tidak perlu sheet baru. exam_id adalah sidik jari isi snapshot, jadi
+// dua siswa yang mulai di konfigurasi sama mendapat identitas yang sama dan
+// perubahan Config/Bank Soal apa pun menghasilkan identitas berbeda.
+const USER_BINDING_COL = 15;
+// Re-entry (RC-6): status_login hanya dianggap "perangkat lain" selama last_seen
+// masih segar. Tab yang ditutup kedaluwarsa sendiri, tanpa reset admin.
+// ponytail: satu ambang waktu global sudah cukup; naikkan ke device token bila
+// kelak perlu membedakan dua perangkat yang sama-sama aktif.
+const REENTRY_GRACE_MS = 90000;
+
+function hashToken(text) {
+  let hash = 5381;
+  const value = String(text);
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash * 33) ^ value.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36).toUpperCase();
+}
+
+// Sidik jari isi soal: seluruh kolom yang menentukan makna jawaban ikut dihitung,
+// termasuk nomor_urut karena urutan penyajian ikut dibekukan.
+function questionFingerprint(row) {
+  const parts = [];
+  for (let c = 0; c <= 13; c++) parts.push(String(row[c] == null ? "" : row[c]));
+  parts.push(canonicalDataSoalCell(row[QUESTION_DATA_COL - 1]));
+  return parts.join("\u0001");
+}
+
+// Snapshot ujian aktif dari satu kali baca Config + Questions. Dipanggil hanya saat
+// attempt dibuat, lalu hasilnya dibekukan pada baris siswa.
+function buildExamSnapshot() {
+  const config = getConfig();
+  const exam_mapel = String(config.exam_mapel || "");
+  const sheet = getSheet("Questions");
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const selected = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row[0] || isQuestionArchived(row)) continue;
+    if (exam_mapel && String(row[13] || "") !== exam_mapel) continue;
+    selected.push(row);
+  }
+
+  // Urutan deterministic: nomor_urut, lalu id_soal sebagai tie-break.
+  selected.sort(function (a, b) {
+    const left = Number(a[1]);
+    const right = Number(b[1]);
+    const leftNum = isFinite(left) ? left : 0;
+    const rightNum = isFinite(right) ? right : 0;
+    if (leftNum !== rightNum) return leftNum - rightNum;
+    return String(a[0]) < String(b[0]) ? -1 : (String(a[0]) > String(b[0]) ? 1 : 0);
+  });
+
+  const question_ids = [];
+  const fingerprints = [];
+  for (let s = 0; s < selected.length; s++) {
+    question_ids.push(String(selected[s][0]));
+    fingerprints.push(questionFingerprint(selected[s]));
+  }
+
+  const exam_name = String(config.exam_name || "");
+  const exam_duration = parseInt(config.exam_duration, 10) || 90;
+  return {
+    exam_id: "EX" + hashToken(
+      [exam_name, exam_mapel, exam_duration, fingerprints.join("\u0002")].join("\u0003")
+    ),
+    exam_name: exam_name,
+    exam_mapel: exam_mapel,
+    exam_duration: exam_duration,
+    question_ids: question_ids,
+  };
+}
+
+// Baris Users kolom 15 → binding. Kosong (baris lama) maupun rusak dibaca null,
+// dan pemanggil wajib punya fallback yang aman untuk itu.
+function parseExamBinding(userRow) {
+  if (!userRow) return null;
+  const raw = userRow[USER_BINDING_COL - 1];
+  const text = String(raw === null || raw === undefined ? "" : raw).trim();
+  if (text === "") return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return null;
+  }
+  if (!isPlainQuestionObject(parsed) || !Array.isArray(parsed.question_ids)) return null;
+  const duration = Number(parsed.exam_duration);
+  return {
+    exam_id: String(parsed.exam_id || ""),
+    exam_name: String(parsed.exam_name || ""),
+    exam_mapel: String(parsed.exam_mapel || ""),
+    exam_duration: isFinite(duration) && duration >= 0 ? duration : 0,
+    question_ids: parsed.question_ids.map(String),
+  };
+}
+
+function findUserRowIndex(usersData, id_siswa) {
+  if (!id_siswa) return -1;
+  for (let i = 1; i < usersData.length; i++) {
+    if (usersData[i][0] === id_siswa) return i;
+  }
+  return -1;
+}
+
+function getAttemptBinding(id_siswa) {
+  const sheet = getSheet("Users");
+  if (!sheet || !id_siswa) return null;
+  const data = sheet.getDataRange().getValues();
+  const index = findUserRowIndex(data, id_siswa);
+  return index === -1 ? null : parseExamBinding(data[index]);
+}
+
+// Soal yang dibekukan sebuah attempt diambil apa adanya berdasarkan id — termasuk
+// bila sudah diarsipkan setelah ujian mulai — dan dalam urutan snapshot.
+function resolveBoundQuestionRows(binding) {
+  const sheet = getSheet("Questions");
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const byId = {};
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]) byId[String(rows[i][0])] = rows[i];
+  }
+  const resolved = [];
+  for (let q = 0; q < binding.question_ids.length; q++) {
+    const row = byId[binding.question_ids[q]];
+    if (row) resolved.push(row);
+  }
+  return resolved;
 }
 
 function getValidMapelIds() {
@@ -571,7 +715,9 @@ function doGet(e) {
         result = handleGetConfig();
         break;
       case "getQuestions":
-        result = handleGetQuestions(false);
+        // id_siswa disuntik proxy dari sesi bertanda tangan, tidak pernah dari
+        // input siswa; lihat cbt-sekolah-ui/src/lib/proxy.ts.
+        result = handleGetQuestions(false, e.parameter.id_siswa);
         break;
       case "getAdminQuestions":
         result = handleGetQuestions(true); // skip exam_mapel filter for admin bank soal
@@ -740,9 +886,14 @@ function handleGetConfig() {
   return { success: true, data: safeConfig };
 }
 
-function handleGetQuestions(skipMapelFilter) {
+function handleGetQuestions(skipMapelFilter, id_siswa) {
   // Admin bank soal uses skipMapelFilter=true to see all questions regardless of exam_mapel
-  const cacheKey = skipMapelFilter ? "questions_all" : "questions";
+  // Siswa yang sudah punya attempt dilayani dari snapshot attempt itu: soal, urutan,
+  // dan mapel-nya tidak lagi dipengaruhi Config maupun Bank Soal terbaru.
+  const binding = skipMapelFilter ? null : getAttemptBinding(id_siswa);
+  const cacheKey = skipMapelFilter
+    ? "questions_all"
+    : (binding ? "questions_" + binding.exam_id : "questions");
   const cached = cache.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
@@ -762,10 +913,14 @@ function handleGetQuestions(skipMapelFilter) {
   }
 
   const sheet = getSheet("Questions");
-  const data = sheet.getDataRange().getValues();
+  // Tanpa binding: seluruh baris sheet (header dibuang) lalu difilter seperti dulu.
+  // Dengan binding: hanya soal beku milik attempt, sudah dalam urutan snapshot.
+  const data = binding
+    ? resolveBoundQuestionRows(binding)
+    : sheet.getDataRange().getValues().slice(1);
   const questions = [];
 
-  for (let i = 1; i < data.length; i++) {
+  for (let i = 0; i < data.length; i++) {
     const row = data[i];
     if (!row[0]) continue;
 
@@ -773,11 +928,13 @@ function handleGetQuestions(skipMapelFilter) {
     const archived = isQuestionArchived(row);
 
     // Soal arsip tidak pernah dikirim ke siswa, tetapi tetap terlihat di admin
-    // supaya soal historis dapat ditelusuri.
-    if (!skipMapelFilter && archived) continue;
+    // supaya soal historis dapat ditelusuri. Soal beku milik attempt tetap dikirim
+    // walau diarsipkan setelah ujian dimulai — siswa harus bisa menyelesaikannya.
+    if (!skipMapelFilter && !binding && archived) continue;
 
-    // Filter per mapel jika exam_mapel dikonfigurasi (dilewati untuk admin)
-    if (!skipMapelFilter && exam_mapel && id_mapel !== exam_mapel) continue;
+    // Filter per mapel jika exam_mapel dikonfigurasi (dilewati untuk admin dan
+    // untuk attempt yang mapel-nya sudah dibekukan)
+    if (!skipMapelFilter && !binding && exam_mapel && id_mapel !== exam_mapel) continue;
 
     const entry = {
       id_soal: row[0],
@@ -816,7 +973,9 @@ function handleGetQuestions(skipMapelFilter) {
     questions.push(entry);
   }
 
-  questions.sort(function(a, b) { return a.nomor_urut - b.nomor_urut; });
+  // Urutan attempt sudah dibekukan di snapshot; mengurutkan ulang di sini akan
+  // memakai nomor_urut terbaru dan membatalkan pembekuan itu.
+  if (!binding) questions.sort(function(a, b) { return a.nomor_urut - b.nomor_urut; });
 
   const result = { success: true, data: questions };
   cache.put(cacheKey, JSON.stringify(result), CACHE_DURATION);
@@ -928,10 +1087,16 @@ function handleLogin(params) {
         return { success: false, message: "Kamu sudah menyelesaikan ujian." };
       }
 
-      if (row[5] === true) {
+      // RC-6: flag status_login yang tertinggal karena tab ditutup tidak boleh
+      // mengunci siswa dari attempt-nya sendiri. Hanya sesi yang masih terlihat
+      // hidup (last_seen segar) yang dianggap perangkat lain.
+      const lastSeenMs = row[11] ? new Date(row[11]).getTime() : 0;
+      if (row[5] === true && isFinite(lastSeenMs) && Date.now() - lastSeenMs < REENTRY_GRACE_MS) {
         return { success: false, message: "Akun sudah login di perangkat lain." };
       }
 
+      // Re-entry memakai attempt yang sama: waktu_mulai, saved_answers, dan binding
+      // tidak pernah ditulis ulang, jadi login kembali tidak memperpanjang waktu.
       const waktuMulai = row[6] || new Date();
       sheet.getRange(i + 1, 6).setValue(true);
       if (!row[6]) {
@@ -940,7 +1105,14 @@ function handleLogin(params) {
       }
       sheet.getRange(i + 1, 12).setValue(new Date());
 
-      const config = getConfig();
+      // Snapshot dibekukan sekali per attempt. Attempt lama dari sebelum Task 5.1
+      // belum punya binding; dibekukan sekarang dari Config yang berlaku supaya
+      // sisa ujiannya tidak lagi ikut berubah.
+      let binding = parseExamBinding(row);
+      if (!binding) {
+        binding = buildExamSnapshot();
+        sheet.getRange(i + 1, USER_BINDING_COL).setValue(JSON.stringify(binding));
+      }
 
       // Read saved answers from col 14 (index 13) for recovery
       var savedRaw = row[13] ? row[13].toString() : "";
@@ -958,7 +1130,9 @@ function handleLogin(params) {
           kelas: row[4],
           status_ujian: row[10] || "SEDANG",
           waktu_mulai: waktuMulai,
-          exam_duration: parseInt(config.exam_duration) || 90,
+          exam_duration: binding.exam_duration,
+          exam_id: binding.exam_id,
+          exam_mapel: binding.exam_mapel,
           saved_answers: savedAnswers,
         },
       };
@@ -987,7 +1161,11 @@ function handleSyncAnswers(params) {
         if (status === "SELESAI" || status === "DISKUALIFIKASI") {
           return { success: false, message: "already_submitted" };
         }
-        if (isExamDeadlinePassed(data[i][6], getConfig().exam_duration)) {
+        // Deadline attempt memakai durasi beku; Config yang berubah di tengah ujian
+        // tidak boleh memutus autosave siswa yang sedang berjalan.
+        var syncBinding = parseExamBinding(data[i]);
+        var syncDuration = syncBinding ? syncBinding.exam_duration : getConfig().exam_duration;
+        if (isExamDeadlinePassed(data[i][6], syncDuration)) {
           return { success: false, message: "deadline_expired" };
         }
         var serialized = JSON.stringify(answers);
@@ -1144,17 +1322,22 @@ function scoringQuestionFromRow(row) {
   };
 }
 
-function scoreExam(questionRows, answers, examMapel) {
+// questionRows selalu berbentuk seperti sheet: indeks 0 adalah header dan dilewati.
+// `frozen` menandai bahwa deretan baris sudah merupakan soal beku milik satu attempt
+// — pada mode itu filter mapel dan arsip tidak berlaku lagi, karena seleksinya sudah
+// dikunci saat attempt dibuat.
+function scoreExam(questionRows, answers, examMapel, frozen) {
   const submitted = isPlainQuestionObject(answers) ? answers : {};
   let totalScore = 0;
   let maxScore = 0;
 
   for (let i = 1; i < questionRows.length; i++) {
     const row = questionRows[i];
-    if (!row || !row[0] || isQuestionArchived(row)) continue;
+    if (!row || !row[0]) continue;
+    if (!frozen && isQuestionArchived(row)) continue;
 
     const question = scoringQuestionFromRow(row);
-    if (examMapel && question.id_mapel !== examMapel) continue;
+    if (!frozen && examMapel && question.id_mapel !== examMapel) continue;
 
     maxScore += question.bobot;
     totalScore += scoreQuestion(question, submitted[question.id_soal]);
@@ -1207,26 +1390,28 @@ function submitExamLocked(params) {
     }
   }
 
+  // Seluruh parameter penilaian diambil dari binding attempt. Config hanya dipakai
+  // untuk attempt lama yang belum punya binding.
+  const guardIndex = findUserRowIndex(guardData, id_siswa);
+  const binding = guardIndex === -1 ? null : parseExamBinding(guardData[guardIndex]);
   const config = getConfig();
-  const exam_mapel = config.exam_mapel || "";
-  const examDuration = Number(config.exam_duration);
-  let authoritativeStart = null;
-  for (let g = 1; g < guardData.length; g++) {
-    if (guardData[g][0] === id_siswa) {
-      authoritativeStart = guardData[g][6];
-      break;
-    }
-  }
+  const exam_mapel = binding ? binding.exam_mapel : (config.exam_mapel || "");
+  const exam_id = binding ? binding.exam_id : "";
+  const examDuration = binding ? binding.exam_duration : Number(config.exam_duration);
+  const authoritativeStart = guardIndex === -1 ? null : guardData[guardIndex][6];
   const deadlineMs = getExamDeadlineMs(authoritativeStart, examDuration);
   if (deadlineMs === null) {
     return { success: false, message: "Waktu mulai ujian tidak valid" };
   }
   const isLate = Date.now() >= deadlineMs;
 
-  const qSheet = getSheet("Questions");
-  const questions = qSheet.getDataRange().getValues();
   const submittedAnswers = isPlainQuestionObject(answers) ? answers : {};
-  const scoring = scoreExam(questions, submittedAnswers, exam_mapel);
+  // Soal yang dinilai adalah soal yang dibekukan saat attempt dimulai, bukan Bank
+  // Soal terbaru: soal delivered == soal scored, walau bank soal sudah berubah.
+  // [null] menempati posisi header supaya bentuknya sama dengan getValues().
+  const scoring = binding
+    ? scoreExam([null].concat(resolveBoundQuestionRows(binding)), submittedAnswers, "", true)
+    : scoreExam(getSheet("Questions").getDataRange().getValues(), submittedAnswers, exam_mapel);
   const finalScore = scoring.finalScore;
 
   const uSheet = getSheet("Users");
@@ -1258,10 +1443,12 @@ function submitExamLocked(params) {
     forced ? "DISKUALIFIKASI - Auto Submit" : violationLog,
     isLate ? "TERLAMBAT" : "",
   ].filter(Boolean).join(" | ");
+  // Kolom 10 dan 11 ditambahkan append-only: baris Responses lama tetap sah dibaca,
+  // arti kolom 1..9 tidak berubah, dan hasil baru dapat ditelusuri ke revisi ujian.
   rSheet.appendRow([
     new Date(), id_siswa, userName, userClass,
     JSON.stringify(submittedAnswers), finalScore.toFixed(2), durasiMenit,
-    submissionLog, "",
+    submissionLog, "", exam_id, exam_mapel,
   ]);
 
   cache.remove("questions"); cache.remove("questions_all");
@@ -1892,6 +2079,7 @@ function handleResetUserLogin(params) {
       sheet.getRange(row, 11).setValue("BELUM"); // status_ujian = BELUM
       sheet.getRange(row, 13).setValue("");      // mapel_diujikan = kosong
       sheet.getRange(row, 14).setValue("");      // saved_answers = kosong
+      sheet.getRange(row, USER_BINDING_COL).setValue(""); // exam_binding = kosong
       return { success: true, message: "Login reset successful" };
     }
   }

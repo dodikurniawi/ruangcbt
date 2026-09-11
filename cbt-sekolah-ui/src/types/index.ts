@@ -30,7 +30,12 @@ export interface User {
     violation_count?: number;
     status_ujian: 'BELUM' | 'SEDANG' | 'SELESAI' | 'DISKUALIFIKASI';
     last_seen?: string;
+    // Nilai beku milik attempt, dikirim GAS saat login/re-entry. exam_duration di
+    // sini adalah durasi attempt, bukan Config terbaru: perubahan Config setelah
+    // siswa mulai tidak boleh menggeser deadline-nya.
     exam_duration?: number;
+    exam_id?: string;    // identitas/revisi ujian yang dibekukan untuk attempt ini
+    exam_mapel?: string; // mapel beku milik attempt
     mapel_diujikan?: string; // id_mapel yang diujikan saat submit, diisi GAS
     saved_answers?: AnswersRecord | null; // recovered answers from server (col 14)
 }
@@ -191,6 +196,9 @@ export interface ExamResponse {
     durasi_ujian: number;
     log_violation: string;
     ip_address?: string;
+    // Kolom append-only: hanya ada pada Responses yang ditulis sejak exam binding.
+    exam_id?: string;
+    exam_mapel?: string;
 }
 
 // Live Score types
