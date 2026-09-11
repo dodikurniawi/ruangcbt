@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
@@ -53,13 +53,17 @@ function getAvatarStyle(name: string) {
 
 export default function PublicLiveMonitoring() {
   const tenantPath = useTenantPath();
-  const { data: scoreRes } = useSWR("getLiveScore", getLiveScore, { refreshInterval: 5000 });
-
+  // Jam "terakhir diperbarui" ditulis dari callback SWR, bukan dari effect: jamnya
+  // milik peristiwa "data baru tiba", dan membacanya saat render akan berbeda
+  // antara server dan browser. Nilai awal kosong sampai muatan pertama datang.
   const [lastUpdate, setLastUpdate] = useState<string>("");
 
-  useEffect(() => {
-    setLastUpdate(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-  }, [scoreRes]);
+  const { data: scoreRes } = useSWR("getLiveScore", getLiveScore, {
+    refreshInterval: 5000,
+    onSuccess: () => setLastUpdate(
+      new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    ),
+  });
 
   const entries: LiveScoreEntry[] = scoreRes?.data ?? [];
   const stats: LiveScoreStats | undefined = scoreRes?.stats;

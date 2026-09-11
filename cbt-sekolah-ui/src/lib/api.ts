@@ -229,7 +229,9 @@ export async function createStudent(data: StudentInput): Promise<ApiResponse> {
 
 export async function updateStudent(
     id_siswa: string,
-    data: { nama_lengkap?: string; username?: string; password?: string; kelas?: string }
+    // foto_url: kosongkan dengan "" untuk menghapus foto; server hanya menerima
+    // URL yang memang dihasilkan uploadImage.
+    data: { nama_lengkap?: string; username?: string; password?: string; kelas?: string; foto_url?: string }
 ): Promise<ApiResponse> {
     return fetchApi('updateStudent', 'POST', { id_siswa, ...data });
 }

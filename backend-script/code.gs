@@ -183,6 +183,12 @@ function isQuestionAnsweredInHistory(id_soal) {
 // dua siswa yang mulai di konfigurasi sama mendapat identitas yang sama dan
 // perubahan Config/Bank Soal apa pun menghasilkan identitas berbeda.
 const USER_BINDING_COL = 15;
+// Kolom 16 = foto_url siswa (append-only). Sheets hanya menyimpan rujukan ke
+// berkas di Drive, tidak pernah gambarnya sendiri.
+const USER_PHOTO_COL = 16;
+// Hanya URL yang memang dihasilkan handleUploadImage yang boleh tersimpan: guru
+// tidak pernah mengetik URL, jadi apa pun bentuk lain berarti request buatan.
+const DRIVE_PHOTO_URL = /^https:\/\/drive\.google\.com\/thumbnail\?id=[A-Za-z0-9_-]+(&sz=w\d+)?$/;
 // Re-entry (RC-6): status_login hanya dianggap "perangkat lain" selama last_seen
 // masih segar. Tab yang ditutup kedaluwarsa sendiri, tanpa reset admin.
 // ponytail: satu ambang waktu global sudah cukup; naikkan ke device token bila
@@ -1068,6 +1074,7 @@ function handleGetUsers(params) {
       status_ujian: row[10] || "BELUM",
       last_seen: row[11] ? new Date(row[11]).toLocaleString("id-ID") : null,
       mapel_diujikan: row[12] || "",
+      foto_url: row[USER_PHOTO_COL - 1] || "",
     });
   }
 
@@ -1759,6 +1766,29 @@ function handleDeleteQuestion(params) {
 
 // ===== UPLOAD GAMBAR KE GOOGLE DRIVE =====
 
+// Drive menentukan jenis berkas dari ekstensi namanya. Berkas gambar yang diunggah
+// tanpa ekstensi tersimpan sebagai berkas biasa, Drive tidak pernah membuat
+// thumbnail untuknya, dan URL thumbnail yang kita kembalikan lalu gagal dimuat
+// browser (ikon gambar rusak) walaupun berkasnya ada dan izinnya benar.
+// Ekstensi dipastikan di sini, satu tempat untuk semua pemanggil unggah gambar.
+const IMAGE_MIME_EXTENSION = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp"];
+
+function imageFileNameFor(fileName, mimeType) {
+  const base = String(fileName == null ? "" : fileName).trim() || ("gambar_" + Date.now());
+  const dot = base.lastIndexOf(".");
+  const current = dot > 0 ? base.slice(dot + 1).toLowerCase() : "";
+  if (IMAGE_EXTENSIONS.indexOf(current) !== -1) return base;
+  const extension = IMAGE_MIME_EXTENSION[String(mimeType || "").toLowerCase()] || "jpg";
+  return base + "." + extension;
+}
+
 function handleUploadImage(params) {
   const { base64Data, mimeType, fileName } = params;
 
@@ -1825,7 +1855,7 @@ function handleUploadImage(params) {
     const blob = Utilities.newBlob(
       bytes,
       normalizedMime,
-      fileName || ("soal_" + Date.now() + ".jpg")
+      imageFileNameFor(fileName, normalizedMime)
     );
 
     const file = folder.createFile(blob);
@@ -2428,9 +2458,16 @@ function handleCreateStudent(params) {
 }
 
 function handleUpdateStudent(params) {
-  const { id_siswa, nama_lengkap, username, password, kelas } = params;
+  const { id_siswa, nama_lengkap, username, password, kelas, foto_url } = params;
 
   if (!id_siswa) return { success: false, message: "id_siswa diperlukan" };
+
+  // foto_url opsional. String kosong berarti guru menghapus fotonya.
+  const photoGiven = foto_url !== undefined && foto_url !== null;
+  const photo = photoGiven ? String(foto_url).trim() : "";
+  if (photoGiven && photo !== "" && !DRIVE_PHOTO_URL.test(photo)) {
+    return { success: false, message: "Foto siswa tidak valid. Ulangi unggah fotonya." };
+  }
 
   const sheet = getSheet("Users");
   const data = sheet.getDataRange().getValues();
@@ -2454,6 +2491,7 @@ function handleUpdateStudent(params) {
       if (username)     sheet.getRange(i + 1, 2).setValue(username);
       if (password)     sheet.getRange(i + 1, 3).setValue(password);
       if (kelas)        sheet.getRange(i + 1, 5).setValue(kelas);
+      if (photoGiven)   sheet.getRange(i + 1, USER_PHOTO_COL).setValue(photo);
       return { success: true, message: "Data siswa diperbarui" };
     }
   }

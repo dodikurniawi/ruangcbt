@@ -45,6 +45,26 @@ function loadGas(sheetRows, mutateSource) {
   for (const name of Object.keys(sheetRows)) sheets[name] = makeSheet(sheetRows[name]);
 
   const locks = { held: false };
+  // Stub Drive seperlunya untuk menguji unggah gambar: berkas yang dibuat direkam
+  // apa adanya (nama, mime, sharing) supaya test bisa memeriksa berkas yang
+  // benar-benar sampai ke Drive, bukan hanya nilai kembaliannya.
+  const driveFiles = [];
+  const driveFolder = {
+    getId: () => "FOLDER_ID",
+    getFoldersByName: () => ({ hasNext: () => false, next: () => null }),
+    createFolder: () => driveFolder,
+    createFile(blob) {
+      const file = {
+        blob,
+        sharing: "",
+        getId: () => "FILEID" + driveFiles.indexOf(file),
+        setSharing(access, permission) { file.sharing = access + ":" + permission; return file; },
+      };
+      driveFiles.push(file);
+      return file;
+    },
+  };
+
   const context = {
     CacheService: { getScriptCache: () => ({ get: () => null, put: () => {}, remove: () => {} }) },
     ContentService: {
@@ -61,7 +81,22 @@ function loadGas(sheetRows, mutateSource) {
       getScriptProperties: () => ({ getProperty: (key) => (key === "SHARED_SECRET" ? tenantSecret : null) }),
     },
     SpreadsheetApp: {
-      getActiveSpreadsheet: () => ({ getSheetByName: (name) => sheets[name] || null, insertSheet: () => null }),
+      getActiveSpreadsheet: () => ({
+        getId: () => "SPREADSHEET_ID",
+        getSheetByName: (name) => sheets[name] || null,
+        insertSheet: () => null,
+      }),
+    },
+    Utilities: {
+      base64Decode: (text) => Buffer.from(String(text), "base64"),
+      newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
+    },
+    DriveApp: {
+      Access: { ANYONE_WITH_LINK: "ANYONE_WITH_LINK" },
+      Permission: { VIEW: "VIEW" },
+      getRootFolder: () => driveFolder,
+      getFolderById: () => driveFolder,
+      getFileById: () => ({ getParents: () => ({ hasNext: () => true, next: () => driveFolder }) }),
     },
     console,
   };
@@ -72,6 +107,7 @@ function loadGas(sheetRows, mutateSource) {
   if (mutateSource) source = mutateSource(source);
   vm.runInContext(source, context);
   context.__sheets = sheets;
+  context.__driveFiles = driveFiles;
   // `const` di top-level script vm tidak menjadi properti context, jadi baca lewat eval.
   context.__eval = function (expr) { return vm.runInContext(expr, context); };
   return context;

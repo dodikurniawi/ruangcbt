@@ -55,6 +55,8 @@ export interface User {
     exam_id?: string;    // identitas/revisi ujian yang dibekukan untuk attempt ini
     exam_mapel?: string; // mapel beku milik attempt
     mapel_diujikan?: string; // id_mapel yang diujikan saat submit, diisi GAS
+    /** Rujukan foto siswa di Drive (Users kolom 16); kosong = belum ada foto. */
+    foto_url?: string;
     saved_answers?: AnswersRecord | null; // recovered answers from server (col 14)
 }
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, logout } from "@/lib/api";
+import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, uploadImage, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
 import type { User } from "@/types";
@@ -62,6 +62,14 @@ export default function AdminManagement() {
   const [formError, setFormError] = useState("");
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  // Foto siswa: id siswa yang sedang diunggah, dan pesan gagal per siswa.
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
+  // Siswa yang fotonya gagal dimuat browser; dipakai agar tampil ikon, bukan
+  // gambar rusak. Dibersihkan setiap kali foto diganti.
+  const [brokenPhotos, setBrokenPhotos] = useState<Set<string>>(new Set());
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoTargetId = useRef<string>("");
   const [configSaved, setConfigSaved] = useState(false);
   const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "" });
   const [showEditModal, setShowEditModal] = useState(false);
@@ -111,6 +119,67 @@ export default function AdminManagement() {
       setFormError(res.message || "Gagal menambah siswa.");
     }
     setIsSaving(false);
+  };
+
+  // Guru hanya memilih berkas; unggah ke penyimpanan dan penyimpanan rujukannya
+  // ke data siswa dikerjakan di sini, memakai jalur unggah gambar yang sudah ada.
+  const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+  const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
+  const handlePhotoPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const id_siswa = photoTargetId.current;
+    e.target.value = "";
+    if (!file || !id_siswa) return;
+
+    setPhotoError("");
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("Format foto harus JPG, PNG, atau WebP.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoError("Ukuran foto maksimal 2 MB. Perkecil dulu fotonya.");
+      return;
+    }
+
+    setUploadingPhotoId(id_siswa);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("read"));
+        reader.readAsDataURL(file);
+      });
+
+      // Ekstensi asli ikut dikirim: Drive memakai ekstensi untuk mengenali berkas
+      // gambar, dan hanya berkas gambar yang mendapat thumbnail.
+      const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".jpg";
+      const uploaded = await uploadImage(base64, file.type, `siswa_${id_siswa}_${Date.now()}${extension}`);
+      if (!uploaded.success || !uploaded.data?.url) {
+        setPhotoError("Gagal menyimpan foto. Coba lagi.");
+        return;
+      }
+      const saved = await updateStudent(id_siswa, { foto_url: uploaded.data.url });
+      setBrokenPhotos((prev) => { const next = new Set(prev); next.delete(id_siswa); return next; });
+      if (!saved.success) {
+        setPhotoError(saved.message || "Gagal menyimpan foto. Coba lagi.");
+        return;
+      }
+      await mutateUsers();
+    } catch {
+      setPhotoError("Gagal membaca file foto. Coba pilih foto lain.");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  };
+
+  const handleRemovePhoto = async (id_siswa: string) => {
+    setPhotoError("");
+    setUploadingPhotoId(id_siswa);
+    const res = await updateStudent(id_siswa, { foto_url: "" });
+    if (!res.success) setPhotoError("Gagal menghapus foto. Coba lagi.");
+    else await mutateUsers();
+    setUploadingPhotoId(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -495,6 +564,26 @@ export default function AdminManagement() {
             </div>
           </div>
 
+          {/* Pemilih berkas foto dipakai bersama seluruh baris; baris tujuan
+              disimpan di photoTargetId saat tombolnya ditekan. */}
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handlePhotoPicked}
+            className="hidden"
+          />
+
+          {photoError && (
+            <div className="mb-4 bg-red-50 text-red-800 px-4 py-3 rounded-xl border border-red-200 font-bold text-xs flex items-start gap-2">
+              <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+              <span className="flex-1 leading-relaxed">{photoError}</span>
+              <button onClick={() => setPhotoError("")} className="cursor-pointer text-red-500 hover:text-red-800" aria-label="Tutup pesan">
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+          )}
+
           {/* Student Table */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
             <div className="overflow-x-auto">
@@ -502,6 +591,7 @@ export default function AdminManagement() {
                 <thead className="bg-[#202E3B] text-white">
                   <tr>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-16 text-center">No</th>
+                    <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-28 text-center">Foto</th>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Nama</th>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-36">Username</th>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-32">Kelas</th>
@@ -513,12 +603,46 @@ export default function AdminManagement() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {usersLoading ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs uppercase tracking-wider">Memuat data...</td></tr>
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-bold text-xs uppercase tracking-wider">Memuat data...</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-bold text-xs uppercase tracking-wider">Tidak ada data siswa.</td></tr>
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-bold text-xs uppercase tracking-wider">Tidak ada data siswa.</td></tr>
                   ) : filtered.map((u, idx) => (
                     <tr key={u.id_siswa} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4 font-bold text-xs text-slate-500 text-center">{idx + 1}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div className="w-12 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                            {u.foto_url && !brokenPhotos.has(u.id_siswa) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={u.foto_url}
+                                alt={`Foto ${u.nama_lengkap}`}
+                                className="w-full h-full object-cover"
+                                // Foto yang gagal dimuat jatuh kembali ke ikon, bukan
+                                // ikon gambar rusak bawaan browser.
+                                onError={() => setBrokenPhotos((prev) => new Set(prev).add(u.id_siswa))}
+                              />
+                            ) : (
+                              <span className="material-symbols-outlined text-slate-300 text-[22px]">person</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => { photoTargetId.current = u.id_siswa; setPhotoError(""); photoInputRef.current?.click(); }}
+                            disabled={uploadingPhotoId === u.id_siswa}
+                            className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] hover:underline cursor-pointer disabled:opacity-50"
+                          >
+                            {uploadingPhotoId === u.id_siswa ? "Menyimpan..." : u.foto_url ? "Ganti Foto" : "Upload Foto"}
+                          </button>
+                          {u.foto_url && uploadingPhotoId !== u.id_siswa && (
+                            <button
+                              onClick={() => handleRemovePhoto(u.id_siswa)}
+                              className="text-[10px] font-bold text-slate-400 hover:text-red-500 cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs shadow-inner">

@@ -147,9 +147,10 @@ export async function handleProxyRequest(
 
     return response;
   } catch (error) {
-    console.error(`Proxy ${method} error [${schoolId}]:`, error instanceof Error ? error.message : error);
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`Proxy ${method} error [${schoolId}]:`, detail);
     return NextResponse.json(
-      { success: false, message: "Failed to connect to server" },
+      { success: false, message: `Gagal terhubung ke server backend (GAS): ${detail}` },
       { status: 502 }
     );
   }

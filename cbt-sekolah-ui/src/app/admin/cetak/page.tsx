@@ -418,6 +418,8 @@ export default function AdminCetak() {
 
   // Filter and sort states for print previews
   const [kartuClass, setKartuClass] = useState("All Classes");
+  // Foto yang gagal dimuat kembali ke siluet bawaan kartu, bukan kotak kosong.
+  const [brokenCardPhotos, setBrokenCardPhotos] = useState<Set<string>>(new Set());
   const [hasilClass, setHasilClass] = useState("All Classes");
   const [hasilMapel, setHasilMapel] = useState(""); // "" = tampilkan label dari print settings
   const [sortBy, setSortBy] = useState<"nama" | "skor">("skor");
@@ -668,6 +670,7 @@ export default function AdminCetak() {
         <div class="lower-section">
           <div class="photo-container">
             <div class="photo-box">
+              ${student.foto_url ? `<img src="${student.foto_url}" alt="" class="photo-img" onerror="this.remove()" />` : `
               <svg viewBox="0 0 100 120" width="100%" height="100%">
                 <rect width="100" height="120" fill="#1d4ed8"/>
                 <circle cx="50" cy="45" r="20" fill="#ffffff" opacity="0.95"/>
@@ -675,6 +678,7 @@ export default function AdminCetak() {
                 <polygon points="50,75 42,88 58,88" fill="#e2e8f0"/>
                 <polygon points="50,88 46,115 54,115" fill="#1d4ed8"/>
               </svg>
+              `}
             </div>
           </div>
           <div class="sig-block">
@@ -718,6 +722,7 @@ export default function AdminCetak() {
           .lower-section { display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; margin-top: auto; }
           .photo-container { width: 75px; height: 95px; border: 1.5px solid #000; padding: 1px; background: #fff; display: flex; align-items: center; justify-content: center; shrink-0; }
           .photo-box { width: 100%; height: 100%; position: relative; overflow: hidden; background: #1d4ed8; display: flex; align-items: center; justify-content: center; }
+          .photo-img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           
           .sig-block { text-align: center; font-size: 10px; font-weight: bold; width: 55%; color: #000; }
           .sig-role { margin-top: 2px; }
@@ -1565,12 +1570,22 @@ export default function AdminCetak() {
                       {/* Photo */}
                       <div className="w-16 h-20 border border-slate-900 p-0.5 bg-white shrink-0">
                         <div className="w-full h-full relative overflow-hidden bg-blue-700 flex items-center justify-center rounded-sm">
+                          {student.foto_url && !brokenCardPhotos.has(student.id_siswa) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={student.foto_url}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              onError={() => setBrokenCardPhotos((prev) => new Set(prev).add(student.id_siswa))}
+                            />
+                          ) : (
                           <svg viewBox="0 0 100 120" className="w-full h-full">
                             <circle cx="50" cy="45" r="20" fill="#ffffff" opacity="0.95"/>
                             <path d="M15 110 C 15 80, 30 75, 50 75 C 70 75, 85 80, 85 110 Z" fill="#ffffff" opacity="0.95"/>
                             <polygon points="50,75 42,88 58,88" fill="#e2e8f0"/>
                             <polygon points="50,88 46,115 54,115" fill="#1d4ed8"/>
                           </svg>
+                          )}
                         </div>
                       </div>
 
