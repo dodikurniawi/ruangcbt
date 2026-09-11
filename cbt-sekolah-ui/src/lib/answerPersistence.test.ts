@@ -17,6 +17,11 @@ const CODE_GS = path.resolve(here, "../../../backend-script/code.gs");
 // deserializeAnswers menerima objek dan JSON yang sah
 assert.deepEqual(deserializeAnswers('{"Q1":"A","Q2":["A","C"]}'), { Q1: "A", Q2: ["A", "C"] });
 assert.deepEqual(deserializeAnswers({ Q1: "B" }), { Q1: "B" });
+assert.deepEqual(
+  deserializeAnswers('{"TF1":{"1":"BENAR","2":"SALAH"}}'),
+  { TF1: { "1": "BENAR", "2": "SALAH" } },
+  "jawaban TRUE_FALSE harus survive serialization/recovery",
+);
 
 // deserializeAnswers menolak input kosong / rusak / bukan objek
 for (const bad of ["", "   ", "{broken", "42", '"teks"', "[1,2,3]", null, undefined, [1, 2]]) {

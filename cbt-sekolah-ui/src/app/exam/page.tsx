@@ -11,7 +11,8 @@ import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
-import type { ImplementedStudentQuestion, ViolationType } from "@/types";
+import { updateTrueFalseAnswer } from "@/lib/trueFalse";
+import type { ImplementedStudentQuestion, TrueFalseValue, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -310,6 +311,11 @@ export default function ExamPage() {
     return Array.isArray(ans) ? ans.includes(upper) : ans === upper;
   };
 
+  const handleTrueFalseAnswer = (questionId: string, statementId: string, value: TrueFalseValue) => {
+    const current = useExamStore.getState().answers[questionId];
+    setAnswer(questionId, updateTrueFalseAnswer(current, statementId, value));
+  };
+
   return (
     <div className="bg-slate-100 font-body-student text-slate-800 min-h-screen flex flex-col">
       {/* HEADER SECTION - FIXED 2 ROWS */}
@@ -452,6 +458,11 @@ export default function ExamPage() {
                     PILIHAN GANDA KOMPLEKS (LEBIH DARI SATU)
                   </span>
                 )}
+                {currentQuestion.tipe === "TRUE_FALSE" && (
+                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+                    BENAR / SALAH PER PERNYATAAN
+                  </span>
+                )}
               </div>
 
               {/* Question Text */}
@@ -481,35 +492,74 @@ export default function ExamPage() {
               )}
 
               {/* Options list */}
-              <div className="flex flex-col gap-3">
-                {OPTIONS.map((opt) => {
-                  const label = getOptionText(opt, currentQuestion);
-                  if (!label) return null;
-                  const selected = isOptionSelected(currentQuestion.id_soal, opt);
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => handleSelectAnswer(currentQuestion.id_soal, opt, currentQuestion.tipe === "COMPLEX")}
-                      className={`flex items-start gap-4 border rounded-xl p-4 cursor-pointer text-left transition-all ${
-                        selected
-                          ? "border-[#2563EB] bg-blue-50/50 shadow-sm"
-                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
-                      }`}
-                    >
-                      <div className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
-                        selected
-                          ? "bg-[#2563EB] border-[#2563EB] text-white shadow-sm"
-                          : "bg-white border-slate-300 text-slate-500"
-                      }`}>
-                        {opt.toUpperCase()}
+              {currentQuestion.tipe === "TRUE_FALSE" ? (
+                <div className="flex flex-col gap-4">
+                  {currentQuestion.data_soal.pernyataan.map((statement, index) => {
+                    const current = answers[currentQuestion.id_soal];
+                    const selected = current !== null && typeof current === "object" && !Array.isArray(current)
+                      ? (current as Record<string, string>)[statement.id]
+                      : undefined;
+                    return (
+                      <div key={statement.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                        <div className="flex items-start gap-3 mb-3">
+                          <span className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
+                            {index + 1}
+                          </span>
+                          <div
+                            className={`text-slate-700 font-medium leading-relaxed ${fontSizeClass}`}
+                            dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(statement.teks) }}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(["BENAR", "SALAH"] as const).map((value) => (
+                            <button
+                              key={value}
+                              onClick={() => handleTrueFalseAnswer(currentQuestion.id_soal, statement.id, value)}
+                              className={`py-3 rounded-xl border-2 font-bold text-sm cursor-pointer transition-all ${
+                                selected === value
+                                  ? "border-[#2563EB] bg-[#2563EB] text-white shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                              }`}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className={`text-slate-700 font-medium leading-relaxed self-center ${fontSizeClass}`}>
-                        {label}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {OPTIONS.map((opt) => {
+                    const label = getOptionText(opt, currentQuestion);
+                    if (!label) return null;
+                    const selected = isOptionSelected(currentQuestion.id_soal, opt);
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => handleSelectAnswer(currentQuestion.id_soal, opt, currentQuestion.tipe === "COMPLEX")}
+                        className={`flex items-start gap-4 border rounded-xl p-4 cursor-pointer text-left transition-all ${
+                          selected
+                            ? "border-[#2563EB] bg-blue-50/50 shadow-sm"
+                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
+                          selected
+                            ? "bg-[#2563EB] border-[#2563EB] text-white shadow-sm"
+                            : "bg-white border-slate-300 text-slate-500"
+                        }`}>
+                          {opt.toUpperCase()}
+                        </div>
+                        <div className={`text-slate-700 font-medium leading-relaxed self-center ${fontSizeClass}`}>
+                          {label}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

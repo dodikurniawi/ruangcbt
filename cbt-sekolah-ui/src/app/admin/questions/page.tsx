@@ -7,11 +7,19 @@ import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage, logout } from "@/lib/api";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
+import {
+  EMPTY_TRUE_FALSE_STATEMENT,
+  nextTrueFalseStatement,
+  serializeTrueFalseDraft,
+  toTrueFalseDraft,
+  validateTrueFalseDraft,
+  type TrueFalseDraftStatement,
+} from "@/lib/trueFalse";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface QuestionForm {
-  tipe: "SINGLE" | "COMPLEX";
+  tipe: "SINGLE" | "COMPLEX" | "TRUE_FALSE";
   kategori: string;
   bobot: number;
   pertanyaan: string;
@@ -21,8 +29,9 @@ interface QuestionForm {
   opsi_c: string;
   opsi_d: string;
   opsi_e: string;
-  kunci_jawaban: string; // "A" for SINGLE, "A,C" for COMPLEX
+  kunci_jawaban: string; // legacy A/A,C; TRUE_FALSE memakai JSON serialized
   id_mapel: string;
+  pernyataan: TrueFalseDraftStatement[];
 }
 
 const EMPTY_FORM: QuestionForm = {
@@ -38,10 +47,16 @@ const EMPTY_FORM: QuestionForm = {
   opsi_e: "",
   kunci_jawaban: "",
   id_mapel: "",
+  pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
 };
 
 const KATEGORI_OPTIONS = ["Mudah", "Sedang", "Sulit", "Sangat Sulit"];
 const OPTION_KEYS = ["a", "b", "c", "d", "e"] as const;
+
+function questionTypeLabel(tipe: QuestionForm["tipe"]): string {
+  if (tipe === "TRUE_FALSE") return "Benar / Salah";
+  return tipe === "SINGLE" ? "Pilihan Ganda" : "Pilihan Kompleks";
+}
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",
@@ -86,7 +101,11 @@ function ToolbarBtn({ icon, label, onClick }: { icon: string; label: string; onC
 }
 
 // ─── Rich-text editor (contenteditable) ─────────────────────────────────────
-function RichEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function RichEditor({ value, onChange, compact = false }: {
+  value: string;
+  onChange: (v: string) => void;
+  compact?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -132,7 +151,7 @@ function RichEditor({ value, onChange }: { value: string; onChange: (v: string) 
         contentEditable
         suppressContentEditableWarning
         onInput={() => onChange(ref.current?.innerHTML ?? "")}
-        className="min-h-[180px] p-4 text-base leading-relaxed text-slate-800 outline-none focus:outline-none"
+        className={`${compact ? "min-h-24" : "min-h-[180px]"} p-4 text-base leading-relaxed text-slate-800 outline-none focus:outline-none`}
         style={{ direction: "ltr" }}
       />
     </div>
@@ -245,7 +264,7 @@ export default function QuestionBankPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }] });
     setSaveError("");
     setFilterMapel("");
     setShowModal(true);
@@ -253,10 +272,29 @@ export default function QuestionBankPage() {
 
   const openEdit = (q: ImplementedAdminQuestion) => {
     setEditingId(q.id_soal);
+    if (q.tipe === "TRUE_FALSE") {
+      setForm({
+        tipe: q.tipe,
+        kategori: q.kategori ?? "Mudah",
+        bobot: q.bobot,
+        pertanyaan: q.pertanyaan,
+        gambar_url: q.gambar_url ?? "",
+        opsi_a: "",
+        opsi_b: "",
+        opsi_c: "",
+        opsi_d: "",
+        opsi_e: "",
+        kunci_jawaban: q.kunci_jawaban,
+        id_mapel: q.id_mapel ?? "",
+        pernyataan: toTrueFalseDraft(q.data_soal, q.kunci_jawaban),
+      });
+      setSaveError("");
+      setFilterMapel("");
+      setShowModal(true);
+      return;
+    }
     setForm({
-      // Form ini baru mendukung dua tipe berbasis pilihan; tipe canonical lain
-      // belum punya field di sini (pekerjaan task tipe soal berikutnya).
-      tipe: q.tipe === "COMPLEX" ? "COMPLEX" : "SINGLE",
+      tipe: q.tipe,
       kategori: q.kategori ?? "Mudah",
       bobot: q.bobot,
       pertanyaan: q.pertanyaan,
@@ -268,6 +306,7 @@ export default function QuestionBankPage() {
       opsi_e: q.opsi_e ?? "",
       kunci_jawaban: q.kunci_jawaban ?? "",
       id_mapel: q.id_mapel ?? "",
+      pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
     });
     setSaveError("");
     setFilterMapel("");
@@ -275,6 +314,7 @@ export default function QuestionBankPage() {
   };
 
   const handleToggleKey = (letter: string) => {
+    if (form.tipe === "TRUE_FALSE") return;
     if (form.tipe === "SINGLE") {
       setForm((p) => ({ ...p, kunci_jawaban: letter }));
     } else {
@@ -295,24 +335,38 @@ export default function QuestionBankPage() {
       return;
     }
     if (!form.pertanyaan.trim()) { setSaveError("Redaksi soal harus diisi."); return; }
-    if (!form.opsi_a || !form.opsi_b || !form.opsi_c || !form.opsi_d) { setSaveError("Opsi A–D harus diisi."); return; }
-    if (!form.kunci_jawaban) { setSaveError("Pilih kunci jawaban."); return; }
+    if (form.tipe === "TRUE_FALSE") {
+      const invalid = validateTrueFalseDraft(form.pernyataan);
+      if (invalid) { setSaveError(invalid); return; }
+    } else {
+      if (!form.opsi_a || !form.opsi_b || !form.opsi_c || !form.opsi_d) { setSaveError("Opsi A–D harus diisi."); return; }
+      if (!form.kunci_jawaban) { setSaveError("Pilih kunci jawaban."); return; }
+    }
 
     setIsSaving(true); setSaveError("");
-    const payload = {
-      tipe: form.tipe,
+    const trueFalse = form.tipe === "TRUE_FALSE" ? serializeTrueFalseDraft(form.pernyataan) : null;
+    const commonPayload = {
       kategori: form.kategori || null,
       bobot: form.bobot,
       pertanyaan: form.pertanyaan,
       gambar_url: form.gambar_url || null,
+      id_mapel: form.id_mapel || null,
+      nomor_urut: editingId ? (questions.find((q) => q.id_soal === editingId)?.nomor_urut ?? questions.length + 1) : questions.length + 1,
+    };
+    const payload = form.tipe === "TRUE_FALSE" ? {
+      ...commonPayload,
+      tipe: "TRUE_FALSE" as const,
+      kunci_jawaban: trueFalse!.kunci_jawaban,
+      data_soal: trueFalse!.data_soal,
+    } : {
+      ...commonPayload,
+      tipe: form.tipe,
       opsi_a: form.opsi_a,
       opsi_b: form.opsi_b,
       opsi_c: form.opsi_c,
       opsi_d: form.opsi_d,
       opsi_e: form.opsi_e || null,
       kunci_jawaban: form.kunci_jawaban,
-      id_mapel: form.id_mapel || null,
-      nomor_urut: editingId ? (questions.find((q) => q.id_soal === editingId)?.nomor_urut ?? questions.length + 1) : questions.length + 1,
     };
 
     const res = editingId
@@ -705,7 +759,7 @@ export default function QuestionBankPage() {
                   <th className="px-4 py-3.5 text-left w-32">Mapel</th>
                   <th className="px-4 py-3.5 w-44">Kode Soal</th>
                   <th className="px-5 py-3.5">Redaksi Pertanyaan</th>
-                  <th className="px-4 py-3.5 w-40 text-center">Status & PG</th>
+                  <th className="px-4 py-3.5 w-40 text-center">Status & Tipe</th>
                   <th className="px-4 py-3.5 w-44 text-center">Aksi</th>
                 </tr>
               </thead>
@@ -732,7 +786,7 @@ export default function QuestionBankPage() {
                 ) : (
                   visible.map((q, idx) => {
                     const cleanPertanyaan = q.pertanyaan.replace(/<[^>]*>/g, "");
-                    const isE = !!q.opsi_e;
+                    const isE = q.tipe !== "TRUE_FALSE" && !!q.opsi_e;
                     const idCode = `#SOAL-${q.nomor_urut < 10 ? '0' : ''}${q.nomor_urut}`;
                     const mapelObj = mapelList.find(m => m.id_mapel === q.id_mapel);
 
@@ -772,7 +826,11 @@ export default function QuestionBankPage() {
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <div className="font-bold text-slate-800 text-xs mb-1">PG ({isE ? "5 Opsi" : "4 Opsi"})</div>
+                          <div className="font-bold text-slate-800 text-xs mb-1">
+                            {q.tipe === "TRUE_FALSE"
+                              ? `TRUE/FALSE (${q.data_soal.pernyataan.length} Pernyataan)`
+                              : `PG (${isE ? "5 Opsi" : "4 Opsi"})`}
+                          </div>
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase border border-emerald-200">
                             <span className="material-symbols-outlined text-[12px]">check_circle</span>
                             <span>Siap Ujian</span>
@@ -847,7 +905,7 @@ export default function QuestionBankPage() {
                   <h3 className="font-bold text-lg text-white tracking-wide flex items-center gap-2">
                     {editingId ? "Edit Soal Ujian" : "Properti Soal Baru"}
                     <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/30 font-medium tracking-normal">
-                      {form.tipe === "SINGLE" ? "Pilihan Ganda" : "Pilihan Kompleks"}
+                      {questionTypeLabel(form.tipe)}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-300 font-normal mt-0.5">
@@ -1025,11 +1083,22 @@ export default function QuestionBankPage() {
                     <div className="relative">
                       <select
                         value={form.tipe}
-                        onChange={(e) => setForm((p) => ({ ...p, tipe: e.target.value as "SINGLE" | "COMPLEX", kunci_jawaban: "" }))}
+                        onChange={(e) => {
+                          const tipe = e.target.value as QuestionForm["tipe"];
+                          setForm((p) => ({
+                            ...p,
+                            tipe,
+                            kunci_jawaban: "",
+                            pernyataan: tipe === "TRUE_FALSE" && p.pernyataan.length === 0
+                              ? [{ ...EMPTY_TRUE_FALSE_STATEMENT }]
+                              : p.pernyataan,
+                          }));
+                        }}
                         className="w-full h-11 border border-slate-300 rounded-xl px-3 text-xs font-semibold text-slate-800 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 outline-none cursor-pointer shadow-sm appearance-none pr-8"
                       >
                         <option value="SINGLE">1. Pilihan Ganda</option>
                         <option value="COMPLEX">2. Pilihan Kompleks</option>
+                        <option value="TRUE_FALSE">3. Benar / Salah</option>
                       </select>
                       <span className="material-symbols-outlined pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">unfold_more</span>
                     </div>
@@ -1059,8 +1128,8 @@ export default function QuestionBankPage() {
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">Tipe Jawaban</label>
                     <div className="h-11 border border-slate-200 rounded-xl px-3.5 bg-slate-100/80 flex items-center gap-2 text-xs font-bold text-slate-700">
-                      <span className={`w-2.5 h-2.5 rounded-full ${form.tipe === "SINGLE" ? "bg-blue-600" : "bg-purple-600"}`}></span>
-                      <span>{form.tipe === "SINGLE" ? "1 Pilihan Kunci" : "Multi Pilihan Kunci"}</span>
+                      <span className={`w-2.5 h-2.5 rounded-full ${form.tipe === "SINGLE" ? "bg-blue-600" : form.tipe === "COMPLEX" ? "bg-purple-600" : "bg-emerald-600"}`}></span>
+                      <span>{form.tipe === "SINGLE" ? "1 Pilihan Kunci" : form.tipe === "COMPLEX" ? "Multi Pilihan Kunci" : "Kunci per Pernyataan"}</span>
                     </div>
                   </div>
                 </div>
@@ -1198,75 +1267,137 @@ export default function QuestionBankPage() {
                 )}
               </div>
 
-              {/* Opsi Jawaban & Kunci Jawaban */}
-              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
-                    <span className="material-symbols-outlined text-emerald-600 text-base">task_alt</span>
-                    Opsi Jawaban & Kunci Jawaban <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-3 py-1 rounded-full border border-emerald-200/60">
-                    {form.tipe === "SINGLE" ? "Klik 1 lingkaran huruf sebagai Kunci Jawaban" : "Klik lingkaran huruf untuk pilih beberapa Kunci Jawaban"}
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  {OPTION_KEYS.map((opt) => {
-                    const key = `opsi_${opt}` as keyof QuestionForm;
-                    const letter = opt.toUpperCase();
-                    const isKey = isKeySelected(letter);
-                    const isOptional = opt === "e";
-                    return (
-                      <div
-                        key={opt}
-                        className={`flex items-center gap-3 rounded-2xl border-2 px-3.5 py-2.5 transition-all shadow-sm ${
-                          isKey
-                            ? "border-emerald-500 bg-emerald-50/70 shadow-emerald-500/10 ring-2 ring-emerald-500/20"
-                            : "border-slate-200 bg-white hover:border-slate-300"
-                        }`}
-                      >
-                        {/* Key Toggle Circle */}
+              {form.tipe === "TRUE_FALSE" ? (
+                <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">fact_check</span>
+                      Pernyataan & Kunci <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({
+                        ...p,
+                        pernyataan: [...p.pernyataan, nextTrueFalseStatement(p.pernyataan)],
+                      }))}
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                    >
+                      + Tambah Pernyataan
+                    </button>
+                  </div>
+                  {form.pernyataan.map((statement, index) => (
+                    <div key={statement.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-bold text-slate-700">Pernyataan {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() => handleToggleKey(letter)}
-                          title={`Klik untuk menetapkan Pilihan ${letter} sebagai Kunci Jawaban`}
-                          className={`flex-shrink-0 w-10 h-10 rounded-xl border-2 flex items-center justify-center font-bold text-sm transition-all cursor-pointer ${
+                          disabled={form.pernyataan.length === 1}
+                          onClick={() => setForm((p) => ({
+                            ...p,
+                            pernyataan: p.pernyataan.filter((item) => item.id !== statement.id),
+                          }))}
+                          className="text-xs font-bold text-red-600 disabled:text-slate-300 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                      <RichEditor
+                        value={statement.teks}
+                        compact
+                        onChange={(value) => setForm((p) => ({
+                          ...p,
+                          pernyataan: p.pernyataan.map((item) => item.id === statement.id
+                            ? { ...item, teks: value }
+                            : item),
+                        }))}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["BENAR", "SALAH"] as const).map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setForm((p) => ({
+                              ...p,
+                              pernyataan: p.pernyataan.map((item) => item.id === statement.id
+                                ? { ...item, kunci: value }
+                                : item),
+                            }))}
+                            className={`py-2.5 rounded-xl border-2 text-xs font-bold cursor-pointer transition-all ${
+                              statement.kunci === value
+                                ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                                : "border-slate-200 text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">task_alt</span>
+                      Opsi Jawaban & Kunci Jawaban <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-3 py-1 rounded-full border border-emerald-200/60">
+                      {form.tipe === "SINGLE" ? "Klik 1 lingkaran huruf sebagai Kunci Jawaban" : "Klik lingkaran huruf untuk pilih beberapa Kunci Jawaban"}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {OPTION_KEYS.map((opt) => {
+                      const key = `opsi_${opt}` as keyof QuestionForm;
+                      const letter = opt.toUpperCase();
+                      const isKey = isKeySelected(letter);
+                      const isOptional = opt === "e";
+                      return (
+                        <div
+                          key={opt}
+                          className={`flex items-center gap-3 rounded-2xl border-2 px-3.5 py-2.5 transition-all shadow-sm ${
                             isKey
-                              ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-105"
-                              : "border-slate-300 text-slate-700 bg-slate-100 hover:bg-slate-200 hover:border-slate-400"
+                              ? "border-emerald-500 bg-emerald-50/70 shadow-emerald-500/10 ring-2 ring-emerald-500/20"
+                              : "border-slate-200 bg-white hover:border-slate-300"
                           }`}
                         >
-                          {letter}
-                        </button>
-
-                        {/* Text Input */}
-                        <input
-                          type="text"
-                          placeholder={`Tulis Pilihan ${letter}${isOptional ? " (opsional)" : ""}`}
-                          value={String(form[key] ?? "")}
-                          onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                          className="flex-grow bg-transparent border-none focus:ring-0 outline-none text-sm font-medium text-slate-800 placeholder:text-slate-400"
-                        />
-
-                        {/* Key Badge Indicator */}
-                        {isKey && (
-                          <div className="flex items-center gap-1 bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm flex-shrink-0">
-                            <span className="material-symbols-outlined text-sm">check_circle</span>
-                            <span>KUNCI</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {form.kunci_jawaban && (
-                  <div className="pt-1 flex items-center gap-2 text-xs text-emerald-800 font-bold bg-emerald-100/50 px-3.5 py-2 rounded-xl border border-emerald-200">
-                    <span className="material-symbols-outlined text-emerald-600 text-base">verified</span>
-                    <span>Kunci Jawaban terpilih: <span className="underline font-black text-emerald-900 tracking-wide text-sm">{form.kunci_jawaban}</span></span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleKey(letter)}
+                            title={`Klik untuk menetapkan Pilihan ${letter} sebagai Kunci Jawaban`}
+                            className={`flex-shrink-0 w-10 h-10 rounded-xl border-2 flex items-center justify-center font-bold text-sm transition-all cursor-pointer ${
+                              isKey
+                                ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-105"
+                                : "border-slate-300 text-slate-700 bg-slate-100 hover:bg-slate-200 hover:border-slate-400"
+                            }`}
+                          >
+                            {letter}
+                          </button>
+                          <input
+                            type="text"
+                            placeholder={`Tulis Pilihan ${letter}${isOptional ? " (opsional)" : ""}`}
+                            value={String(form[key] ?? "")}
+                            onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                            className="flex-grow bg-transparent border-none focus:ring-0 outline-none text-sm font-medium text-slate-800 placeholder:text-slate-400"
+                          />
+                          {isKey && (
+                            <div className="flex items-center gap-1 bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm flex-shrink-0">
+                              <span className="material-symbols-outlined text-sm">check_circle</span>
+                              <span>KUNCI</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                  {form.kunci_jawaban && (
+                    <div className="pt-1 flex items-center gap-2 text-xs text-emerald-800 font-bold bg-emerald-100/50 px-3.5 py-2 rounded-xl border border-emerald-200">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">verified</span>
+                      <span>Kunci Jawaban terpilih: <span className="underline font-black text-emerald-900 tracking-wide text-sm">{form.kunci_jawaban}</span></span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Error */}
               {saveError && (
@@ -1304,14 +1435,14 @@ export default function QuestionBankPage() {
       {previewQuestion && (() => {
         const pq = previewQuestion;
         const kunci = pq.kunci_jawaban ?? "";
+        const trueFalseStatements = pq.tipe === "TRUE_FALSE"
+          ? toTrueFalseDraft(pq.data_soal, pq.kunci_jawaban)
+          : [];
         const kunciArr = pq.tipe === "COMPLEX"
           ? kunci.split(",").map((k) => k.trim().toUpperCase())
           : [kunci.toUpperCase()];
-        const opts: [string, string][] = [
-          ["A", pq.opsi_a],
-          ["B", pq.opsi_b],
-          ["C", pq.opsi_c],
-          ["D", pq.opsi_d],
+        const opts: [string, string][] = pq.tipe === "TRUE_FALSE" ? [] : [
+          ["A", pq.opsi_a], ["B", pq.opsi_b], ["C", pq.opsi_c], ["D", pq.opsi_d],
           ...(pq.opsi_e ? [["E", pq.opsi_e] as [string, string]] : []),
         ];
         return (
@@ -1331,7 +1462,7 @@ export default function QuestionBankPage() {
                     <h3 className="text-base font-bold text-white flex items-center gap-2">
                       Pratinjau Soal #{pq.nomor_urut}
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${pq.tipe === "COMPLEX" ? "bg-purple-500/30 text-purple-200 border border-purple-400/30" : "bg-blue-500/30 text-blue-200 border border-blue-400/30"}`}>
-                        {pq.tipe === "SINGLE" ? "Pilihan Ganda" : "Pilihan Kompleks"}
+                        {questionTypeLabel(pq.tipe)}
                       </span>
                     </h3>
                     <p className="text-xs text-slate-300">Tampilan pertanyaan yang akan dilihat oleh siswa</p>
@@ -1366,9 +1497,22 @@ export default function QuestionBankPage() {
                   </div>
                 )}
 
-                {/* Options */}
+                {/* Options / TRUE_FALSE statements */}
                 <div className="space-y-2.5">
-                  {opts.map(([key, text]) => {
+                  {pq.tipe === "TRUE_FALSE" ? trueFalseStatements.map((statement, index) => (
+                    <div key={statement.id} className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-white">
+                      <span className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 bg-slate-100 text-slate-700 border border-slate-200">
+                        {index + 1}
+                      </span>
+                      <span
+                        className="text-sm leading-relaxed grow min-w-0 font-medium text-slate-800"
+                        dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(statement.teks) }}
+                      />
+                      <span className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+                        {statement.kunci}
+                      </span>
+                    </div>
+                  )) : opts.map(([key, text]) => {
                     const isKunci = kunciArr.includes(key);
                     return (
                       <div
@@ -1396,7 +1540,7 @@ export default function QuestionBankPage() {
                   })}
                 </div>
 
-                {pq.kunci_jawaban && (
+                {pq.tipe !== "TRUE_FALSE" && pq.kunci_jawaban && (
                   <div className="p-3 bg-emerald-100/60 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold flex items-center gap-2">
                     <span className="material-symbols-outlined text-emerald-600 text-base">verified</span>
                     <span>Kunci Jawaban: {pq.kunci_jawaban}</span>

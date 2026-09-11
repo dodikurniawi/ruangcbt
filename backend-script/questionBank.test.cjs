@@ -655,7 +655,7 @@ const contract = JSON.parse(
 // ── 28. Tipe canonical yang belum didukung ditolak, bukan diam-diam diterima ─
 {
   const gas = loadGas(baseState());
-  for (const tipe of ["TRUE_FALSE", "MATCHING", "FILL_IN"]) {
+  for (const tipe of ["MATCHING", "FILL_IN"]) {
     const res = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: tipe }) });
     assert.equal(res.success, false, tipe + " belum boleh diterima");
     assert.match(res.message, /belum didukung/);
@@ -1200,3 +1200,207 @@ function scoreFixture(tipe, kunci, bobot, dataSoal) {
 }
 
 console.log("questionBank424: type-aware scoring 39 cases + mutations A-D PASS");
+
+// TASK 4.2.5 — TRUE_FALSE production vertical slice.
+function trueFalsePayload(overrides) {
+  return Object.assign({
+    nomor_urut: 2,
+    tipe: "TRUE_FALSE",
+    pertanyaan: "Nilai setiap pernyataan",
+    gambar_url: "",
+    kunci_jawaban: { "1": "BENAR", "2": "SALAH" },
+    bobot: 40,
+    kategori: "Sedang",
+    id_mapel: "MAPEL_A",
+    data_soal: {
+      pernyataan: [
+        { id: "1", teks: "Matahari terbit dari timur" },
+        { id: "2", teks: "Air membeku pada 100°C" },
+      ],
+    },
+  }, overrides || {});
+}
+
+function trueFalseRow(id, status) {
+  return [
+    id || "TF1", 1, "TRUE_FALSE", "Nilai setiap pernyataan", "", "", "", "", "", "",
+    '{"1":"BENAR","2":"SALAH"}', 40, "Sedang", "MAPEL_A", status || "AKTIF", "",
+    JSON.stringify(trueFalsePayload().data_soal),
+  ];
+}
+
+function trueFalseExamState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, trueFalseRow()];
+  state.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+  ];
+  return state;
+}
+
+function historicalTrueFalseState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, trueFalseRow()];
+  state.Responses.push([
+    new Date(), "S1", "Siswa", "6A", JSON.stringify({ TF1: { "1": "BENAR", "2": "SALAH" } }),
+    "100.00", 10, "", "",
+  ]);
+  return state;
+}
+
+// ADMIN validation: valid exact contract diterima; semua bentuk parsial ditolak.
+{
+  let cases = 0;
+  const expectCreate = (payload, success, pattern) => {
+    cases++;
+    const result = post(loadGas(baseState()), "createQuestion", { data: payload });
+    assert.equal(result.success, success, result.message);
+    if (pattern) assert.match(result.message, pattern);
+  };
+
+  expectCreate(trueFalsePayload(), true);                                                    // 1
+  expectCreate(trueFalsePayload({ kunci_jawaban: '{"1":"BENAR","2":"SALAH"}' }), true,
+    undefined); // carrier JSON dari form production
+  expectCreate(trueFalsePayload({ data_soal: undefined }), false, /daftar pernyataan/);       // 2
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [] } }), false, /minimal/);        // 3
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [
+    { id: "1", teks: "a" }, { id: "1", teks: "b" },
+  ] } }), false, /unik/);                                                                     // 4
+  expectCreate(trueFalsePayload({ kunci_jawaban: undefined }), false, /berupa objek/);
+  expectCreate(trueFalsePayload({ kunci_jawaban: { "1": "BENAR" } }), false, /seluruh/);    // 5
+  expectCreate(trueFalsePayload({ kunci_jawaban: { "1": "YA", "2": "SALAH" } }), false, /BENAR atau SALAH/); // 6
+  expectCreate(trueFalsePayload({ kunci_jawaban: { "1": "BENAR", "2": "SALAH", "3": "BENAR" } }), false, /seluruh|tidak memiliki/); // 7
+  expectCreate(trueFalsePayload({ data_soal: "rusak" }), false, /daftar pernyataan/);        // 8
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [{ teks: "tanpa id" }] } }), false, /id/i); // 9
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [{ id: "1", teks: "<p></p>" }] }, kunci_jawaban: { "1": "BENAR" } }), false, /teks/); // 10
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [{ id: "1", teks: "x" }], ekstra: true }, kunci_jawaban: { "1": "BENAR" } }), false, /hanya boleh/); // 11
+  expectCreate(trueFalsePayload({ data_soal: { pernyataan: [{ id: "1", teks: "x", jawaban: "BENAR" }] }, kunci_jawaban: { "1": "BENAR" } }), false, /struktur/i); // 12
+  assert.equal(cases, 14);
+}
+
+// Persistence + round-trip admin/student projection.
+{
+  const gas = loadGas(baseState());
+  const created = post(gas, "createQuestion", { data: trueFalsePayload({
+    kunci_jawaban: '{"1":"BENAR","2":"SALAH"}',
+  }) });
+  assert.equal(created.success, true);                                                         // 13
+  const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
+  assert.deepEqual(JSON.parse(row[16]), trueFalsePayload().data_soal);                          // 14
+  assert.deepEqual(JSON.parse(row[10]), { "1": "BENAR", "2": "SALAH" });                   // 15
+
+  const admin = get(gas, "getAdminQuestions").data.find((question) => question.id_soal === created.id_soal);
+  assert.deepEqual(admin.data_soal, trueFalsePayload().data_soal);                              // 16
+  assert.deepEqual(JSON.parse(admin.kunci_jawaban), { "1": "BENAR", "2": "SALAH" });       // 17
+
+  const student = get(gas, "getQuestions").data.find((question) => question.id_soal === created.id_soal);
+  assert.deepEqual(student.data_soal, trueFalsePayload().data_soal);                            // 18
+  assert.equal("kunci_jawaban" in student, false);                                             // 19
+  assert.equal("status_soal" in student, false);                                               // 20
+  assert.equal("versi_dari" in student, false);                                                // 21
+  assert.equal(["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"].some((field) => field in student), false); // 22
+}
+
+// Submit integration memakai scorer 4.2.4, bukan kalkulasi baru di UI.
+{
+  const submit = (answer) => post(loadGas(trueFalseExamState()), "submitExam", {
+    id_siswa: "S1", answers: { TF1: answer }, score: 100,
+  });
+  assert.equal(submit({ "1": "BENAR", "2": "SALAH" }).score, "100.00");                    // 23
+  assert.equal(submit({ "1": "BENAR", "2": "BENAR" }).score, "50.00");                   // 24
+  assert.equal(submit({ "1": "SALAH", "2": "BENAR" }).score, "0.00");                   // 25
+  assert.equal(submit("rusak").score, "0.00");                                               // 26
+}
+
+// Historical content edits version; nomor-only/no-op tetap in-place.
+{
+  const expectVersion = (payload, expected, message) => {
+    const gas = loadGas(historicalTrueFalseState());
+    const result = post(gas, "updateQuestion", { id_soal: "TF1", data: payload });
+    assert.equal(result.versioned, expected, message);
+    if (expected) {
+      assert.equal(gas.__sheets.Questions.rows[1][14], "ARSIP");
+      assert.equal(gas.__sheets.Questions.rows.length, 3);
+    } else {
+      assert.equal(gas.__sheets.Questions.rows.length, 2);
+    }
+  };
+
+  const textChanged = trueFalsePayload({ nomor_urut: 1, data_soal: {
+    pernyataan: [{ id: "1", teks: "Teks berubah" }, { id: "2", teks: "Air membeku pada 100°C" }],
+  } });
+  expectVersion(textChanged, true, "ubah teks wajib versioning");                              // 27
+  expectVersion(trueFalsePayload({ nomor_urut: 1, kunci_jawaban: { "1": "SALAH", "2": "SALAH" } }), true,
+    "ubah key wajib versioning");                                                              // 28
+  expectVersion(trueFalsePayload({ nomor_urut: 1, data_soal: { pernyataan: [
+    ...trueFalsePayload().data_soal.pernyataan, { id: "3", teks: "Pernyataan baru" },
+  ] }, kunci_jawaban: { "1": "BENAR", "2": "SALAH", "3": "BENAR" } }), true,
+  "tambah statement wajib versioning");                                                       // 29
+  expectVersion(trueFalsePayload({ nomor_urut: 1, data_soal: { pernyataan: [
+    { id: "1", teks: "Matahari terbit dari timur" },
+  ] }, kunci_jawaban: { "1": "BENAR" } }), true, "hapus statement wajib versioning");      // 30
+  expectVersion(trueFalsePayload({ nomor_urut: 9 }), false, "nomor-only harus in-place");      // 31
+  expectVersion(trueFalsePayload({ nomor_urut: 1 }), false, "no-op tidak boleh membuat versi"); // 32
+}
+
+// Regression + scope lock: hanya TRUE_FALSE yang diaktifkan.
+{
+  const gas = loadGas(baseState());
+  assert.equal(post(gas, "createQuestion", { data: validSingle }).success, true);               // 33
+  assert.equal(post(gas, "createQuestion", { data: Object.assign({}, validSingle, {
+    tipe: "COMPLEX", kunci_jawaban: "A,C",
+  }) }).success, true);                                                                         // 34
+  for (const tipe of ["MATCHING", "FILL_IN"]) {
+    const result = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe }) });
+    assert.equal(result.success, false, tipe + " tidak boleh aktif");                           // 35-36
+    assert.match(result.message, /belum didukung/);
+  }
+}
+
+// Mutation A/D/E: whitelist, projection, dan partial scorer benar-benar dijaga.
+{
+  const valid = trueFalsePayload();
+  const whitelistMutation = (source) => {
+    const mutated = source.replace(
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE"];',
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];',
+    );
+    assert.notEqual(mutated, source, "titik mutation A tidak ditemukan");
+    return mutated;
+  };
+  const brokenWhitelist = loadGas(baseState(), whitelistMutation);
+  assert.throws(() => assert.equal(
+    post(brokenWhitelist, "createQuestion", { data: valid }).success, true,
+  ), undefined, "mutation A tidak terdeteksi");
+  assert.equal(post(loadGas(baseState()), "createQuestion", { data: valid }).success, true);
+
+  const projectionMutation = (source) => {
+    const mutated = source.replace("    if (skipMapelFilter) {", "    if (true) {");
+    assert.notEqual(mutated, source, "titik mutation D tidak ditemukan");
+    return mutated;
+  };
+  const assertSafeProjection = (gas) => assert.equal(
+    "kunci_jawaban" in get(gas, "getQuestions").data[0], false,
+  );
+  assert.throws(() => assertSafeProjection(loadGas(trueFalseExamState(), projectionMutation)), undefined,
+    "mutation D tidak terdeteksi");
+  assertSafeProjection(loadGas(trueFalseExamState()));
+
+  const scoringGas = loadGas(baseState());
+  const registry = scoringGas.__eval("QUESTION_SCORERS");
+  const original = registry.TRUE_FALSE;
+  const question = scoreFixture("TRUE_FALSE", '{"1":"BENAR","2":"SALAH"}', 40,
+    trueFalsePayload().data_soal);
+  try {
+    registry.TRUE_FALSE = (q, answer) => original(q, answer) === q.bobot ? q.bobot : 0;
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question, {
+      "1": "BENAR", "2": "BENAR",
+    }), 20), undefined, "mutation E tidak terdeteksi");
+  } finally {
+    registry.TRUE_FALSE = original;
+  }
+  assert.equal(scoringGas.scoreQuestion(question, { "1": "BENAR", "2": "BENAR" }), 20);
+}
+
+console.log("questionBank425: TRUE_FALSE E2E 38 cases + mutations A/D/E PASS");

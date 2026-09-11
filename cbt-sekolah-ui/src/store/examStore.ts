@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { User, ImplementedStudentQuestion, AnswersRecord } from '@/types';
+import type { User, ImplementedStudentQuestion, AnswersRecord, Answer } from '@/types';
 
 interface ExamStore {
     // User data
@@ -19,7 +19,7 @@ interface ExamStore {
 
     // Answers
     answers: AnswersRecord;
-    setAnswer: (questionId: string, answer: string | string[]) => void;
+    setAnswer: (questionId: string, answer: Answer) => void;
     setAllAnswers: (answers: AnswersRecord) => void;
 
     // Timer

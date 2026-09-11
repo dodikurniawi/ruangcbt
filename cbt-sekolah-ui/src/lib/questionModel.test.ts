@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   sanitizeQuestionPayload,
   sanitizeDataSoal,
@@ -196,6 +199,15 @@ assert.equal(mixed.pernyataan.length, 2);
 assert.deepEqual(mixed.pernyataan.map((p) => p.id), ["1", "2"]);
 assert.equal(mixed.pernyataan[1].teks, "sah juga");
 
+const noPartialTrueFalse = sanitizeQuestionPayload({
+  tipe: "TRUE_FALSE",
+  data_soal: {
+    pernyataan: [{ id: "1", teks: "sah" }, { teks: "tanpa id" }],
+  },
+});
+assert.equal("data_soal" in noPartialTrueFalse, false,
+  "payload TRUE_FALSE rusak tidak boleh disimpan sebagai subset parsial");
+
 // Field asing di dalam data_soal tidak diteruskan — termasuk yang menyerupai kunci.
 const smuggled = sanitizeDataSoal("MATCHING", {
   kiri: [{ id: "1", teks: "Jakarta", kunci: "A", jawaban: "A" }],
@@ -221,6 +233,34 @@ assert.equal(keyKept.kunci_jawaban, '{"1":"BENAR"}', "kunci JSON masa depan lewa
 assert.equal(
   JSON.stringify(keyKept.data_soal).includes("BENAR"), false,
   "kunci tidak boleh muncul di data_soal"
+);
+
+// Mutation B: bypass sanitizer nested statement harus mematahkan assertion XSS,
+// lalu modul produksi asli tetap memberi hasil aman.
+const sanitizerSource = readFileSync(new URL("./questionSanitize.ts", import.meta.url), "utf8");
+const mutatedSanitizer = sanitizerSource.replace(
+  "items.push({ id, teks: sanitizeQuestionHtml(raw.teks) });",
+  "items.push({ id, teks: String(raw.teks) });",
+);
+assert.notEqual(mutatedSanitizer, sanitizerSource, "titik mutasi nested sanitizer tidak ditemukan");
+const mutationDir = mkdtempSync(join(tmpdir(), "ruangcbt-sanitizer-"));
+const mutationFile = join(mutationDir, "questionSanitize.ts");
+writeFileSync(mutationFile, mutatedSanitizer, "utf8");
+try {
+  const broken = await import(pathToFileURL(mutationFile).href);
+  const unsafe = broken.sanitizeDataSoal("TRUE_FALSE", {
+    pernyataan: [{ id: "1", teks: "<script>steal()</script>Aman" }],
+  }) as { pernyataan: { teks: string }[] };
+  assert.throws(() => assert.equal(unsafe.pernyataan[0].teks, "Aman"),
+    "mutation B tidak terdeteksi");
+} finally {
+  rmSync(mutationDir, { recursive: true, force: true });
+}
+assert.equal(
+  (sanitizeDataSoal("TRUE_FALSE", {
+    pernyataan: [{ id: "1", teks: "<script>steal()</script>Aman" }],
+  }) as { pernyataan: { teks: string }[] }).pernyataan[0].teks,
+  "Aman",
 );
 
 console.log("questionModel: canonical model, sanitizer type-aware, parity kontrak PASS");

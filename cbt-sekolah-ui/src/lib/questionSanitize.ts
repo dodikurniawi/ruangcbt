@@ -131,6 +131,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function hasCompleteTrueFalseStructure(value: unknown): boolean {
+  if (!isPlainObject(value) || !Array.isArray(value.pernyataan)) return false;
+  if (Object.keys(value).some((field) => field !== "pernyataan")) return false;
+  return value.pernyataan.every((item) =>
+    isPlainObject(item) &&
+    Object.keys(item).every((field) => field === "id" || field === "teks") &&
+    typeof item.id === "string" && item.id.trim() !== "" &&
+    typeof item.teks === "string"
+  );
+}
+
 /**
  * Normalisasi satu daftar item bernomor: hanya `id` dan `teks` yang bertahan,
  * `teks` disanitasi, entri rusak dibuang. Struktur asing tidak diteruskan.
@@ -191,7 +202,11 @@ export function sanitizeQuestionPayload(data: Record<string, unknown>): Record<s
 
   if ("data_soal" in clean) {
     const sanitized = sanitizeDataSoal(clean.tipe, clean.data_soal);
-    if (sanitized === undefined) delete clean.data_soal;
+    // TRUE_FALSE sudah production-active: jangan mengubah payload rusak menjadi
+    // subset valid. Hapus seluruh struktur agar validator GAS menolak request.
+    if (clean.tipe === "TRUE_FALSE" && !hasCompleteTrueFalseStructure(clean.data_soal)) {
+      delete clean.data_soal;
+    } else if (sanitized === undefined) delete clean.data_soal;
     else clean.data_soal = sanitized;
   }
 

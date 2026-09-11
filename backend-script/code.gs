@@ -107,7 +107,7 @@ const QUESTION_STATUS_ARCHIVED = "ARSIP";
 // Seluruh tipe yang dikenal model canonical (lihat question-contract.json).
 const CANONICAL_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];
 // Tipe yang benar-benar didukung end-to-end. Sisanya ditolak sampai dikerjakan.
-const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];
+const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE"];
 const OPTION_LETTERS = ["A", "B", "C", "D", "E"];
 const QUESTION_ALLOWED_FIELDS = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
@@ -216,6 +216,46 @@ const QUESTION_TYPE_VALIDATORS = {
   COMPLEX: function (data) {
     return validateChoiceQuestion(data, 2, 0, "Soal COMPLEX minimal punya dua kunci jawaban");
   },
+  TRUE_FALSE: function (data) {
+    if (!isPlainQuestionObject(data.data_soal) || !Array.isArray(data.data_soal.pernyataan)) {
+      return "TRUE_FALSE wajib memiliki daftar pernyataan";
+    }
+    if (Object.keys(data.data_soal).some(function (field) { return field !== "pernyataan"; })) {
+      return "data_soal TRUE_FALSE hanya boleh memuat pernyataan";
+    }
+
+    const statements = data.data_soal.pernyataan;
+    if (statements.length === 0) return "TRUE_FALSE minimal memiliki satu pernyataan";
+
+    const ids = Object.create(null);
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i];
+      if (!isPlainQuestionObject(statement) ||
+          Object.keys(statement).some(function (field) { return field !== "id" && field !== "teks"; })) {
+        return "Struktur pernyataan TRUE_FALSE tidak valid";
+      }
+      const id = typeof statement.id === "string" ? statement.id.trim() : "";
+      const text = typeof statement.teks === "string"
+        ? statement.teks.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()
+        : "";
+      if (!id) return "Setiap pernyataan TRUE_FALSE wajib memiliki id";
+      if (!text) return "Setiap pernyataan TRUE_FALSE wajib memiliki teks";
+      if (ids[id]) return "ID pernyataan TRUE_FALSE harus unik";
+      ids[id] = true;
+    }
+
+    const key = parseScoringObject(data.kunci_jawaban);
+    if (!key) return "Kunci jawaban TRUE_FALSE harus berupa objek";
+    const keyIds = Object.keys(key);
+    if (keyIds.length !== statements.length) return "Kunci TRUE_FALSE harus sesuai seluruh pernyataan";
+    for (let i = 0; i < keyIds.length; i++) {
+      if (!ids[keyIds[i]]) return "Kunci TRUE_FALSE tidak memiliki pernyataan";
+      if (key[keyIds[i]] !== "BENAR" && key[keyIds[i]] !== "SALAH") {
+        return "Kunci TRUE_FALSE hanya boleh BENAR atau SALAH";
+      }
+    }
+    return null;
+  },
 };
 
 // Validasi otoritatif di boundary GAS. Client boleh punya validasi sendiri, tetapi
@@ -231,6 +271,7 @@ function validateQuestionPayload(data) {
 
   const tipe = String(data.tipe || "").toUpperCase();
   if (CANONICAL_QUESTION_TYPES.indexOf(tipe) === -1) return "Tipe soal tidak dikenal: " + tipe;
+  if (VALID_QUESTION_TYPES.indexOf(tipe) === -1) return "Tipe soal " + tipe + " belum didukung";
   const typeValidator = QUESTION_TYPE_VALIDATORS[tipe];
   if (!typeValidator) return "Tipe soal " + tipe + " belum didukung";
 
@@ -352,10 +393,12 @@ function ensureQuestionColumns(sheet) {
 }
 
 function questionRowValues(id_soal, data, statusValue, originId) {
+  const tipe = String(data.tipe).toUpperCase();
+  const structuredKey = tipe === "TRUE_FALSE" ? parseScoringObject(data.kunci_jawaban) : null;
   return [
     id_soal,
     data.nomor_urut,
-    String(data.tipe).toUpperCase(),
+    tipe,
     data.pertanyaan,
     data.gambar_url || "",
     data.opsi_a,
@@ -363,7 +406,7 @@ function questionRowValues(id_soal, data, statusValue, originId) {
     data.opsi_c,
     data.opsi_d,
     data.opsi_e || "",
-    parseAnswerKeys(data.kunci_jawaban).join(","),
+    tipe === "TRUE_FALSE" && structuredKey ? stableStringify(structuredKey) : parseAnswerKeys(data.kunci_jawaban).join(","),
     Number(data.bobot),
     data.kategori || "",
     String(data.id_mapel || "").trim(),
@@ -635,16 +678,20 @@ function handleGetQuestions(skipMapelFilter) {
       tipe: row[2],
       pertanyaan: row[3],
       gambar_url: parseGDriveImageUrl(row[4]),
-      opsi_a: row[5],
-      opsi_b: row[6],
-      opsi_c: row[7],
-      opsi_d: row[8],
-      opsi_e: row[9] || null,
       bobot: row[11] || 1,
       kategori: row[12] || null,
       id_mapel: id_mapel,
       nama_mapel: id_mapel ? (mapelLookup[id_mapel] || null) : null,
     };
+    // Opsi A-E hanya milik tipe pilihan. TRUE_FALSE memakai data_soal dan tidak
+    // boleh menerima bentuk legacy yang tidak relevan.
+    if (row[2] === "SINGLE" || row[2] === "COMPLEX") {
+      entry.opsi_a = row[5];
+      entry.opsi_b = row[6];
+      entry.opsi_c = row[7];
+      entry.opsi_d = row[8];
+      entry.opsi_e = row[9] || null;
+    }
     // data_soal hanya diikutkan bila kolom 17 berisi JSON objek yang sah. Sel rusak
     // dicatat dan dilewati, bukan menggagalkan seluruh request.
     const dataSoal = parseDataSoalCell(row[QUESTION_DATA_COL - 1]);

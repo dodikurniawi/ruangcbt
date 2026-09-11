@@ -115,11 +115,14 @@ try {
     request("POST", "updateQuestion", adminCookie, {
       id_soal: "Q1",
       data: {
-        tipe: "MATCHING",
-        pertanyaan: "Jodohkan",
+        tipe: "TRUE_FALSE",
+        pertanyaan: "Nilai pernyataan",
+        kunci_jawaban: '{"1":"BENAR","2":"SALAH"}',
         data_soal: {
-          kiri: [{ id: "1", teks: '<script>alert(1)</script>Jakarta' }],
-          kanan: [{ id: "A", teks: '<img src=x onerror="alert(1)">Ibukota' }],
+          pernyataan: [
+            { id: "1", teks: '<script>alert(1)</script>Jakarta adalah ibu kota' },
+            { id: "2", teks: '<b onclick="steal()">Bandung di Jawa Timur</b>' },
+          ],
         },
       },
     }),
@@ -127,11 +130,11 @@ try {
   );
   assert.equal(nestedQuestion.status, 200);
   const nestedData = (lastBody.data as Record<string, unknown>).data_soal as {
-    kiri: { teks: string }[];
-    kanan: { teks: string }[];
+    pernyataan: { id: string; teks: string }[];
   };
-  assert.equal(nestedData.kiri[0].teks, "Jakarta");
-  assert.equal(nestedData.kanan[0].teks, "Ibukota");
+  assert.equal(nestedData.pernyataan[0].teks, "Jakarta adalah ibu kota");
+  assert.equal(nestedData.pernyataan[1].teks, "<b>Bandung di Jawa Timur</b>");
+  assert.equal((lastBody.data as Record<string, unknown>).kunci_jawaban, '{"1":"BENAR","2":"SALAH"}');
 
   const callsBeforeMalformedQuestion = upstreamCalls;
   const malformedQuestion = await handleProxyRequest(

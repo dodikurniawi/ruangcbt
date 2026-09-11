@@ -43,7 +43,7 @@ export interface User {
 // terimplementasi sengaja tetap tercantum agar kontrak dan sanitizer sudah punya
 // bentuk yang benar; GAS tetap menolaknya sampai tipe tersebut dikerjakan.
 export const QUESTION_TYPES = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'MATCHING', 'FILL_IN'] as const;
-export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX'] as const;
+export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX', 'TRUE_FALSE'] as const;
 
 export const QUESTION_WRITE_FIELDS = [
     'id_soal', 'nomor_urut', 'tipe', 'pertanyaan', 'gambar_url',
@@ -158,11 +158,13 @@ export type ImplementedAdminQuestion = AdminQuestion<ImplementedStudentQuestion>
  * 17; untuk SINGLE/COMPLEX tipenya tetap `never` karena keduanya tidak punya isi
  * terstruktur.
  */
-export type QuestionWritePayload =
-    Omit<ImplementedAdminQuestion, 'nama_mapel' | 'status_soal' | 'versi_dari'>;
+export type QuestionWritePayload<T extends ImplementedAdminQuestion = ImplementedAdminQuestion> =
+    T extends T ? Omit<T, 'nama_mapel' | 'status_soal' | 'versi_dari'> : never;
 
 // Answer types
-export type Answer = string | string[];
+export type TrueFalseValue = 'BENAR' | 'SALAH';
+export type TrueFalseAnswer = Record<string, TrueFalseValue>;
+export type Answer = string | string[] | TrueFalseAnswer;
 export type AnswersRecord = Record<string, Answer>;
 
 // Response from exam
