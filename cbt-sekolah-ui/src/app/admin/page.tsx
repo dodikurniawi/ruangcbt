@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, setExamStatus, resetUserLogin, logout } from "@/lib/api";
-import type { User, ExamConfig } from "@/types";
+import { getUsers, getExamSummary, getMataPelajaran, saveExamConfig, setExamStatus, resetUserLogin, logout } from "@/lib/api";
+import type { User, ExamSummary, MataPelajaran } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
   const map = {
@@ -46,6 +46,11 @@ export default function AdminDashboard() {
   const [filterClass, setFilterClass] = useState("All Classes");
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  // Draft "Adakan Ujian". null = belum disentuh guru, jadi ikut nilai tersimpan.
+  const [draft, setDraft] = useState<{ exam_name: string; exam_mapel: string; exam_duration: string } | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [examError, setExamError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // Admin auth guard
   useEffect(() => {
@@ -57,14 +62,85 @@ export default function AdminDashboard() {
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR(
     "getUsers", getUsers, { refreshInterval: 5000 }
   );
-  const { data: configRes, mutate: mutateConfig } = useSWR("getConfig", getConfig, { refreshInterval: 10000 });
+  const { data: summaryRes, mutate: mutateSummary } = useSWR("getExamSummary", getExamSummary, { refreshInterval: 10000 });
+  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
 
   const users: User[] = usersRes?.data ?? [];
-  const config: ExamConfig | undefined = configRes?.data;
+  const summary: ExamSummary | undefined = summaryRes?.data;
+  const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
 
   // Derive directly from SWR data
-  const examName = config?.exam_name ?? "Dashboard Monitoring";
-  const examOpen = config?.exam_status !== "CLOSED";
+  const examName = summary?.exam_name || "Dashboard Monitoring";
+  const examOpen = summary?.exam_status === "OPEN";
+  const form = draft ?? {
+    exam_name: summary?.exam_name ?? "",
+    exam_mapel: summary?.exam_mapel ?? "",
+    exam_duration: String(summary?.exam_duration ?? 90),
+  };
+  const mapelName = (id: string) => mapelList.find((m) => m.id_mapel === id)?.nama_mapel ?? id;
+  // Jumlah soal aktif untuk mapel yang sedang dipilih di form, bukan yang tersimpan.
+  const draftQuestionCount = form.exam_mapel
+    ? (summary?.question_counts?.[form.exam_mapel] ?? 0)
+    : 0;
+  const durationNumber = Number(form.exam_duration);
+
+  const setField = (field: "exam_name" | "exam_mapel" | "exam_duration", value: string) => {
+    setExamError("");
+    setDraft({ ...form, [field]: value });
+  };
+
+  // Penjaga yang sama juga berlaku di server; ini hanya supaya guru tahu lebih awal.
+  const blockingReason = (): string => {
+    if (!form.exam_name.trim()) return "Nama ujian wajib diisi.";
+    if (!form.exam_mapel) return "Pilih mata pelajaran yang akan diujikan.";
+    if (!Number.isInteger(durationNumber) || durationNumber < 1 || durationNumber > 600) {
+      return "Durasi ujian harus berupa angka antara 1 dan 600 menit.";
+    }
+    if (draftQuestionCount === 0) {
+      return `Belum ada soal aktif untuk mata pelajaran ${mapelName(form.exam_mapel)}. Tambahkan soal di Bank Soal terlebih dahulu.`;
+    }
+    return "";
+  };
+
+  const handleReviewOpen = () => {
+    const reason = blockingReason();
+    if (reason) { setExamError(reason); return; }
+    setExamError("");
+    setShowConfirm(true);
+  };
+
+  const handleOpenExam = async () => {
+    setIsTogglingStatus(true);
+    setExamError("");
+    const res = await saveExamConfig({
+      exam_name: form.exam_name.trim(),
+      exam_mapel: form.exam_mapel,
+      exam_duration: durationNumber,
+      exam_status: "OPEN",
+    });
+    if (res.success) {
+      setShowConfirm(false);
+      setDraft(null);
+      setNotice("Ujian berhasil dibuka. Siswa sekarang dapat mulai mengerjakan.");
+      await mutateSummary();
+    } else {
+      setExamError(res.message || "Gagal membuka ujian. Silakan coba lagi.");
+    }
+    setIsTogglingStatus(false);
+  };
+
+  const handleCloseExam = async () => {
+    setIsTogglingStatus(true);
+    setExamError("");
+    const res = await setExamStatus("CLOSED");
+    if (res.success) {
+      setNotice("Ujian telah ditutup. Siswa baru tidak dapat memulai ujian. Data siswa yang sudah selesai tetap tersimpan.");
+      await mutateSummary();
+    } else {
+      setExamError("Gagal menutup ujian. Silakan coba lagi.");
+    }
+    setIsTogglingStatus(false);
+  };
 
   const classes = Array.from(new Set(users.map((u) => u.kelas))).filter(Boolean);
 
@@ -81,14 +157,6 @@ export default function AdminDashboard() {
     sedang: users.filter((u) => u.status_ujian === "SEDANG").length,
     selesai: users.filter((u) => u.status_ujian === "SELESAI").length,
     diskualifikasi: users.filter((u) => u.status_ujian === "DISKUALIFIKASI").length,
-  };
-
-  const handleToggleExam = async () => {
-    const next = examOpen ? "CLOSED" : "OPEN";
-    setIsTogglingStatus(true);
-    const res = await setExamStatus(next);
-    if (res.success) mutateConfig();
-    setIsTogglingStatus(false);
   };
 
   const handleResetLogin = async (id_siswa: string) => {
@@ -232,7 +300,7 @@ export default function AdminDashboard() {
             }`}
           >
             <span className="material-symbols-outlined text-[20px]">quiz</span>
-            <span className="text-sm">Monitoring Ujian</span>
+            <span className="text-sm">Adakan Ujian &amp; Monitoring</span>
           </Link>
         </nav>
 
@@ -263,65 +331,167 @@ export default function AdminDashboard() {
           </button>
         </header>
 
-        {/* Exam Control Banner */}
-        <section className="mb-8">
-          <div className={`border rounded-3xl p-6 shadow-xs flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 transition-all ${
-            examOpen 
-              ? "bg-white border-emerald-200 shadow-emerald-500/5" 
-              : "bg-amber-50/60 border-amber-300/80 shadow-amber-500/5"
+        {/* Adakan Ujian — satu-satunya tempat mengatur & membuka ujian aktif */}
+        <section id="adakan-ujian" className="mb-8">
+          <div className={`border rounded-3xl shadow-xs transition-all ${
+            examOpen ? "bg-white border-emerald-200 shadow-emerald-500/5" : "bg-white border-slate-200/90"
           }`}>
-            <div className="flex items-start md:items-center gap-4.5 flex-1">
-              <div className="relative flex items-center justify-center shrink-0 mt-1 md:mt-0">
-                {examOpen && <div className="absolute w-14 h-14 bg-emerald-500/20 rounded-full animate-ping"></div>}
-                <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md ${
-                  examOpen ? "bg-gradient-to-br from-emerald-600 to-teal-600 shadow-emerald-600/30" : "bg-gradient-to-br from-red-600 to-rose-600 shadow-red-600/30"
-                }`}>
-                  <span className="material-symbols-outlined text-3xl select-none">
-                    {examOpen ? "lock_open" : "lock"}
-                  </span>
-                </div>
+            <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0 ${
+                examOpen ? "bg-gradient-to-br from-emerald-600 to-teal-600" : "bg-gradient-to-br from-[#1D4ED8] to-blue-700"
+              }`}>
+                <span className="material-symbols-outlined text-2xl">{examOpen ? "lock_open" : "edit_calendar"}</span>
               </div>
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-xs uppercase tracking-wide shadow-xs ${
-                    examOpen 
-                      ? "bg-emerald-600 text-white shadow-emerald-600/20" 
-                      : "bg-red-600 text-white shadow-red-600/20"
-                  }`}>
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                    {examOpen ? "STATUS: AKTIF MEMBUKA UJIAN" : "STATUS: UJIAN DITUTUP"}
-                  </span>
-                  <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-lg ${
-                    examOpen ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
-                  }`}>
-                    {examOpen ? "Siswa Bisa Login" : "Siswa GAK BISA Login"}
-                  </span>
-                </div>
-                <h3 className="font-black text-xl text-slate-900">
-                  {examOpen ? "Ujian Sedang Berlangsung" : "Akses Portal Ujian Terkunci"}
-                </h3>
-                <p className={`text-xs md:text-sm font-bold leading-relaxed ${
-                  examOpen ? "text-slate-600" : "text-slate-800"
-                }`}>
-                  {examOpen 
-                    ? "✓ Siswa DAPAT login menggunakan 6 digit PIN dan langsung mengerjakan ujian."
-                    : "⛔ PENTING: Saat status UJIAN DITUTUP, seluruh siswa TIDAK BISA LOGIN ke portal ujian. Tekan tombol di samping untuk membuka akses."
-                  }
+              <div>
+                <h3 className="font-black text-lg text-slate-900">Adakan Ujian</h3>
+                <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-0.5">
+                  Atur ujian, buka untuk siswa, lalu pantau
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleToggleExam}
-              disabled={isTogglingStatus}
-              className={`w-full lg:w-auto px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer shrink-0 disabled:opacity-60 hover:scale-105 ${
-                examOpen 
-                  ? "bg-red-600 hover:bg-red-700 text-white shadow-red-600/20" 
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-              }`}
-            >
-              <span className="material-symbols-outlined text-lg">{examOpen ? "do_not_disturb_on" : "play_circle"}</span>
-              {isTogglingStatus ? "Memproses..." : examOpen ? "Tutup Ujian Sekarang" : "Buka Akses Ujian"}
-            </button>
+
+            {notice && (
+              <div className="mx-6 mt-6 bg-emerald-50 text-emerald-800 px-4 py-3 rounded-xl border border-emerald-200 font-bold text-xs flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0">check_circle</span>
+                <span className="leading-relaxed">{notice}</span>
+                <button onClick={() => setNotice("")} className="ml-auto text-emerald-700 cursor-pointer shrink-0" aria-label="Tutup pesan">
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            )}
+            {examError && (
+              <div className="mx-6 mt-6 bg-red-50 text-red-800 px-4 py-3 rounded-xl border border-red-200 font-bold text-xs flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                <span className="leading-relaxed">{examError}</span>
+              </div>
+            )}
+
+            {!summary ? (
+              <div className="p-6 text-xs font-bold uppercase tracking-wider text-slate-400">Memuat pengaturan ujian...</div>
+            ) : examOpen ? (
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-xs uppercase tracking-wide bg-emerald-600 text-white shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                    Ujian sedang berlangsung
+                  </span>
+                </div>
+                <dl className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                  {[
+                    { label: "Nama Ujian", value: summary.exam_name || "—" },
+                    { label: "Mata Pelajaran", value: mapelName(summary.exam_mapel) || "—" },
+                    { label: "Durasi", value: `${summary.exam_duration} menit` },
+                    { label: "Jumlah Soal", value: `${summary.question_count} soal` },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <dt className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest mb-1">{item.label}</dt>
+                      <dd className="font-black text-sm text-slate-900">{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="text-xs font-bold text-slate-500 leading-relaxed">
+                  Siswa yang sudah mulai mengerjakan tetap memakai soal dan durasi seperti saat mereka mulai,
+                  walaupun Bank Soal atau pengaturan ini diubah setelahnya.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={handleCloseExam}
+                    disabled={isTogglingStatus}
+                    className="px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer disabled:opacity-60 bg-red-600 hover:bg-red-700 text-white shadow-red-600/20"
+                  >
+                    <span className="material-symbols-outlined text-lg">do_not_disturb_on</span>
+                    {isTogglingStatus ? "Memproses..." : "Tutup Ujian"}
+                  </button>
+                  <Link
+                    href={tenantPath("/monitoring")}
+                    target="_blank"
+                    className="px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-[#1D4ED8] transition-all"
+                  >
+                    <span className="material-symbols-outlined text-lg">monitoring</span>
+                    Buka Live Monitoring
+                  </Link>
+                </div>
+                <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
+                  Halaman Live Monitoring dapat dibuka langsung lewat tautannya, tanpa login.
+                  Bagikan ke guru lain, kepala sekolah, atau orang tua bila perlu.
+                </p>
+              </div>
+            ) : (
+              <div className="p-6 space-y-6">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-black text-xs uppercase tracking-wide bg-red-600 text-white shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                    Ujian belum dibuka
+                  </span>
+                  <span className="text-xs font-black uppercase px-2.5 py-1 rounded-lg bg-red-100 text-red-800">
+                    Siswa belum bisa login
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <div className="lg:col-span-2">
+                    <label htmlFor="exam_name" className="font-extrabold text-[10px] text-slate-500 uppercase tracking-widest block mb-2">Nama Ujian</label>
+                    <input
+                      id="exam_name"
+                      value={form.exam_name}
+                      onChange={(e) => setField("exam_name", e.target.value)}
+                      maxLength={120}
+                      placeholder="Contoh: Sumatif Akhir Semester Genap"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none font-bold text-xs text-slate-700 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="exam_mapel" className="font-extrabold text-[10px] text-slate-500 uppercase tracking-widest block mb-2">Mata Pelajaran</label>
+                    <select
+                      id="exam_mapel"
+                      value={form.exam_mapel}
+                      onChange={(e) => setField("exam_mapel", e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none font-bold text-xs text-slate-700 transition-all bg-white"
+                    >
+                      <option value="">— Pilih mata pelajaran —</option>
+                      {mapelList.map((m) => (
+                        <option key={m.id_mapel} value={m.id_mapel}>{m.nama_mapel}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="exam_duration" className="font-extrabold text-[10px] text-slate-500 uppercase tracking-widest block mb-2">Durasi (menit)</label>
+                    <input
+                      id="exam_duration"
+                      type="number"
+                      min={1}
+                      max={600}
+                      value={form.exam_duration}
+                      onChange={(e) => setField("exam_duration", e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none font-bold text-xs text-slate-700 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl px-5 py-4 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[#1D4ED8]">inventory_2</span>
+                  <div>
+                    <p className="font-black text-sm text-slate-900">
+                      {form.exam_mapel ? `${draftQuestionCount} soal` : "Pilih mata pelajaran dulu"}
+                    </p>
+                    <p className="font-bold text-[11px] text-slate-500">
+                      {form.exam_mapel
+                        ? `Semua soal aktif ${mapelName(form.exam_mapel)} akan dipakai pada ujian ini.`
+                        : "Jumlah soal muncul setelah mata pelajaran dipilih."}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleReviewOpen}
+                  disabled={isTogglingStatus}
+                  className="w-full lg:w-auto px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer disabled:opacity-60 bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                >
+                  <span className="material-symbols-outlined text-lg">play_circle</span>
+                  Buka Ujian
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
@@ -453,7 +623,52 @@ export default function AdminDashboard() {
           </div>
         </section>
       </main>
+
+      {/* Konfirmasi sebelum ujian benar-benar dibuka */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[100] flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200/80">
+            <h3 className="font-black text-lg text-slate-900 mb-1">Buka Ujian?</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Periksa dulu sebelum siswa masuk</p>
+
+            <dl className="space-y-4 mb-6">
+              {[
+                { label: "Nama", value: form.exam_name.trim() },
+                { label: "Mapel", value: mapelName(form.exam_mapel) },
+                { label: "Durasi", value: `${durationNumber} menit` },
+                { label: "Jumlah soal", value: `${draftQuestionCount} soal` },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest">{item.label}</dt>
+                  <dd className="font-black text-sm text-slate-900 mt-0.5">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <p className="text-xs font-bold text-slate-500 leading-relaxed bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-3 mb-6">
+              Setelah siswa mulai mengerjakan, soal dan durasi yang mereka dapatkan tidak berubah,
+              walaupun Bank Soal atau pengaturan ujian diubah setelahnya.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={isTogglingStatus}
+                className="flex-1 py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-700 font-black text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleOpenExam}
+                disabled={isTogglingStatus}
+                className="flex-1 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-60"
+              >
+                {isTogglingStatus ? "Memproses..." : "Buka Ujian"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

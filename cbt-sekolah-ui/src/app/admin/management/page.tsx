@@ -5,10 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getMataPelajaran, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, logout } from "@/lib/api";
+import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
-import type { User, MataPelajaran } from "@/types";
+import type { User } from "@/types";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
   const map = {
@@ -85,11 +85,9 @@ export default function AdminManagement() {
 
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR("getUsers", getUsers, { refreshInterval: 10000 });
   const { data: configRes } = useSWR("getConfig", getConfig);
-  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
-  const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
   const classes = Array.from(new Set(users.map((u) => u.kelas))).filter(Boolean);
 
   const filtered = users.filter((u) => {
@@ -217,23 +215,18 @@ export default function AdminManagement() {
     }
   };
 
+  // Nama ujian, mapel, dan durasi TIDAK diatur di sini: ketiganya milik layar
+  // "Adakan Ujian" dan disimpan sebagai satu konfigurasi utuh lewat saveExamConfig.
+  // Form ini hanya menyimpan pengaturan pendukung yang berdiri sendiri.
   const handleSaveConfig = async () => {
     if (!configFormRef.current) return;
     const fd = new FormData(configFormRef.current);
-    const exam_name = (fd.get("exam_name") as string) || "";
-    const exam_duration = Number(fd.get("exam_duration")) || 90;
     const exam_pin = (fd.get("exam_pin") as string) || "";
     const admin_password = (fd.get("admin_password") as string) || "";
     const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
-    const exam_mapel = (fd.get("exam_mapel") as string) || "";
 
     setIsSavingConfig(true);
-    const tasks: Promise<unknown>[] = [
-      updateConfig("exam_name", exam_name),
-      updateConfig("exam_duration", exam_duration),
-      updateConfig("admin_wa", admin_wa),
-      updateConfig("exam_mapel", exam_mapel),
-    ];
+    const tasks: Promise<unknown>[] = [updateConfig("admin_wa", admin_wa)];
     if (exam_pin) tasks.push(updateConfig("exam_pin", exam_pin));
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
     await Promise.all(tasks);
@@ -604,52 +597,27 @@ export default function AdminManagement() {
               </div>
             )}
 
-            <form ref={configFormRef} key={config?.exam_name ?? "loading"} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
+            <form ref={configFormRef} key={config?.admin_wa ?? "loading"} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
+              <div className="bg-blue-50/60 border border-blue-200/70 rounded-xl px-4 py-3 flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] text-[#2563EB] shrink-0">info</span>
+                <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+                  Nama ujian, mata pelajaran, dan durasi diatur di halaman{" "}
+                  <Link href={tenantPath("/admin")} className="text-[#2563EB] underline">Adakan Ujian</Link>,
+                  supaya pengaturan ujian tersimpan sekaligus saat ujian dibuka.
+                </p>
+              </div>
               <div>
-                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">Nama Ujian</label>
+                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">PIN Ujian</label>
                 <input
-                  name="exam_name"
-                  defaultValue={config?.exam_name ?? ""}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all"
+                  name="exam_pin"
+                  type="text"
+                  defaultValue=""
+                  placeholder="Kosongkan jika tidak diubah"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
                 />
-              </div>
-              <div>
-                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">
-                  Mata Pelajaran yang Diujikan
-                </label>
-                <select
-                  name="exam_mapel"
-                  defaultValue={config?.exam_mapel ?? ""}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all bg-white"
-                >
-                  <option value="">— Semua Mapel (tidak difilter) —</option>
-                  {mapelList.map((m) => (
-                    <option key={m.id_mapel} value={m.id_mapel}>{m.nama_mapel}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[10px] text-slate-400">Pilih mapel agar soal yang tampil ke siswa hanya soal mapel tersebut.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">Durasi (Menit)</label>
-                  <input
-                    name="exam_duration"
-                    type="number"
-                    min={1}
-                    defaultValue={config?.exam_duration ?? 90}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">PIN Ujian</label>
-                  <input
-                    name="exam_pin"
-                    type="text"
-                    defaultValue={config?.exam_pin ?? ""}
-                    placeholder="Kosongkan jika tidak pakai PIN"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
-                  />
-                </div>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian.
+                </p>
               </div>
               <div>
                 <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">

@@ -62,11 +62,23 @@ for (const action of [
   "createKelas", "updateKelas", "deleteKelas", "deleteAllKelas",
   "createMataPelajaran", "updateMataPelajaran", "deleteMataPelajaran", "deleteAllMataPelajaran",
   "setExamStatus", "getPrintSettings", "savePrintSettings",
+  "saveExamConfig", "getExamSummary",
 ]) {
   assert.equal(ACTION_RULES[action]?.role, "admin", `${action} harus admin-only`);
 }
 
 assert.equal(authorizeAction("updateConfig", "POST", "tenant-a", student).allowed, false);
+// Adakan Ujian: hanya admin, hanya tenant-nya sendiri, dan tidak pernah publik.
+assert.equal(authorizeAction("saveExamConfig", "POST", "tenant-a", student).allowed, false);
+assert.equal(authorizeAction("saveExamConfig", "POST", "tenant-a", null).allowed, false);
+assert.equal(authorizeAction("saveExamConfig", "POST", "tenant-a", admin).allowed, true);
+assert.equal(authorizeAction("saveExamConfig", "POST", "tenant-b", admin).allowed, false);
+assert.equal(authorizeAction("saveExamConfig", "GET", "tenant-a", admin).allowed, false);
+assert.equal(authorizeAction("getExamSummary", "GET", "tenant-a", student).allowed, false);
+assert.equal(authorizeAction("getExamSummary", "GET", "tenant-a", admin).allowed, true);
+// Live Monitoring tetap publik: tidak boleh berubah menjadi butuh login.
+assert.equal(ACTION_RULES.getLiveScore.role, "public");
+assert.equal(authorizeAction("getLiveScore", "GET", "tenant-a", null).allowed, true);
 assert.equal(authorizeAction("getAdminQuestions", "GET", "tenant-a", student).allowed, false);
 assert.equal(authorizeAction("getAdminQuestions", "GET", "tenant-a", admin).allowed, true);
 

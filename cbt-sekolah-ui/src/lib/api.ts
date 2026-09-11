@@ -9,7 +9,9 @@ import type {
     ExamConfig,
     AnswersRecord,
     Kelas,
-    MataPelajaran
+    MataPelajaran,
+    ExamSummary,
+    SaveExamConfigInput
 } from '@/types';
 
 // Resolve proxy URL: tenant-aware when inside /s/[schoolId]/, fallback to single-tenant
@@ -180,6 +182,20 @@ export async function getExamStatus(): Promise<ApiResponse<{ exam_status: 'OPEN'
 
 export async function setExamStatus(status: 'OPEN' | 'CLOSED'): Promise<ApiResponse> {
     return fetchApi('setExamStatus', 'POST', { status });
+}
+
+// ===== ADAKAN UJIAN =====
+
+export async function getExamSummary(): Promise<ApiResponse<ExamSummary>> {
+    return fetchApi<ExamSummary>('getExamSummary');
+}
+
+/**
+ * Satu-satunya jalur penyimpanan nama/mapel/durasi ujian. Server memvalidasi ulang
+ * dan menolak membuka ujian tanpa soal aktif, jadi layar guru tidak perlu menebak.
+ */
+export async function saveExamConfig(input: SaveExamConfigInput): Promise<ApiResponse<ExamSummary>> {
+    return fetchApi<ExamSummary>('saveExamConfig', 'POST', { ...input });
 }
 
 // ===== KELOLA SISWA =====

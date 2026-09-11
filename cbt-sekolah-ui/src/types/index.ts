@@ -17,6 +17,24 @@ export interface ExamConfig {
     exam_mapel?: string; // id_mapel yang diujikan, kosong = semua mapel
 }
 
+/** Ringkasan layar "Adakan Ujian": konfigurasi aktif + jumlah soal aktif per mapel. */
+export interface ExamSummary {
+    exam_name: string;
+    exam_mapel: string;
+    exam_duration: number;
+    exam_status: 'OPEN' | 'CLOSED';
+    question_count: number;
+    question_counts?: Record<string, number>;
+}
+
+/** Payload satu aksi simpan konfigurasi ujian; server memvalidasi ulang semuanya. */
+export interface SaveExamConfigInput {
+    exam_name: string;
+    exam_mapel: string;
+    exam_duration: number;
+    exam_status: 'OPEN' | 'CLOSED';
+}
+
 // User types
 export interface User {
     id_siswa: string;

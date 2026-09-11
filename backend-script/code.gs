@@ -209,20 +209,22 @@ function questionFingerprint(row) {
 
 // Snapshot ujian aktif dari satu kali baca Config + Questions. Dipanggil hanya saat
 // attempt dibuat, lalu hasilnya dibekukan pada baris siswa.
-function buildExamSnapshot() {
-  const config = getConfig();
-  const exam_mapel = String(config.exam_mapel || "");
+// Soal yang dipakai satu ujian: seluruh soal AKTIF pada mapel tersebut, dalam
+// urutan deterministic (nomor_urut, lalu id_soal). Satu-satunya tempat aturan
+// "soal apa yang masuk ujian" hidup — dipakai snapshot attempt maupun jumlah soal
+// yang ditampilkan ke guru, jadi angka yang dilihat guru = soal yang diterima siswa.
+function collectExamQuestionRows(exam_mapel) {
+  const mapel = String(exam_mapel || "");
   const sheet = getSheet("Questions");
   const rows = sheet ? sheet.getDataRange().getValues() : [];
   const selected = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row[0] || isQuestionArchived(row)) continue;
-    if (exam_mapel && String(row[13] || "") !== exam_mapel) continue;
+    if (mapel && String(row[13] || "") !== mapel) continue;
     selected.push(row);
   }
 
-  // Urutan deterministic: nomor_urut, lalu id_soal sebagai tie-break.
   selected.sort(function (a, b) {
     const left = Number(a[1]);
     const right = Number(b[1]);
@@ -231,6 +233,13 @@ function buildExamSnapshot() {
     if (leftNum !== rightNum) return leftNum - rightNum;
     return String(a[0]) < String(b[0]) ? -1 : (String(a[0]) > String(b[0]) ? 1 : 0);
   });
+  return selected;
+}
+
+function buildExamSnapshot() {
+  const config = getConfig();
+  const exam_mapel = String(config.exam_mapel || "");
+  const selected = collectExamQuestionRows(exam_mapel);
 
   const question_ids = [];
   const fingerprints = [];
@@ -737,6 +746,9 @@ function doGet(e) {
       case "getExamStatus":
         result = handleGetExamStatus();
         break;
+      case "getExamSummary":
+        result = handleGetExamSummary();
+        break;
       case "getMataPelajaran":
         result = handleGetMataPelajaran();
         break;
@@ -823,6 +835,9 @@ function doPost(e) {
         break;
       case "setExamStatus":
         result = handleSetExamStatus(params);
+        break;
+      case "saveExamConfig":
+        result = handleSaveExamConfig(params);
         break;
       // ── Gambar Soal ──────────────────────────────
       case "uploadImage":
@@ -2059,6 +2074,145 @@ function handleUpdateConfig(params) {
   cache.remove("config");
   if (key === "exam_mapel") cache.remove("questions"); cache.remove("questions_all");
   return { success: true, message: "Config added" };
+}
+
+// ===== ADAKAN UJIAN — KONFIGURASI UJIAN AKTIF =====
+// Satu aksi, satu konfigurasi utuh. Sebelumnya UI menyimpan nama/mapel/durasi
+// lewat beberapa updateConfig terpisah, sehingga satu request gagal bisa
+// meninggalkan ujian dengan mapel baru tetapi durasi lama.
+const EXAM_NAME_MAX_LENGTH = 120;
+const EXAM_DURATION_MIN = 1;
+const EXAM_DURATION_MAX = 600;
+
+// Tulis beberapa key Config dalam satu pass. Dipanggil di dalam lock.
+// ponytail: setValue per baris sudah cukup untuk sheet Config sepanjang belasan
+// baris; pindah ke satu setValues bila Config kelak tumbuh besar.
+function writeConfigValues(values) {
+  const sheet = getSheet("Config");
+  if (!sheet) return false;
+  const data = sheet.getDataRange().getValues();
+  const keys = Object.keys(values);
+  const pending = {};
+  for (let k = 0; k < keys.length; k++) pending[keys[k]] = true;
+
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0];
+    if (pending[key]) {
+      sheet.getRange(i + 1, 2).setValue(values[key]);
+      delete pending[key];
+    }
+  }
+  const remaining = Object.keys(pending);
+  for (let r = 0; r < remaining.length; r++) {
+    sheet.appendRow([remaining[r], values[remaining[r]], ""]);
+  }
+
+  cache.remove("config");
+  cache.remove("questions");
+  cache.remove("questions_all");
+  return true;
+}
+
+// Ringkasan untuk layar "Adakan Ujian": konfigurasi aktif + jumlah soal aktif per
+// mapel, supaya guru melihat jumlah soal berubah saat mengganti pilihan mapel
+// tanpa memuat seluruh Bank Soal.
+function handleGetExamSummary() {
+  const config = getConfig();
+  const sheet = getSheet("Questions");
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const counts = {};
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row[0] || isQuestionArchived(row)) continue;
+    const mapel = String(row[13] || "");
+    if (!mapel) continue;
+    counts[mapel] = (counts[mapel] || 0) + 1;
+  }
+
+  const exam_mapel = String(config.exam_mapel || "");
+  return {
+    success: true,
+    data: {
+      exam_name: String(config.exam_name || ""),
+      exam_mapel: exam_mapel,
+      exam_duration: parseInt(config.exam_duration, 10) || 90,
+      exam_status: config.exam_status || "OPEN",
+      question_counts: counts,
+      question_count: collectExamQuestionRows(exam_mapel).length,
+    },
+  };
+}
+
+function handleSaveExamConfig(params) {
+  // Lock supaya dua guru yang menyimpan hampir bersamaan tidak menghasilkan
+  // campuran nama baru + mapel lama.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+  try {
+    return saveExamConfigLocked(params || {});
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveExamConfigLocked(params) {
+  const exam_name = String(params.exam_name == null ? "" : params.exam_name).trim();
+  const exam_mapel = String(params.exam_mapel == null ? "" : params.exam_mapel).trim();
+  const exam_status = String(params.exam_status || "").toUpperCase();
+
+  if (!exam_name) return { success: false, message: "Nama ujian wajib diisi." };
+  if (exam_name.length > EXAM_NAME_MAX_LENGTH) {
+    return { success: false, message: "Nama ujian terlalu panjang, maksimal " + EXAM_NAME_MAX_LENGTH + " karakter." };
+  }
+  if (!exam_mapel) return { success: false, message: "Mata pelajaran wajib dipilih." };
+  const validMapel = getValidMapelIds();
+  if (!validMapel || validMapel.indexOf(exam_mapel) === -1) {
+    return { success: false, message: "Mata pelajaran tidak ditemukan. Pilih ulang mata pelajaran." };
+  }
+
+  const exam_duration = Number(params.exam_duration);
+  if (!isFinite(exam_duration) || Math.floor(exam_duration) !== exam_duration ||
+      exam_duration < EXAM_DURATION_MIN || exam_duration > EXAM_DURATION_MAX) {
+    return {
+      success: false,
+      message: "Durasi ujian harus berupa angka antara " + EXAM_DURATION_MIN + " dan " + EXAM_DURATION_MAX + " menit.",
+    };
+  }
+  if (exam_status !== "OPEN" && exam_status !== "CLOSED") {
+    return { success: false, message: "Status ujian tidak valid." };
+  }
+
+  // Jumlah soal dihitung ulang di server di dalam lock; angka dari layar guru
+  // tidak pernah dipercaya. Ujian kosong tidak boleh dibuka.
+  const questionCount = collectExamQuestionRows(exam_mapel).length;
+  if (exam_status === "OPEN" && questionCount === 0) {
+    return {
+      success: false,
+      message: "Belum ada soal aktif untuk mata pelajaran ini. Tambahkan soal di Bank Soal terlebih dahulu.",
+    };
+  }
+
+  const written = writeConfigValues({
+    exam_name: exam_name,
+    exam_mapel: exam_mapel,
+    exam_duration: exam_duration,
+    exam_status: exam_status,
+  });
+  if (!written) return { success: false, message: "Gagal menyimpan pengaturan ujian. Silakan coba lagi." };
+
+  return {
+    success: true,
+    message: exam_status === "OPEN" ? "Ujian berhasil dibuka" : "Pengaturan ujian tersimpan",
+    data: {
+      exam_name: exam_name,
+      exam_mapel: exam_mapel,
+      exam_duration: exam_duration,
+      exam_status: exam_status,
+      question_count: questionCount,
+    },
+  };
 }
 
 // ===== USER HANDLERS =====
