@@ -655,11 +655,7 @@ const contract = JSON.parse(
 // ── 28. Tipe canonical yang belum didukung ditolak, bukan diam-diam diterima ─
 {
   const gas = loadGas(baseState());
-  for (const tipe of ["MATCHING", "FILL_IN"]) {
-    const res = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: tipe }) });
-    assert.equal(res.success, false, tipe + " belum boleh diterima");
-    assert.match(res.message, /belum didukung/);
-  }
+  // Seluruh tipe canonical kini aktif; hanya tipe di luar model yang ditolak.
   const unknown = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: "ESSAY" }) });
   assert.equal(unknown.success, false);
   assert.match(unknown.message, /tidak dikenal/);
@@ -1351,10 +1347,12 @@ function historicalTrueFalseState() {
   assert.equal(post(gas, "createQuestion", { data: Object.assign({}, validSingle, {
     tipe: "COMPLEX", kunci_jawaban: "A,C",
   }) }).success, true);                                                                         // 34
-  for (const tipe of ["MATCHING", "FILL_IN"]) {
-    const result = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe }) });
-    assert.equal(result.success, false, tipe + " tidak boleh aktif");                           // 35-36
-    assert.match(result.message, /belum didukung/);
+  // FILL_IN (4.2.7) dan MATCHING (4.2.6) kini aktif; keduanya punya suite sendiri.
+  // Di sini cukup dipastikan tipe di luar model canonical tetap ditolak.
+  {
+    const result = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe: "ESSAY" }) });
+    assert.equal(result.success, false, "tipe tak dikenal tidak boleh aktif");                   // 35-36
+    assert.match(result.message, /tidak dikenal/);
   }
 }
 
@@ -1363,7 +1361,7 @@ function historicalTrueFalseState() {
   const valid = trueFalsePayload();
   const whitelistMutation = (source) => {
     const mutated = source.replace(
-      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE"];',
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];',
       'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX"];',
     );
     assert.notEqual(mutated, source, "titik mutation A tidak ditemukan");
@@ -1404,3 +1402,769 @@ function historicalTrueFalseState() {
 }
 
 console.log("questionBank425: TRUE_FALSE E2E 38 cases + mutations A/D/E PASS");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.2.7 — FILL_IN production vertical slice
+// ═══════════════════════════════════════════════════════════════════════════
+
+function fillInPayload(overrides) {
+  return Object.assign({
+    nomor_urut: 2,
+    tipe: "FILL_IN",
+    pertanyaan: "Apa ibu kota Indonesia?",
+    gambar_url: "",
+    kunci_jawaban: { accepted_answers: ["Jakarta", "DKI Jakarta"], case_sensitive: false, trim: true },
+    bobot: 20,
+    kategori: "Mudah",
+    id_mapel: "MAPEL_A",
+    data_soal: { petunjuk: "<p>Tulis nama kota.</p>" },
+  }, overrides || {});
+}
+
+function fillInKey(overrides) {
+  return Object.assign({ accepted_answers: ["Jakarta"], case_sensitive: false, trim: true }, overrides || {});
+}
+
+function fillInRow(id, status, key) {
+  return [
+    id || "FI1", 1, "FILL_IN", "Apa ibu kota Indonesia?", "", "", "", "", "", "",
+    JSON.stringify(key || fillInPayload().kunci_jawaban), 20, "Mudah", "MAPEL_A", status || "AKTIF", "",
+    JSON.stringify(fillInPayload().data_soal),
+  ];
+}
+
+function fillInExamState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, fillInRow()];
+  state.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+  ];
+  return state;
+}
+
+function historicalFillInState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, fillInRow()];
+  state.Responses.push([
+    new Date(), "S1", "Siswa", "6A", JSON.stringify({ FI1: "Jakarta" }), "100.00", 10, "", "",
+  ]);
+  return state;
+}
+
+// ADMIN validation (1-8): kontrak diterima utuh, bentuk parsial ditolak.
+{
+  let cases = 0;
+  const expectCreate = (payload, success, pattern) => {
+    cases++;
+    const result = post(loadGas(baseState()), "createQuestion", { data: payload });
+    assert.equal(result.success, success, result.message);
+    if (pattern) assert.match(result.message, pattern);
+  };
+
+  expectCreate(fillInPayload(), true);                                                           // 1
+  expectCreate(fillInPayload({ kunci_jawaban: JSON.stringify(fillInKey()) }), true);             // carrier JSON form
+  expectCreate(fillInPayload({ kunci_jawaban: { accepted_answers: ["Jakarta"] } }), true);       // flag opsional
+  expectCreate(fillInPayload({ data_soal: undefined }), false, /petunjuk/i);                     // 2
+  expectCreate(fillInPayload({ data_soal: { petunjuk: "<p>  </p>" } }), false, /Petunjuk/);       // 2
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ accepted_answers: [] }) }), false, /minimal/); // 3
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ accepted_answers: ["Jakarta", 7] }) }), false, /teks/); // 4
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ accepted_answers: ["   "] }) }), false, /kosong/); // 5
+  expectCreate(fillInPayload({ data_soal: "rusak" }), false, /petunjuk/i);                       // 6
+  expectCreate(fillInPayload({ data_soal: { petunjuk: "x", ekstra: true } }), false, /hanya boleh/); // 6
+  expectCreate(fillInPayload({ kunci_jawaban: undefined }), false, /berupa objek/);              // 7
+  expectCreate(fillInPayload({ kunci_jawaban: "bukan json" }), false, /berupa objek/);           // 7
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ case_sensitive: "ya" }) }), false, /case_sensitive/); // 8
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ trim: 1 }) }), false, /trim/);         // 8
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ fuzzy: true }) }), false, /hanya boleh/); // 8
+  // Duplikat setelah normalisasi ditolak, bukan didedupe diam-diam.
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ accepted_answers: ["Jakarta", " jakarta "] }) }),
+    false, /duplikat/);
+  // Duplikat itu sah ketika case_sensitive aktif — keduanya memang berbeda.
+  expectCreate(fillInPayload({ kunci_jawaban: fillInKey({ accepted_answers: ["Jakarta", "jakarta"], case_sensitive: true }) }), true);
+  assert.equal(cases, 17);
+}
+
+// NORMALIZATION + SCORING (9-13, 30-39) lewat scorer produksi.
+{
+  const gas = loadGas(baseState());
+  let cases = 0;
+  const expectScore = (key, answer, expected, message) => {
+    cases++;
+    assert.equal(
+      gas.scoreQuestion(scoreFixture("FILL_IN", JSON.stringify(key), 20, fillInPayload().data_soal), answer),
+      expected, message,
+    );
+  };
+
+  const base = fillInKey({ accepted_answers: ["Jakarta"] });
+  expectScore(base, "Jakarta", 20, "exact match wajib penuh");                                   // 30
+  expectScore(base, "JAKARTA", 20, "default case-insensitive");                                  // 9/31
+  expectScore(base, "  jakarta  ", 20, "default trim");                                          // 10/32
+  expectScore(base, "Bandung", 0, "jawaban salah wajib nol");                                    // 33
+  expectScore(fillInKey({ accepted_answers: ["Jakarta", "DKI Jakarta"] }), "dki jakarta", 20,
+    "salah satu accepted answer cukup");                                                         // 34
+
+  const caseSensitive = fillInKey({ accepted_answers: ["Jakarta"], case_sensitive: true });
+  expectScore(caseSensitive, "Jakarta", 20, "case-sensitive tetap menerima bentuk persis");       // 11
+  expectScore(caseSensitive, "jakarta", 0, "case-sensitive wajib menolak beda huruf");            // 35
+  expectScore(caseSensitive, "  Jakarta  ", 20, "trim tetap berlaku saat case_sensitive");        // 13
+
+  const noTrim = fillInKey({ accepted_answers: ["Jakarta"], trim: false });
+  expectScore(noTrim, "Jakarta", 20, "trim=false tetap menerima jawaban persis");                 // 12
+  expectScore(noTrim, " Jakarta ", 0, "trim=false wajib menolak spasi ekstra");                   // 36
+  expectScore(fillInKey({ accepted_answers: ["Jakarta"], trim: false, case_sensitive: true }), "jakarta ", 0,
+    "kombinasi flag tetap exact");                                                                // 13
+
+  // Kunci dan jawaban rusak: nol, tanpa exception.
+  expectScore({ accepted_answers: "Jakarta" }, "Jakarta", 0, "accepted_answers bukan array");      // 37
+  expectScore({}, "Jakarta", 0, "kunci tanpa accepted_answers");                                   // 37
+  expectScore(base, { curang: true }, 0, "jawaban objek bukan string");                            // 38
+  expectScore(base, ["Jakarta"], 0, "jawaban array bukan string");                                 // 38
+  expectScore(fillInKey({ accepted_answers: ["Jakarta", 5] }), "Jakarta", 20,
+    "entri rusak dilewati, entri sah tetap dinilai");                                              // 37
+  // Fuzzy/typo/substring tidak pernah benar.
+  expectScore(base, "Jakartaa", 0, "typo bukan jawaban benar");                                    // 39
+  expectScore(base, "Jakarta Selatan", 0, "superstring bukan jawaban benar");                      // 39
+  expectScore(base, "jakar", 0, "substring bukan jawaban benar");                                  // 39
+  // Kosong dan whitespace-only tidak pernah penuh.
+  expectScore(base, "", 0, "jawaban kosong nol");                                                  // 27
+  expectScore(base, "   ", 0, "whitespace-only nol setelah normalisasi");                          // 27
+  expectScore(fillInKey({ accepted_answers: ["Jakarta"], trim: false }), "   ", 0,
+    "whitespace-only nol walau trim dimatikan");
+  assert.equal(cases, 22);
+
+  // Malformed kunci di kolom 11 tidak menggagalkan request submit.
+  const malformedState = fillInExamState();
+  malformedState.Questions[1][10] = "{bukan json";
+  const malformedSubmit = post(loadGas(malformedState), "submitExam", {
+    id_siswa: "S1", answers: { FI1: "Jakarta" }, score: 100,
+  });
+  assert.equal(malformedSubmit.success, true, "kunci rusak tidak boleh membuat submit gagal");
+  assert.equal(malformedSubmit.score, "0.00");                                                     // 37
+}
+
+// PERSISTENCE + PROJECTION (14-15, 20-26).
+{
+  const gas = loadGas(baseState());
+  const created = post(gas, "createQuestion", {
+    data: fillInPayload({ kunci_jawaban: JSON.stringify(fillInPayload().kunci_jawaban) }),
+  });
+  assert.equal(created.success, true, created.message);
+  const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
+  assert.equal(row.length, 17);
+  assert.deepEqual(JSON.parse(row[16]), fillInPayload().data_soal);                                // 14
+  assert.deepEqual(JSON.parse(row[10]), fillInPayload().kunci_jawaban);                            // 15
+
+  const admin = get(gas, "getAdminQuestions").data.find((q) => q.id_soal === created.id_soal);
+  assert.deepEqual(admin.data_soal, fillInPayload().data_soal);
+  assert.deepEqual(JSON.parse(admin.kunci_jawaban), fillInPayload().kunci_jawaban);                // 15
+
+  const student = get(gas, "getQuestions").data.find((q) => q.id_soal === created.id_soal);
+  assert.equal(student.data_soal.petunjuk, fillInPayload().data_soal.petunjuk);                    // 20
+  assert.equal("kunci_jawaban" in student, false);                                                 // 22
+  assert.equal("status_soal" in student, false);                                                   // 25
+  assert.equal("versi_dari" in student, false);                                                    // 26
+  assert.equal(["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"].some((f) => f in student), false);
+  const serialized = JSON.stringify(student);
+  assert.equal(serialized.indexOf("accepted_answers"), -1, "accepted_answers bocor ke siswa");      // 21
+  assert.equal(serialized.indexOf("case_sensitive"), -1, "case_sensitive bocor ke siswa");          // 23
+  assert.equal(serialized.indexOf("trim"), -1, "trim bocor ke siswa");                              // 24
+  assert.equal(serialized.indexOf("Jakarta"), -1, "isi kunci bocor ke siswa");
+}
+
+// ANSWER + SUBMIT (27-29): string jawaban lewat autosave dan submit apa adanya.
+{
+  const saved = post(loadGas(fillInExamState()), "syncAnswers", {
+    id_siswa: "S1", answers: { FI1: "  Jakarta " },
+  });
+  assert.equal(saved.success, true, saved.message);
+
+  const gas = loadGas(fillInExamState());
+  post(gas, "syncAnswers", { id_siswa: "S1", answers: { FI1: "  Jakarta " } });
+  const stored = gas.__sheets.Users.rows[1][13];
+  assert.deepEqual(JSON.parse(stored), { FI1: "  Jakarta " }, "string jawaban dipertahankan apa adanya"); // 28/29
+
+  const submit = (answer) => post(loadGas(fillInExamState()), "submitExam", {
+    id_siswa: "S1", answers: { FI1: answer }, score: 100,
+  });
+  assert.equal(submit("Jakarta").score, "100.00");                                                  // 30
+  assert.equal(submit(" dki jakarta ").score, "100.00");                                            // 31/32/34
+  assert.equal(submit("Bandung").score, "0.00");                                                    // 33
+  assert.equal(submit("").score, "0.00");                                                           // 27
+  assert.equal(submit({ curang: true }).score, "0.00");                                             // 38
+  assert.equal(gas.__eval("isAnswerFilled")(""), false, "string kosong = belum dijawab");            // 27
+  assert.equal(gas.__eval("isAnswerFilled")("Jakarta"), true);                                       // 28
+}
+
+// HISTORICAL (40-47): seluruh perubahan isi FILL_IN wajib versioning.
+{
+  const expectVersion = (payload, expected, message) => {
+    const gas = loadGas(historicalFillInState());
+    const before = gas.__sheets.Questions.rows[1].slice();
+    const result = post(gas, "updateQuestion", { id_soal: "FI1", data: payload });
+    assert.equal(result.success, true, result.message);
+    assert.equal(result.versioned, expected, message);
+    if (expected) {
+      assert.equal(gas.__sheets.Questions.rows.length, 3);
+      assert.equal(gas.__sheets.Questions.rows[1][14], "ARSIP");
+      assert.deepEqual(gas.__sheets.Questions.rows[1].slice(0, 14), before.slice(0, 14),
+        "baris historis wajib immutable");
+      assert.deepEqual(gas.__sheets.Questions.rows[1][16], before[16]);
+    } else {
+      assert.equal(gas.__sheets.Questions.rows.length, 2);
+    }
+  };
+  const current = fillInPayload({ nomor_urut: 1 });
+
+  expectVersion(fillInPayload({ nomor_urut: 1, data_soal: { petunjuk: "<p>Petunjuk baru.</p>" } }),
+    true, "ubah petunjuk wajib versioning");                                                         // 40
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: fillInKey({ accepted_answers: ["Bandung"] }) }),
+    true, "ubah accepted answer wajib versioning");                                                  // 41
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: fillInKey({
+    accepted_answers: ["Jakarta", "DKI Jakarta", "Batavia"],
+  }) }), true, "tambah accepted answer wajib versioning");                                            // 42
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: fillInKey({ accepted_answers: ["Jakarta"] }) }),
+    true, "hapus accepted answer wajib versioning");                                                  // 43
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: Object.assign({}, fillInPayload().kunci_jawaban, {
+    case_sensitive: true,
+  }) }), true, "ubah case_sensitive wajib versioning");                                               // 44
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: Object.assign({}, fillInPayload().kunci_jawaban, {
+    trim: false,
+  }) }), true, "ubah trim wajib versioning");                                                         // 45
+  expectVersion(fillInPayload({ nomor_urut: 9 }), false, "nomor-only harus in-place");                // 46
+  expectVersion(current, false, "no-op tidak boleh membuat versi");                                   // 47
+  // Urutan kunci JSON berbeda bukan perubahan isi.
+  expectVersion(fillInPayload({ nomor_urut: 1, kunci_jawaban: {
+    trim: true, case_sensitive: false, accepted_answers: ["Jakarta", "DKI Jakarta"],
+  } }), false, "urutan field kunci bukan perubahan isi");                                             // 47
+}
+
+// FEATURE GATE + REGRESI (48-53).
+{
+  const gas = loadGas(baseState());
+  assert.equal(post(gas, "createQuestion", { data: fillInPayload() }).success, true);                 // 48
+  assert.equal(post(gas, "createQuestion", { data: trueFalsePayload() }).success, true);              // 50
+  assert.equal(post(gas, "createQuestion", { data: validSingle }).success, true);                     // 51
+  assert.equal(post(gas, "createQuestion", { data: Object.assign({}, validSingle, {
+    tipe: "COMPLEX", kunci_jawaban: "A,C",
+  }) }).success, true);                                                                                // 52
+  // MATCHING diaktifkan pada Task 4.2.6 recovery; tipe di luar model tetap ditolak.
+  for (const tipe of ["ESSAY"]) {
+    const result = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe }) });
+    assert.equal(result.success, false, tipe + " tidak boleh ikut aktif");                             // 49/53
+  }
+  assert.deepEqual(
+    Array.from(gas.__eval("VALID_QUESTION_TYPES")),
+    ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
+    "whitelist tipe menyimpang dari scope task",
+  );
+
+  // Regresi scoring tipe lain tidak berubah oleh normalisasi FILL_IN.
+  assert.equal(gas.scoreQuestion(scoreFixture("SINGLE", "B", 10, null), "B"), 10);                      // 51
+  assert.equal(gas.scoreQuestion(scoreFixture("SINGLE", "B", 10, null), "b"), 0,
+    "SINGLE tetap case-sensitive seperti sebelumnya");
+  assert.equal(gas.scoreQuestion(scoreFixture("COMPLEX", "A,C", 10, null), ["C", "A"]), 10);           // 52
+  assert.equal(gas.scoreQuestion(
+    scoreFixture("TRUE_FALSE", '{"1":"BENAR","2":"SALAH"}', 40, trueFalsePayload().data_soal),
+    { "1": "BENAR", "2": "BENAR" },
+  ), 20);                                                                                              // 50
+}
+
+// MUTATION A/D/F/G/H: whitelist, projection, exact match, full/0, empty answer.
+{
+  const valid = fillInPayload();
+
+  // A. FILL_IN dicabut dari whitelist → admin test gagal.
+  const whitelistMutation = (source) => {
+    const mutated = source.replace(
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];',
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE"];',
+    );
+    assert.notEqual(mutated, source, "titik mutation A tidak ditemukan");
+    return mutated;
+  };
+  assert.throws(() => assert.equal(
+    post(loadGas(baseState(), whitelistMutation), "createQuestion", { data: valid }).success, true,
+  ), undefined, "mutation A tidak terdeteksi");
+  assert.equal(post(loadGas(baseState()), "createQuestion", { data: valid }).success, true);
+
+  // B/D. Kunci FILL_IN (accepted_answers + flag) bocor ke proyeksi siswa.
+  const projectionMutation = (source) => {
+    const mutated = source.replace("    if (skipMapelFilter) {", "    if (true) {");
+    assert.notEqual(mutated, source, "titik mutation B tidak ditemukan");
+    return mutated;
+  };
+  const assertNoKeyLeak = (gas) => {
+    const student = get(gas, "getQuestions").data[0];
+    assert.equal(JSON.stringify(student).indexOf("accepted_answers"), -1);
+  };
+  assert.throws(() => assertNoKeyLeak(loadGas(fillInExamState(), projectionMutation)), undefined,
+    "mutation B tidak terdeteksi");
+  assertNoKeyLeak(loadGas(fillInExamState()));
+
+  const scoringGas = loadGas(baseState());
+  const registry = scoringGas.__eval("QUESTION_SCORERS");
+  const original = registry.FILL_IN;
+  const question = (key) => scoreFixture("FILL_IN", JSON.stringify(key), 20, fillInPayload().data_soal);
+
+  try {
+    // D. case_sensitive=false diabaikan → normalisasi case gagal.
+    registry.FILL_IN = (q, answer) => {
+      const key = JSON.parse(q.kunci_jawaban);
+      return key.accepted_answers.indexOf(String(answer).trim()) !== -1 ? q.bobot : 0;
+    };
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "JAKARTA"), 20),
+      undefined, "mutation D tidak terdeteksi");
+
+    // E. Flag trim diabaikan → test trim gagal.
+    registry.FILL_IN = (q, answer) => {
+      const key = JSON.parse(q.kunci_jawaban);
+      return key.accepted_answers.some((value) => value.toLowerCase() === String(answer).toLowerCase())
+        ? q.bobot : 0;
+    };
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question(fillInKey()), " jakarta "), 20),
+      undefined, "mutation E tidak terdeteksi");
+
+    // F. Exact match diganti contains → jawaban salah ikut bernilai penuh.
+    registry.FILL_IN = (q, answer) => {
+      const key = JSON.parse(q.kunci_jawaban);
+      return key.accepted_answers.some((value) =>
+        String(answer).toLowerCase().indexOf(value.toLowerCase()) !== -1) ? q.bobot : 0;
+    };
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "Jakarta Selatan"), 0),
+      undefined, "mutation F tidak terdeteksi");
+
+    // G. Full/0 diganti partial → skor parsial lolos.
+    registry.FILL_IN = (q, answer) => (original(q, answer) === q.bobot ? q.bobot : q.bobot / 2);
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "Bandung"), 0),
+      undefined, "mutation G tidak terdeteksi");
+
+    // H. Jawaban kosong setelah normalisasi bernilai penuh. Diuji langsung pada
+    // scorer: scoreQuestion sudah menyaringnya lebih dulu lewat isAnswerFilled,
+    // jadi lapisan scorer harus punya penolakannya sendiri.
+    registry.FILL_IN = (q, answer) => (String(answer).trim() === "" ? q.bobot : original(q, answer));
+    assert.throws(() => assert.equal(registry.FILL_IN(question(fillInKey()), "   "), 0),
+      undefined, "mutation H tidak terdeteksi");
+  } finally {
+    registry.FILL_IN = original;
+  }
+
+  // Implementasi asli: seluruh assertion di atas kembali benar.
+  assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "JAKARTA"), 20);
+  assert.equal(scoringGas.scoreQuestion(question(fillInKey()), " jakarta "), 20);
+  assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "Jakarta Selatan"), 0);
+  assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "Bandung"), 0);
+  assert.equal(scoringGas.scoreQuestion(question(fillInKey()), "   "), 0);
+  assert.equal(scoringGas.__eval("scoreFillIn")(question(fillInKey()), "   "), 0,
+    "scorer sendiri wajib menolak jawaban kosong, bukan hanya isAnswerFilled");
+}
+
+console.log("questionBank427: FILL_IN E2E 53 cases + mutations A/B/D/E/F/G/H PASS");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4.2.6 RECOVERY — MATCHING production vertical slice
+// ═══════════════════════════════════════════════════════════════════════════
+
+function matchingData(overrides) {
+  return Object.assign({
+    kiri: [
+      { id: "1", teks: "Jakarta" },
+      { id: "2", teks: "Bandung" },
+    ],
+    kanan: [
+      { id: "A", teks: "Jawa Barat" },
+      { id: "B", teks: "DKI Jakarta" },
+    ],
+  }, overrides || {});
+}
+
+function matchingPayload(overrides) {
+  return Object.assign({
+    nomor_urut: 2,
+    tipe: "MATCHING",
+    pertanyaan: "Jodohkan kota dengan provinsinya",
+    gambar_url: "",
+    kunci_jawaban: { "1": "B", "2": "A" },
+    bobot: 40,
+    kategori: "Sedang",
+    id_mapel: "MAPEL_A",
+    data_soal: matchingData(),
+  }, overrides || {});
+}
+
+function matchingRow(id, status) {
+  return [
+    id || "MT1", 1, "MATCHING", "Jodohkan kota dengan provinsinya", "", "", "", "", "", "",
+    '{"1":"B","2":"A"}', 40, "Sedang", "MAPEL_A", status || "AKTIF", "",
+    JSON.stringify(matchingData()),
+  ];
+}
+
+function matchingExamState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, matchingRow()];
+  state.Users = [
+    USER_HEADER,
+    ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+  ];
+  return state;
+}
+
+function historicalMatchingState() {
+  const state = baseState();
+  state.Questions = [QUESTION_HEADER, matchingRow()];
+  state.Responses.push([
+    new Date(), "S1", "Siswa", "6A", JSON.stringify({ MT1: { "1": "B", "2": "A" } }), "100.00", 10, "", "",
+  ]);
+  return state;
+}
+
+// ADMIN validation (1-11).
+{
+  let cases = 0;
+  const expectCreate = (payload, success, pattern) => {
+    cases++;
+    const result = post(loadGas(baseState()), "createQuestion", { data: payload });
+    assert.equal(result.success, success, result.message);
+    if (pattern) assert.match(result.message, pattern);
+  };
+
+  expectCreate(matchingPayload(), true);                                                          // 1
+  expectCreate(matchingPayload({ kunci_jawaban: '{"1":"B","2":"A"}' }), true);                     // carrier JSON form
+  // Jumlah kiri dan kanan tidak wajib sama.
+  expectCreate(matchingPayload({
+    data_soal: matchingData({ kanan: [
+      { id: "A", teks: "Jawa Barat" }, { id: "B", teks: "DKI Jakarta" }, { id: "C", teks: "Jawa Timur" },
+    ] }),
+  }), true);
+  expectCreate(matchingPayload({ data_soal: matchingData({ kiri: [] }) }), false, /kiri/);         // 2
+  expectCreate(matchingPayload({ data_soal: matchingData({ kanan: [] }) }), false, /kanan/);       // 3
+  expectCreate(matchingPayload({ data_soal: matchingData({ kiri: [
+    { id: "1", teks: "Jakarta" }, { id: "1", teks: "Bandung" },
+  ] }) }), false, /unik/);                                                                          // 4
+  expectCreate(matchingPayload({
+    data_soal: matchingData({ kanan: [{ id: "A", teks: "x" }, { id: "A", teks: "y" }] }),
+    kunci_jawaban: { "1": "A", "2": "A" },
+  }), false, /unik/);                                                                               // 5
+  expectCreate(matchingPayload({ data_soal: matchingData({ kiri: [
+    { id: "1", teks: "<p> </p>" }, { id: "2", teks: "Bandung" },
+  ] }) }), false, /teks/);                                                                           // 6
+  expectCreate(matchingPayload({ data_soal: matchingData({ kanan: [
+    { id: "A", teks: "" }, { id: "B", teks: "DKI Jakarta" },
+  ] }) }), false, /teks/);                                                                           // 7
+  expectCreate(matchingPayload({ kunci_jawaban: { "1": "B" } }), false, /seluruh item kiri/);       // 8
+  expectCreate(matchingPayload({ kunci_jawaban: { "1": "B", "2": "A", "3": "A" } }), false,
+    /seluruh item kiri|item kiri yang tidak ada/);                                                  // 9
+  expectCreate(matchingPayload({ kunci_jawaban: { "1": "B", "2": "Z" } }), false,
+    /item kanan yang tidak ada/);                                                                   // 10
+  expectCreate(matchingPayload({ data_soal: "rusak" }), false, /daftar kiri dan kanan/);            // 11
+  expectCreate(matchingPayload({ data_soal: { kiri: matchingData().kiri } }), false, /daftar kiri dan kanan/); // 11
+  expectCreate(matchingPayload({ data_soal: matchingData({ ekstra: true }) }), false, /hanya boleh/); // 11
+  expectCreate(matchingPayload({ data_soal: matchingData({ kiri: [{ teks: "tanpa id" }] }) }), false, /id/i);
+  expectCreate(matchingPayload({ kunci_jawaban: undefined }), false, /berupa objek/);
+  expectCreate(matchingPayload({ kunci_jawaban: { "1": "B", "2": 7 } }), false, /item kanan yang tidak ada/);
+  // ID kiri dan kanan hidup di ruang nama terpisah.
+  expectCreate(matchingPayload({
+    data_soal: { kiri: [{ id: "A", teks: "Jakarta" }], kanan: [{ id: "A", teks: "DKI Jakarta" }] },
+    kunci_jawaban: { A: "A" },
+  }), true);
+  assert.equal(cases, 19);
+
+  // Payload ditolak tidak boleh meninggalkan baris separuh jadi.
+  const gas = loadGas(baseState());
+  const before = gas.__sheets.Questions.rows.length;
+  post(gas, "createQuestion", { data: matchingPayload({ kunci_jawaban: { "1": "Z", "2": "A" } }) });
+  assert.equal(gas.__sheets.Questions.rows.length, before, "payload invalid tidak boleh tersimpan sebagian");
+}
+
+// PERSISTENCE + PROJECTION (12-13, 18-23).
+{
+  const gas = loadGas(baseState());
+  const created = post(gas, "createQuestion", { data: matchingPayload({
+    kunci_jawaban: '{"1":"B","2":"A"}',
+  }) });
+  assert.equal(created.success, true, created.message);
+
+  const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
+  assert.equal(row.length, 17, "kolom 1-16 tidak bergeser");
+  assert.deepEqual(JSON.parse(row[16]), matchingData());                                           // 12
+  assert.deepEqual(JSON.parse(row[10]), { "1": "B", "2": "A" });                                   // 13
+
+  const admin = get(gas, "getAdminQuestions").data.find((q) => q.id_soal === created.id_soal);
+  assert.deepEqual(admin.data_soal, matchingData());
+  assert.deepEqual(JSON.parse(admin.kunci_jawaban), { "1": "B", "2": "A" });
+
+  const student = get(gas, "getQuestions").data.find((q) => q.id_soal === created.id_soal);
+  assert.deepEqual(student.data_soal.kiri, matchingData().kiri);                                   // 18
+  assert.deepEqual(student.data_soal.kanan, matchingData().kanan);                                 // 19
+  assert.equal("kunci_jawaban" in student, false);                                                  // 20
+  assert.equal("status_soal" in student, false);                                                    // 21
+  assert.equal("versi_dari" in student, false);                                                     // 22
+  assert.equal(["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"].some((f) => f in student), false);
+  assert.equal(
+    Object.keys(student).every((field) => contract.student_fields.includes(field)), true,
+    "proyeksi MATCHING memuat field di luar allowlist",
+  );
+  // Mapping kunci tidak boleh terbaca dari payload siswa.
+  assert.equal(JSON.stringify(student).indexOf('"1":"B"'), -1, "mapping kunci bocor ke siswa");
+
+  // Regresi tipe lain pada sheet yang sama (14-17).
+  assert.equal(post(gas, "createQuestion", { data: validSingle }).success, true);                   // 14
+  assert.equal(post(gas, "createQuestion", { data: Object.assign({}, validSingle, {
+    tipe: "COMPLEX", kunci_jawaban: "A,C", nomor_urut: 4,
+  }) }).success, true);                                                                              // 15
+  assert.equal(post(gas, "createQuestion", { data: trueFalsePayload({ nomor_urut: 5 }) }).success, true); // 16
+  const fillInCreated = post(gas, "createQuestion", { data: fillInPayload({ nomor_urut: 6 }) });
+  assert.equal(fillInCreated.success, true, fillInCreated.message);                                  // 17
+  const fillInStudent = get(gas, "getQuestions").data.find((q) => q.id_soal === fillInCreated.id_soal);
+  assert.equal(JSON.stringify(fillInStudent).indexOf("accepted_answers"), -1,
+    "accepted_answers FILL_IN bocor setelah MATCHING aktif");                                        // 23
+}
+
+// SCORING (29-33) memakai scorer 4.2.4, berbasis ID canonical.
+{
+  const gas = loadGas(baseState());
+  let cases = 0;
+  const question = (key, data) => scoreFixture("MATCHING", JSON.stringify(key || { "1": "B", "2": "A" }),
+    40, data || matchingData());
+  const expectScore = (answer, expected, message, key, data) => {
+    cases++;
+    assert.equal(gas.scoreQuestion(question(key, data), answer), expected, message);
+  };
+
+  expectScore({ "1": "B", "2": "A" }, 40, "semua pasangan benar");                                  // 29
+  expectScore({ "1": "B", "2": "B" }, 20, "separuh benar");                                         // 30
+  expectScore({ "1": "A", "2": "B" }, 0, "semua salah");                                            // 31
+  expectScore({ "1": "B" }, 20, "parsial: hanya pasangan terisi yang dinilai");                      // 32
+  expectScore({ "1": "B", "2": "" }, 20, "pasangan kosong tidak menambah skor");                     // 32
+  expectScore({}, 0, "tanpa pasangan = 0");                                                          // 32
+  expectScore({ "1": "Z", "2": "A" }, 20, "tujuan tidak dikenal tidak mendapat skor");               // 33
+  expectScore({ "1": "B", "2": {} }, 20, "nilai rusak = 0 untuk pasangan itu");                      // 33
+  expectScore("bukan-object", 0, "jawaban bukan object tidak crash");                                // 33
+  expectScore(["B", "A"], 0, "array bukan bentuk jawaban MATCHING");                                 // 33
+  // Kunci yang menunjuk id kanan tak dikenal tidak pernah menghasilkan skor palsu.
+  expectScore({ "1": "Z" }, 0, "kunci rusak tidak memberi skor", { "1": "Z", "2": "A" });
+  // Teks tidak pernah jadi dasar perbandingan.
+  expectScore({ "1": "DKI Jakarta", "2": "Jawa Barat" }, 0, "perbandingan wajib memakai ID, bukan teks");
+  // Urutan array tidak menentukan kebenaran: ID yang menentukan.
+  expectScore({ "1": "B", "2": "A" }, 40, "urutan daftar tidak mengubah arti ID", undefined,
+    matchingData({ kanan: [{ id: "B", teks: "DKI Jakarta" }, { id: "A", teks: "Jawa Barat" }] }));
+  assert.equal(cases, 13);
+
+  // Submit end-to-end memakai scorer yang sama.
+  const submit = (answer) => post(loadGas(matchingExamState()), "submitExam", {
+    id_siswa: "S1", answers: { MT1: answer }, score: 100,
+  });
+  assert.equal(submit({ "1": "B", "2": "A" }).score, "100.00");
+  assert.equal(submit({ "1": "B" }).score, "50.00");
+  assert.equal(submit({ "1": "A", "2": "B" }).score, "0.00");
+  assert.equal(submit("rusak").score, "0.00");
+
+  // Kunci rusak di kolom 11 tidak menggagalkan submit.
+  const malformed = matchingExamState();
+  malformed.Questions[1][10] = "{bukan json";
+  const malformedSubmit = post(loadGas(malformed), "submitExam", {
+    id_siswa: "S1", answers: { MT1: { "1": "B" } }, score: 100,
+  });
+  assert.equal(malformedSubmit.success, true, "kunci rusak tidak boleh menggagalkan submit");
+  assert.equal(malformedSubmit.score, "0.00");
+}
+
+// ANSWER + AUTOSAVE/RECOVERY (24-28).
+{
+  const gas = loadGas(matchingExamState());
+  const partial = { "1": "B" };
+  assert.equal(gas.__eval("isAnswerFilled")({}), false, "objek kosong = belum dijawab");            // 24
+  assert.equal(gas.__eval("isAnswerFilled")(partial), true, "pasangan parsial tetap terisi");        // 25
+
+  const saved = post(gas, "syncAnswers", { id_siswa: "S1", answers: { MT1: partial } });
+  assert.equal(saved.success, true, saved.message);
+  assert.deepEqual(JSON.parse(gas.__sheets.Users.rows[1][13]), { MT1: partial },
+    "pasangan parsial tersimpan apa adanya");                                                        // 25/28
+
+  const full = { "1": "B", "2": "A" };
+  post(gas, "syncAnswers", { id_siswa: "S1", answers: { MT1: full } });
+  assert.deepEqual(JSON.parse(gas.__sheets.Users.rows[1][13]), { MT1: full });                        // 26
+
+  // Tujuan tidak dikenal tetap tersimpan tanpa error; scoring yang menolaknya.
+  const stray = { "1": "Z" };
+  post(gas, "syncAnswers", { id_siswa: "S1", answers: { MT1: stray } });
+  assert.deepEqual(JSON.parse(gas.__sheets.Users.rows[1][13]), { MT1: stray });                       // 27
+  assert.equal(gas.scoreQuestion(
+    scoreFixture("MATCHING", '{"1":"B","2":"A"}', 40, matchingData()), stray,
+  ), 0);                                                                                              // 27
+
+  // Login mengembalikan jawaban tersimpan (jalur recovery existing).
+  const recoveryState = matchingExamState();
+  recoveryState.Users[1][5] = false;
+  recoveryState.Users[1][13] = JSON.stringify({ MT1: partial });
+  const recovered = post(loadGas(recoveryState), "login", { username: "siswa", password: "pw" });
+  assert.equal(recovered.success, true, recovered.message);
+  assert.deepEqual(recovered.data.saved_answers, { MT1: partial }, "recovery mengembalikan objek sama"); // 28
+}
+
+// HISTORICAL (34-42).
+{
+  const expectVersion = (payload, expected, message) => {
+    const gas = loadGas(historicalMatchingState());
+    const before = gas.__sheets.Questions.rows[1].slice();
+    const result = post(gas, "updateQuestion", { id_soal: "MT1", data: payload });
+    assert.equal(result.success, true, result.message);
+    assert.equal(result.versioned, expected, message);
+    if (expected) {
+      assert.equal(gas.__sheets.Questions.rows.length, 3);
+      assert.equal(gas.__sheets.Questions.rows[1][14], "ARSIP");
+      assert.deepEqual(gas.__sheets.Questions.rows[1].slice(0, 14), before.slice(0, 14),
+        "baris historis wajib immutable");
+      assert.equal(gas.__sheets.Questions.rows[1][16], before[16]);
+    } else {
+      assert.equal(gas.__sheets.Questions.rows.length, 2);
+    }
+  };
+
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({ kiri: [
+    { id: "1", teks: "Kota Jakarta" }, { id: "2", teks: "Bandung" },
+  ] }) }), true, "ubah teks kiri wajib versioning");                                                 // 34
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({ kanan: [
+    { id: "A", teks: "Provinsi Jawa Barat" }, { id: "B", teks: "DKI Jakarta" },
+  ] }) }), true, "ubah teks kanan wajib versioning");                                                // 35
+  expectVersion(matchingPayload({ nomor_urut: 1, kunci_jawaban: { "1": "A", "2": "B" } }), true,
+    "ubah mapping wajib versioning");                                                                // 36
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({ kiri: [
+    ...matchingData().kiri, { id: "3", teks: "Surabaya" },
+  ] }), kunci_jawaban: { "1": "B", "2": "A", "3": "A" } }), true, "tambah kiri wajib versioning");   // 37
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({ kanan: [
+    ...matchingData().kanan, { id: "C", teks: "Jawa Timur" },
+  ] }) }), true, "tambah kanan wajib versioning");                                                   // 38
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({
+    kiri: [{ id: "1", teks: "Jakarta" }],
+  }), kunci_jawaban: { "1": "B" } }), true, "hapus kiri wajib versioning");                          // 39
+  expectVersion(matchingPayload({ nomor_urut: 1, data_soal: matchingData({
+    kanan: [{ id: "B", teks: "DKI Jakarta" }],
+  }), kunci_jawaban: { "1": "B", "2": "B" } }), true, "hapus kanan wajib versioning");               // 40
+  expectVersion(matchingPayload({ nomor_urut: 9 }), false, "nomor-only harus in-place");             // 41
+  expectVersion(matchingPayload({ nomor_urut: 1 }), false, "no-op tidak boleh membuat versi");       // 42
+  // Urutan field kunci JSON bukan perubahan isi.
+  expectVersion(matchingPayload({ nomor_urut: 1, kunci_jawaban: { "2": "A", "1": "B" } }), false,
+    "urutan field kunci bukan perubahan isi");                                                       // 42
+}
+
+// FEATURE GATE (43-48) — seluruh whitelist konsisten dengan kontrak.
+{
+  const gas = loadGas(baseState());
+  assert.equal(post(gas, "createQuestion", { data: matchingPayload() }).success, true);              // 43
+  assert.equal(post(gas, "createQuestion", { data: fillInPayload({ nomor_urut: 3 }) }).success, true); // 44
+  assert.equal(post(gas, "createQuestion", { data: trueFalsePayload({ nomor_urut: 4 }) }).success, true); // 45
+  assert.equal(post(gas, "createQuestion", { data: validSingle }).success, true);                     // 46
+  assert.equal(post(gas, "createQuestion", { data: Object.assign({}, validSingle, {
+    tipe: "COMPLEX", kunci_jawaban: "A,C", nomor_urut: 6,
+  }) }).success, true);                                                                                // 47
+  for (const tipe of ["ESSAY", "DRAG_DROP", ""]) {
+    const result = post(gas, "createQuestion", { data: Object.assign({}, validSingle, { tipe }) });
+    assert.equal(result.success, false, "tipe " + tipe + " tidak boleh aktif");                        // 48
+    assert.match(result.message, /tidak dikenal/);
+  }
+  assert.deepEqual(
+    Array.from(gas.__eval("VALID_QUESTION_TYPES")),
+    ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
+  );
+  assert.deepEqual(
+    Array.from(gas.__eval("VALID_QUESTION_TYPES")).sort(),
+    contract.types_implemented.slice().sort(),
+    "whitelist GAS menyimpang dari kontrak bersama",
+  );
+  assert.deepEqual(
+    Object.keys(gas.__eval("QUESTION_TYPE_VALIDATORS")).sort(),
+    contract.types_implemented.slice().sort(),
+    "tabel validator tidak menutupi seluruh tipe aktif",
+  );
+  assert.deepEqual(
+    Array.from(gas.__eval("STRUCTURED_KEY_TYPES")).sort(),
+    ["FILL_IN", "MATCHING", "TRUE_FALSE"],
+  );
+}
+
+// MUTATION A/B/D/E/G.
+{
+  const valid = matchingPayload();
+
+  // A. MATCHING dicabut dari whitelist.
+  const whitelistMutation = (source) => {
+    const mutated = source.replace(
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];',
+      'const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "FILL_IN"];',
+    );
+    assert.notEqual(mutated, source, "titik mutation A tidak ditemukan");
+    return mutated;
+  };
+  assert.throws(() => assert.equal(
+    post(loadGas(baseState(), whitelistMutation), "createQuestion", { data: valid }).success, true,
+  ), undefined, "mutation A tidak terdeteksi");
+  assert.equal(post(loadGas(baseState()), "createQuestion", { data: valid }).success, true);
+
+  // B. Mapping kunci bocor ke proyeksi siswa.
+  const projectionMutation = (source) => {
+    const mutated = source.replace("    if (skipMapelFilter) {", "    if (true) {");
+    assert.notEqual(mutated, source, "titik mutation B tidak ditemukan");
+    return mutated;
+  };
+  const assertNoKeyLeak = (gas) => {
+    const student = get(gas, "getQuestions").data[0];
+    assert.equal("kunci_jawaban" in student, false);
+    assert.equal(JSON.stringify(student).indexOf('"1":"B"'), -1);
+  };
+  assert.throws(() => assertNoKeyLeak(loadGas(matchingExamState(), projectionMutation)), undefined,
+    "mutation B tidak terdeteksi");
+  assertNoKeyLeak(loadGas(matchingExamState()));
+
+  const scoringGas = loadGas(baseState());
+  const registry = scoringGas.__eval("QUESTION_SCORERS");
+  const original = registry.MATCHING;
+  const question = scoreFixture("MATCHING", '{"1":"B","2":"A"}', 40, matchingData());
+
+  try {
+    // D. Perbandingan memakai teks, bukan ID.
+    registry.MATCHING = (q, answer) => {
+      const key = JSON.parse(q.kunci_jawaban);
+      const rightText = Object.create(null);
+      for (const right of q.data_soal.kanan) rightText[right.id] = right.teks;
+      let correct = 0;
+      for (const left of q.data_soal.kiri) {
+        if (answer[left.id] === rightText[key[left.id]]) correct++;
+      }
+      return q.bobot * correct / q.data_soal.kiri.length;
+    };
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question, { "1": "B", "2": "A" }), 40),
+      undefined, "mutation D tidak terdeteksi");
+
+    // E. Partial diganti all-or-nothing.
+    registry.MATCHING = (q, answer) => (original(q, answer) === q.bobot ? q.bobot : 0);
+    assert.throws(() => assert.equal(scoringGas.scoreQuestion(question, { "1": "B", "2": "B" }), 20),
+      undefined, "mutation E tidak terdeteksi");
+
+    // G. Posisi array dipakai sebagai identitas: item kiri ke-i dianggap
+    // berpasangan dengan item kanan ke-i, bukan dengan ID dari kunci.
+    registry.MATCHING = (q, answer) => {
+      let correct = 0;
+      for (let i = 0; i < q.data_soal.kiri.length; i++) {
+        const expected = q.data_soal.kanan[i];
+        if (expected && answer[q.data_soal.kiri[i].id] === expected.id) correct++;
+      }
+      return q.bobot * correct / q.data_soal.kiri.length;
+    };
+    assert.throws(() => assert.equal(
+      scoringGas.scoreQuestion(question, { "1": "B", "2": "A" }), 40,
+    ), undefined, "mutation G tidak terdeteksi");
+  } finally {
+    registry.MATCHING = original;
+  }
+
+  assert.equal(scoringGas.scoreQuestion(question, { "1": "B", "2": "A" }), 40);
+  assert.equal(scoringGas.scoreQuestion(question, { "1": "B", "2": "B" }), 20);
+  assert.equal(scoringGas.scoreQuestion(question, { "2": "A", "1": "B" }), 40,
+    "urutan properti jawaban tidak boleh mengubah skor");
+  assert.equal(scoringGas.scoreQuestion(question, { "1": "DKI Jakarta", "2": "Jawa Barat" }), 0);
+}
+
+console.log("questionBank426: MATCHING E2E 48 cases + mutations A/B/D/E/G PASS");

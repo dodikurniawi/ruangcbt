@@ -136,6 +136,53 @@ try {
   assert.equal(nestedData.pernyataan[1].teks, "<b>Bandung di Jawa Timur</b>");
   assert.equal((lastBody.data as Record<string, unknown>).kunci_jawaban, '{"1":"BENAR","2":"SALAH"}');
 
+  const fillInQuestion = await handleProxyRequest(
+    request("POST", "updateQuestion", adminCookie, {
+      id_soal: "Q1",
+      data: {
+        tipe: "FILL_IN",
+        pertanyaan: "Apa ibu kota Indonesia?",
+        kunci_jawaban: '{"accepted_answers":["Jakarta"],"case_sensitive":false,"trim":true}',
+        data_soal: { petunjuk: '<p onclick="steal()">Tulis nama kota</p><script>alert(1)</script>' },
+      },
+    }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(fillInQuestion.status, 200);
+  const fillInData = (lastBody.data as Record<string, unknown>).data_soal as { petunjuk: string };
+  assert.equal(fillInData.petunjuk, "<p>Tulis nama kota</p>", "petunjuk wajib disanitasi di proxy");
+  assert.equal(
+    (lastBody.data as Record<string, unknown>).kunci_jawaban,
+    '{"accepted_answers":["Jakarta"],"case_sensitive":false,"trim":true}',
+    "kunci FILL_IN diteruskan apa adanya untuk divalidasi GAS",
+  );
+
+  const matchingQuestion = await handleProxyRequest(
+    request("POST", "updateQuestion", adminCookie, {
+      id_soal: "Q1",
+      data: {
+        tipe: "MATCHING",
+        pertanyaan: "Jodohkan",
+        kunci_jawaban: '{"1":"B"}',
+        data_soal: {
+          kiri: [{ id: "1", teks: '<script>alert(1)</script>Jakarta' }],
+          kanan: [{ id: "B", teks: '<b onclick="steal()">DKI Jakarta</b>' }],
+        },
+      },
+    }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(matchingQuestion.status, 200);
+  const matchingData = (lastBody.data as Record<string, unknown>).data_soal as {
+    kiri: { id: string; teks: string }[];
+    kanan: { id: string; teks: string }[];
+  };
+  assert.equal(matchingData.kiri[0].teks, "Jakarta", "teks kiri wajib disanitasi di proxy");
+  assert.equal(matchingData.kanan[0].teks, "<b>DKI Jakarta</b>");
+  assert.equal(matchingData.kiri[0].id, "1", "ID tetap identifier polos");
+  assert.equal((lastBody.data as Record<string, unknown>).kunci_jawaban, '{"1":"B"}',
+    "mapping MATCHING diteruskan apa adanya untuk divalidasi GAS");
+
   const callsBeforeMalformedQuestion = upstreamCalls;
   const malformedQuestion = await handleProxyRequest(
     request("POST", "createQuestion", adminCookie, { data: [] }),

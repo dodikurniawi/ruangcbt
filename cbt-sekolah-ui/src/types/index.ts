@@ -43,7 +43,7 @@ export interface User {
 // terimplementasi sengaja tetap tercantum agar kontrak dan sanitizer sudah punya
 // bentuk yang benar; GAS tetap menolaknya sampai tipe tersebut dikerjakan.
 export const QUESTION_TYPES = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'MATCHING', 'FILL_IN'] as const;
-export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX', 'TRUE_FALSE'] as const;
+export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'MATCHING', 'FILL_IN'] as const;
 
 export const QUESTION_WRITE_FIELDS = [
     'id_soal', 'nomor_urut', 'tipe', 'pertanyaan', 'gambar_url',
@@ -161,10 +161,23 @@ export type ImplementedAdminQuestion = AdminQuestion<ImplementedStudentQuestion>
 export type QuestionWritePayload<T extends ImplementedAdminQuestion = ImplementedAdminQuestion> =
     T extends T ? Omit<T, 'nama_mapel' | 'status_soal' | 'versi_dari'> : never;
 
+/**
+ * Kunci FILL_IN (admin-only, kolom 11). accepted_answers adalah plain text yang
+ * dibandingkan exact setelah normalisasi; flag-nya adalah metadata kunci dan
+ * tidak pernah ikut ke siswa.
+ */
+export interface FillInAnswerKey {
+    accepted_answers: string[];
+    case_sensitive?: boolean;
+    trim?: boolean;
+}
+
 // Answer types
 export type TrueFalseValue = 'BENAR' | 'SALAH';
 export type TrueFalseAnswer = Record<string, TrueFalseValue>;
-export type Answer = string | string[] | TrueFalseAnswer;
+/** MATCHING: id item kiri → id item kanan. Parsial (sebagian kiri) tetap sah. */
+export type MatchingAnswer = Record<string, string>;
+export type Answer = string | string[] | TrueFalseAnswer | MatchingAnswer;
 export type AnswersRecord = Record<string, Answer>;
 
 // Response from exam

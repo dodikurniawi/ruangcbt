@@ -12,6 +12,7 @@ import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
 import { updateTrueFalseAnswer } from "@/lib/trueFalse";
+import { updateMatchingAnswer } from "@/lib/matching";
 import type { ImplementedStudentQuestion, TrueFalseValue, ViolationType } from "@/types";
 
 function formatTime(seconds: number): string {
@@ -316,6 +317,13 @@ export default function ExamPage() {
     setAnswer(questionId, updateTrueFalseAnswer(current, statementId, value));
   };
 
+  // Pasangan disimpan sebagai id kiri → id kanan; pilihan lain tidak tersentuh
+  // sehingga jawaban parsial tetap utuh sampai autosave berikutnya.
+  const handleMatchingAnswer = (questionId: string, leftId: string, rightId: string) => {
+    const current = useExamStore.getState().answers[questionId];
+    setAnswer(questionId, updateMatchingAnswer(current, leftId, rightId));
+  };
+
   return (
     <div className="bg-slate-100 font-body-student text-slate-800 min-h-screen flex flex-col">
       {/* HEADER SECTION - FIXED 2 ROWS */}
@@ -463,6 +471,16 @@ export default function ExamPage() {
                     BENAR / SALAH PER PERNYATAAN
                   </span>
                 )}
+                {currentQuestion.tipe === "FILL_IN" && (
+                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200">
+                    ISIAN SINGKAT
+                  </span>
+                )}
+                {currentQuestion.tipe === "MATCHING" && (
+                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-violet-50 text-violet-700 px-3 py-1 rounded-full border border-violet-200">
+                    PASANGKAN SETIAP ITEM
+                  </span>
+                )}
               </div>
 
               {/* Question Text */}
@@ -492,7 +510,65 @@ export default function ExamPage() {
               )}
 
               {/* Options list */}
-              {currentQuestion.tipe === "TRUE_FALSE" ? (
+              {currentQuestion.tipe === "MATCHING" ? (
+                <div className="flex flex-col gap-3">
+                  {currentQuestion.data_soal.kiri.map((item) => {
+                    const current = answers[currentQuestion.id_soal];
+                    const selected = current !== null && typeof current === "object" && !Array.isArray(current)
+                      ? (current as Record<string, string>)[item.id] ?? ""
+                      : "";
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-3 border border-slate-200 rounded-xl p-4 bg-slate-50/50"
+                      >
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <span className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
+                            {item.id}
+                          </span>
+                          <div
+                            className={`text-slate-700 font-medium leading-relaxed ${fontSizeClass}`}
+                            dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(item.teks) }}
+                          />
+                        </div>
+                        <select
+                          value={selected}
+                          onChange={(e) => handleMatchingAnswer(currentQuestion.id_soal, item.id, e.target.value)}
+                          className={`w-full sm:w-64 shrink-0 border-2 rounded-xl px-3 py-2.5 font-medium bg-white outline-none cursor-pointer transition-colors ${fontSizeClass} ${
+                            selected ? "border-[#2563EB] text-slate-800" : "border-slate-300 text-slate-500"
+                          }`}
+                        >
+                          <option value="">Pilih pasangan</option>
+                          {currentQuestion.data_soal.kanan.map((right) => (
+                            <option key={right.id} value={right.id}>
+                              {right.id}. {right.teks.replace(/<[^>]*>/g, "")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : currentQuestion.tipe === "FILL_IN" ? (
+                <div className="flex flex-col gap-4">
+                  {currentQuestion.data_soal.petunjuk && (
+                    <div
+                      className={`text-slate-600 font-medium leading-relaxed border-l-4 border-sky-300 bg-sky-50/60 rounded-r-xl px-4 py-3 ${fontSizeClass}`}
+                      dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(currentQuestion.data_soal.petunjuk) }}
+                    />
+                  )}
+                  <input
+                    type="text"
+                    value={typeof answers[currentQuestion.id_soal] === "string"
+                      ? answers[currentQuestion.id_soal] as string
+                      : ""}
+                    onChange={(e) => setAnswer(currentQuestion.id_soal, e.target.value)}
+                    placeholder="Tulis jawabanmu di sini"
+                    autoComplete="off"
+                    className={`w-full border-2 border-slate-300 focus:border-[#2563EB] rounded-xl px-4 py-3 text-slate-800 font-medium outline-none transition-colors ${fontSizeClass}`}
+                  />
+                </div>
+              ) : currentQuestion.tipe === "TRUE_FALSE" ? (
                 <div className="flex flex-col gap-4">
                   {currentQuestion.data_soal.pernyataan.map((statement, index) => {
                     const current = answers[currentQuestion.id_soal];

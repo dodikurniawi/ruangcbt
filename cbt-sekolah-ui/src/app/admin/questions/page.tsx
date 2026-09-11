@@ -15,11 +15,26 @@ import {
   validateTrueFalseDraft,
   type TrueFalseDraftStatement,
 } from "@/lib/trueFalse";
+import {
+  EMPTY_FILL_IN_DRAFT,
+  serializeFillInDraft,
+  toFillInDraft,
+  validateFillInDraft,
+  type FillInDraft,
+} from "@/lib/fillIn";
+import {
+  emptyMatchingDraft,
+  nextMatchingId,
+  serializeMatchingDraft,
+  toMatchingDraft,
+  validateMatchingDraft,
+  type MatchingDraft,
+} from "@/lib/matching";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface QuestionForm {
-  tipe: "SINGLE" | "COMPLEX" | "TRUE_FALSE";
+  tipe: "SINGLE" | "COMPLEX" | "TRUE_FALSE" | "MATCHING" | "FILL_IN";
   kategori: string;
   bobot: number;
   pertanyaan: string;
@@ -32,6 +47,8 @@ interface QuestionForm {
   kunci_jawaban: string; // legacy A/A,C; TRUE_FALSE memakai JSON serialized
   id_mapel: string;
   pernyataan: TrueFalseDraftStatement[];
+  fillIn: FillInDraft;
+  matching: MatchingDraft;
 }
 
 const EMPTY_FORM: QuestionForm = {
@@ -48,6 +65,8 @@ const EMPTY_FORM: QuestionForm = {
   kunci_jawaban: "",
   id_mapel: "",
   pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
+  fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
+  matching: emptyMatchingDraft(),
 };
 
 const KATEGORI_OPTIONS = ["Mudah", "Sedang", "Sulit", "Sangat Sulit"];
@@ -55,7 +74,21 @@ const OPTION_KEYS = ["a", "b", "c", "d", "e"] as const;
 
 function questionTypeLabel(tipe: QuestionForm["tipe"]): string {
   if (tipe === "TRUE_FALSE") return "Benar / Salah";
+  if (tipe === "FILL_IN") return "Isian Singkat";
+  if (tipe === "MATCHING") return "Menjodohkan";
   return tipe === "SINGLE" ? "Pilihan Ganda" : "Pilihan Kompleks";
+}
+
+/** Tipe yang isinya hidup di data_soal, bukan di opsi A–E. */
+function usesLegacyOptions(tipe: QuestionForm["tipe"]): boolean {
+  return tipe === "SINGLE" || tipe === "COMPLEX";
+}
+
+/** Versi narrowing untuk soal tersimpan: hanya SINGLE/COMPLEX yang punya opsi A–E. */
+function hasLegacyOptions(
+  question: ImplementedAdminQuestion,
+): question is Extract<ImplementedAdminQuestion, { tipe: "SINGLE" | "COMPLEX" }> {
+  return usesLegacyOptions(question.tipe);
 }
 
 const GROQ_MODELS = [
@@ -264,7 +297,12 @@ export default function QuestionBankPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ ...EMPTY_FORM, pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }] });
+    setForm({
+      ...EMPTY_FORM,
+      pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
+      fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
+      matching: emptyMatchingDraft(),
+    });
     setSaveError("");
     setFilterMapel("");
     setShowModal(true);
@@ -272,6 +310,42 @@ export default function QuestionBankPage() {
 
   const openEdit = (q: ImplementedAdminQuestion) => {
     setEditingId(q.id_soal);
+    if (q.tipe === "MATCHING") {
+      setForm({
+        ...EMPTY_FORM,
+        tipe: q.tipe,
+        kategori: q.kategori ?? "Mudah",
+        bobot: q.bobot,
+        pertanyaan: q.pertanyaan,
+        gambar_url: q.gambar_url ?? "",
+        kunci_jawaban: q.kunci_jawaban,
+        id_mapel: q.id_mapel ?? "",
+        matching: toMatchingDraft(q.data_soal, q.kunci_jawaban),
+      });
+      setSaveError("");
+      setFilterMapel("");
+      setShowModal(true);
+      return;
+    }
+    if (q.tipe === "FILL_IN") {
+      setForm({
+        ...EMPTY_FORM,
+        tipe: q.tipe,
+        kategori: q.kategori ?? "Mudah",
+        bobot: q.bobot,
+        pertanyaan: q.pertanyaan,
+        gambar_url: q.gambar_url ?? "",
+        kunci_jawaban: q.kunci_jawaban,
+        id_mapel: q.id_mapel ?? "",
+        pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
+        fillIn: toFillInDraft(q.data_soal, q.kunci_jawaban),
+        matching: emptyMatchingDraft(),
+      });
+      setSaveError("");
+      setFilterMapel("");
+      setShowModal(true);
+      return;
+    }
     if (q.tipe === "TRUE_FALSE") {
       setForm({
         tipe: q.tipe,
@@ -287,6 +361,8 @@ export default function QuestionBankPage() {
         kunci_jawaban: q.kunci_jawaban,
         id_mapel: q.id_mapel ?? "",
         pernyataan: toTrueFalseDraft(q.data_soal, q.kunci_jawaban),
+        fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
+        matching: emptyMatchingDraft(),
       });
       setSaveError("");
       setFilterMapel("");
@@ -307,6 +383,8 @@ export default function QuestionBankPage() {
       kunci_jawaban: q.kunci_jawaban ?? "",
       id_mapel: q.id_mapel ?? "",
       pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
+      fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
+      matching: emptyMatchingDraft(),
     });
     setSaveError("");
     setFilterMapel("");
@@ -314,7 +392,7 @@ export default function QuestionBankPage() {
   };
 
   const handleToggleKey = (letter: string) => {
-    if (form.tipe === "TRUE_FALSE") return;
+    if (!usesLegacyOptions(form.tipe)) return;
     if (form.tipe === "SINGLE") {
       setForm((p) => ({ ...p, kunci_jawaban: letter }));
     } else {
@@ -338,6 +416,12 @@ export default function QuestionBankPage() {
     if (form.tipe === "TRUE_FALSE") {
       const invalid = validateTrueFalseDraft(form.pernyataan);
       if (invalid) { setSaveError(invalid); return; }
+    } else if (form.tipe === "FILL_IN") {
+      const invalid = validateFillInDraft(form.fillIn);
+      if (invalid) { setSaveError(invalid); return; }
+    } else if (form.tipe === "MATCHING") {
+      const invalid = validateMatchingDraft(form.matching);
+      if (invalid) { setSaveError(invalid); return; }
     } else {
       if (!form.opsi_a || !form.opsi_b || !form.opsi_c || !form.opsi_d) { setSaveError("Opsi A–D harus diisi."); return; }
       if (!form.kunci_jawaban) { setSaveError("Pilih kunci jawaban."); return; }
@@ -345,6 +429,8 @@ export default function QuestionBankPage() {
 
     setIsSaving(true); setSaveError("");
     const trueFalse = form.tipe === "TRUE_FALSE" ? serializeTrueFalseDraft(form.pernyataan) : null;
+    const fillIn = form.tipe === "FILL_IN" ? serializeFillInDraft(form.fillIn) : null;
+    const matching = form.tipe === "MATCHING" ? serializeMatchingDraft(form.matching) : null;
     const commonPayload = {
       kategori: form.kategori || null,
       bobot: form.bobot,
@@ -358,6 +444,16 @@ export default function QuestionBankPage() {
       tipe: "TRUE_FALSE" as const,
       kunci_jawaban: trueFalse!.kunci_jawaban,
       data_soal: trueFalse!.data_soal,
+    } : form.tipe === "MATCHING" ? {
+      ...commonPayload,
+      tipe: "MATCHING" as const,
+      kunci_jawaban: matching!.kunci_jawaban,
+      data_soal: matching!.data_soal,
+    } : form.tipe === "FILL_IN" ? {
+      ...commonPayload,
+      tipe: "FILL_IN" as const,
+      kunci_jawaban: fillIn!.kunci_jawaban,
+      data_soal: fillIn!.data_soal,
     } : {
       ...commonPayload,
       tipe: form.tipe,
@@ -786,7 +882,7 @@ export default function QuestionBankPage() {
                 ) : (
                   visible.map((q, idx) => {
                     const cleanPertanyaan = q.pertanyaan.replace(/<[^>]*>/g, "");
-                    const isE = q.tipe !== "TRUE_FALSE" && !!q.opsi_e;
+                    const isE = hasLegacyOptions(q) && !!q.opsi_e;
                     const idCode = `#SOAL-${q.nomor_urut < 10 ? '0' : ''}${q.nomor_urut}`;
                     const mapelObj = mapelList.find(m => m.id_mapel === q.id_mapel);
 
@@ -829,7 +925,11 @@ export default function QuestionBankPage() {
                           <div className="font-bold text-slate-800 text-xs mb-1">
                             {q.tipe === "TRUE_FALSE"
                               ? `TRUE/FALSE (${q.data_soal.pernyataan.length} Pernyataan)`
-                              : `PG (${isE ? "5 Opsi" : "4 Opsi"})`}
+                              : q.tipe === "FILL_IN"
+                                ? "ISIAN SINGKAT"
+                                : q.tipe === "MATCHING"
+                                  ? `MENJODOHKAN (${q.data_soal.kiri.length} Pasangan)`
+                                  : `PG (${isE ? "5 Opsi" : "4 Opsi"})`}
                           </div>
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase border border-emerald-200">
                             <span className="material-symbols-outlined text-[12px]">check_circle</span>
@@ -1099,6 +1199,8 @@ export default function QuestionBankPage() {
                         <option value="SINGLE">1. Pilihan Ganda</option>
                         <option value="COMPLEX">2. Pilihan Kompleks</option>
                         <option value="TRUE_FALSE">3. Benar / Salah</option>
+                        <option value="FILL_IN">4. Isian Singkat</option>
+                        <option value="MATCHING">5. Menjodohkan</option>
                       </select>
                       <span className="material-symbols-outlined pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">unfold_more</span>
                     </div>
@@ -1267,7 +1369,206 @@ export default function QuestionBankPage() {
                 )}
               </div>
 
-              {form.tipe === "TRUE_FALSE" ? (
+              {form.tipe === "MATCHING" ? (
+                <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {(["kiri", "kanan"] as const).map((side) => (
+                      <div key={side} className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                            <span className="material-symbols-outlined text-emerald-600 text-base">
+                              {side === "kiri" ? "format_list_numbered" : "format_list_bulleted"}
+                            </span>
+                            Kolom {side} <span className="text-red-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setForm((p) => ({
+                              ...p,
+                              matching: {
+                                ...p.matching,
+                                [side]: [...p.matching[side], { id: nextMatchingId(p.matching[side], side), teks: "" }],
+                              },
+                            }))}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                          >
+                            + Tambah
+                          </button>
+                        </div>
+                        {form.matching[side].map((item) => (
+                          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2 shadow-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center text-xs font-bold">
+                                {item.id}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={form.matching[side].length === 1}
+                                onClick={() => setForm((p) => {
+                                  const items = p.matching[side].filter((entry) => entry.id !== item.id);
+                                  // Pasangan yang menunjuk item terhapus ikut dibuang supaya
+                                  // kunci tidak pernah menunjuk ID yang sudah tidak ada.
+                                  const pasangan: Record<string, string> = {};
+                                  for (const [leftId, rightId] of Object.entries(p.matching.pasangan)) {
+                                    if (side === "kiri" && leftId === item.id) continue;
+                                    if (side === "kanan" && rightId === item.id) continue;
+                                    pasangan[leftId] = rightId;
+                                  }
+                                  return { ...p, matching: { ...p.matching, [side]: items, pasangan } };
+                                })}
+                                className="text-xs font-bold text-red-600 disabled:text-slate-300 cursor-pointer disabled:cursor-not-allowed"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                            <RichEditor
+                              value={item.teks}
+                              compact
+                              onChange={(value) => setForm((p) => ({
+                                ...p,
+                                matching: {
+                                  ...p.matching,
+                                  [side]: p.matching[side].map((entry) => entry.id === item.id
+                                    ? { ...entry, teks: value }
+                                    : entry),
+                                },
+                              }))}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2.5 pt-1">
+                    <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">link</span>
+                      Pasangan Jawaban <span className="text-red-500">*</span>
+                    </label>
+                    {form.matching.kiri.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2.5">
+                        <span
+                          className="flex-1 min-w-0 truncate text-xs font-semibold text-slate-700 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                          title={item.teks.replace(/<[^>]*>/g, "")}
+                        >
+                          {item.id}. {item.teks.replace(/<[^>]*>/g, "") || "(kosong)"}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-lg">arrow_forward</span>
+                        <select
+                          value={form.matching.pasangan[item.id] ?? ""}
+                          onChange={(e) => setForm((p) => ({
+                            ...p,
+                            matching: {
+                              ...p.matching,
+                              pasangan: { ...p.matching.pasangan, [item.id]: e.target.value },
+                            },
+                          }))}
+                          className="w-40 shrink-0 h-11 border border-slate-300 rounded-xl px-3 text-xs font-semibold text-slate-800 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 outline-none cursor-pointer shadow-sm"
+                        >
+                          <option value="">Pilih pasangan</option>
+                          {form.matching.kanan.map((right) => (
+                            <option key={right.id} value={right.id}>
+                              {right.id}. {right.teks.replace(/<[^>]*>/g, "").slice(0, 30)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Pasangan disimpan memakai ID item, jadi mengubah teks tidak merusak kunci.
+                    </p>
+                  </div>
+                </div>
+              ) : form.tipe === "FILL_IN" ? (
+                <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    <span className="material-symbols-outlined text-emerald-600 text-base">edit_note</span>
+                    Petunjuk Pengisian <span className="text-red-500">*</span>
+                  </label>
+                  <RichEditor
+                    value={form.fillIn.petunjuk}
+                    compact
+                    onChange={(value) => setForm((p) => ({ ...p, fillIn: { ...p.fillIn, petunjuk: value } }))}
+                  />
+
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">checklist</span>
+                      Jawaban Diterima <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({
+                        ...p,
+                        fillIn: { ...p.fillIn, acceptedAnswers: [...p.fillIn.acceptedAnswers, ""] },
+                      }))}
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                    >
+                      + Tambah Jawaban
+                    </button>
+                  </div>
+                  <div className="space-y-2.5">
+                    {form.fillIn.acceptedAnswers.map((value, index) => (
+                      <div key={index} className="flex items-center gap-2.5">
+                        <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center text-xs font-bold shrink-0">
+                          {index + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => setForm((p) => ({
+                            ...p,
+                            fillIn: {
+                              ...p.fillIn,
+                              acceptedAnswers: p.fillIn.acceptedAnswers.map((item, i) => i === index ? e.target.value : item),
+                            },
+                          }))}
+                          placeholder="Contoh: Jakarta"
+                          className="flex-1 h-11 border border-slate-300 rounded-xl px-3 text-xs font-semibold text-slate-800 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 outline-none shadow-sm"
+                        />
+                        <button
+                          type="button"
+                          disabled={form.fillIn.acceptedAnswers.length === 1}
+                          onClick={() => setForm((p) => ({
+                            ...p,
+                            fillIn: {
+                              ...p.fillIn,
+                              acceptedAnswers: p.fillIn.acceptedAnswers.filter((_, i) => i !== index),
+                            },
+                          }))}
+                          className="text-xs font-bold text-red-600 disabled:text-slate-300 cursor-pointer disabled:cursor-not-allowed px-2"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.fillIn.trim}
+                        onChange={(e) => setForm((p) => ({ ...p, fillIn: { ...p.fillIn, trim: e.target.checked } }))}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-xs font-semibold text-slate-700">Abaikan spasi di awal/akhir</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.fillIn.caseSensitive}
+                        onChange={(e) => setForm((p) => ({ ...p, fillIn: { ...p.fillIn, caseSensitive: e.target.checked } }))}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-xs font-semibold text-slate-700">Bedakan huruf besar/kecil</span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Jawaban siswa dinilai persis sama dengan salah satu jawaban di atas setelah aturan di atas diterapkan.
+                  </p>
+                </div>
+              ) : form.tipe === "TRUE_FALSE" ? (
                 <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -1438,10 +1739,12 @@ export default function QuestionBankPage() {
         const trueFalseStatements = pq.tipe === "TRUE_FALSE"
           ? toTrueFalseDraft(pq.data_soal, pq.kunci_jawaban)
           : [];
+        const fillInDraft = pq.tipe === "FILL_IN" ? toFillInDraft(pq.data_soal, pq.kunci_jawaban) : null;
+        const matchingDraft = pq.tipe === "MATCHING" ? toMatchingDraft(pq.data_soal, pq.kunci_jawaban) : null;
         const kunciArr = pq.tipe === "COMPLEX"
           ? kunci.split(",").map((k) => k.trim().toUpperCase())
           : [kunci.toUpperCase()];
-        const opts: [string, string][] = pq.tipe === "TRUE_FALSE" ? [] : [
+        const opts: [string, string][] = !hasLegacyOptions(pq) ? [] : [
           ["A", pq.opsi_a], ["B", pq.opsi_b], ["C", pq.opsi_c], ["D", pq.opsi_d],
           ...(pq.opsi_e ? [["E", pq.opsi_e] as [string, string]] : []),
         ];
@@ -1499,7 +1802,63 @@ export default function QuestionBankPage() {
 
                 {/* Options / TRUE_FALSE statements */}
                 <div className="space-y-2.5">
-                  {pq.tipe === "TRUE_FALSE" ? trueFalseStatements.map((statement, index) => (
+                  {matchingDraft ? (
+                    <div className="space-y-2.5">
+                      {matchingDraft.kiri.map((item) => {
+                        const target = matchingDraft.kanan.find((right) => right.id === matchingDraft.pasangan[item.id]);
+                        return (
+                          <div key={item.id} className="flex items-center gap-2.5 p-3 rounded-2xl border border-slate-200 bg-white">
+                            <span className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 bg-slate-100 text-slate-700 border border-slate-200">
+                              {item.id}
+                            </span>
+                            <span
+                              className="text-sm leading-relaxed grow min-w-0 font-medium text-slate-800"
+                              dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(item.teks) }}
+                            />
+                            <span className="material-symbols-outlined text-slate-400 text-lg shrink-0">arrow_forward</span>
+                            <span className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold max-w-[40%] truncate">
+                              {target ? `${target.id}. ${target.teks.replace(/<[^>]*>/g, "")}` : "Belum dipasangkan"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="p-3 rounded-2xl border border-slate-200 bg-slate-50">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Pilihan kanan</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {matchingDraft.kanan.map((right) => (
+                            <span key={right.id} className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold">
+                              {right.id}. {right.teks.replace(/<[^>]*>/g, "")}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : fillInDraft ? (
+                    <div className="space-y-3">
+                      <div
+                        className="text-sm leading-relaxed text-slate-700 font-medium p-3.5 rounded-2xl border border-slate-200 bg-white"
+                        dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(fillInDraft.petunjuk) }}
+                      />
+                      <div className="h-11 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center px-3 text-xs font-semibold text-slate-400">
+                        Kolom isian jawaban siswa
+                      </div>
+                      <div className="p-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/80 space-y-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Jawaban diterima</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {fillInDraft.acceptedAnswers.map((value, index) => (
+                            <span key={index} className="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-emerald-900 text-xs font-semibold">
+                              {value}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-emerald-800 font-medium">
+                          {fillInDraft.trim ? "Spasi awal/akhir diabaikan" : "Spasi awal/akhir diperhitungkan"}
+                          {" · "}
+                          {fillInDraft.caseSensitive ? "Huruf besar/kecil dibedakan" : "Huruf besar/kecil diabaikan"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : pq.tipe === "TRUE_FALSE" ? trueFalseStatements.map((statement, index) => (
                     <div key={statement.id} className="flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-white">
                       <span className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 bg-slate-100 text-slate-700 border border-slate-200">
                         {index + 1}
@@ -1540,7 +1899,7 @@ export default function QuestionBankPage() {
                   })}
                 </div>
 
-                {pq.tipe !== "TRUE_FALSE" && pq.kunci_jawaban && (
+                {hasLegacyOptions(pq) && pq.kunci_jawaban && (
                   <div className="p-3 bg-emerald-100/60 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold flex items-center gap-2">
                     <span className="material-symbols-outlined text-emerald-600 text-base">verified</span>
                     <span>Kunci Jawaban: {pq.kunci_jawaban}</span>

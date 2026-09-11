@@ -107,7 +107,9 @@ const QUESTION_STATUS_ARCHIVED = "ARSIP";
 // Seluruh tipe yang dikenal model canonical (lihat question-contract.json).
 const CANONICAL_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];
 // Tipe yang benar-benar didukung end-to-end. Sisanya ditolak sampai dikerjakan.
-const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE"];
+const VALID_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];
+// Tipe yang kuncinya berupa objek JSON pada kolom 11, bukan string "A"/"A,C".
+const STRUCTURED_KEY_TYPES = ["TRUE_FALSE", "MATCHING", "FILL_IN"];
 const OPTION_LETTERS = ["A", "B", "C", "D", "E"];
 const QUESTION_ALLOWED_FIELDS = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
@@ -185,6 +187,21 @@ function parseAnswerKeys(rawKey) {
   return keys;
 }
 
+// Field yang boleh ada pada kunci FILL_IN. accepted_answers wajib; dua sisanya opsional.
+const FILL_IN_KEY_FIELDS = ["accepted_answers", "case_sensitive", "trim"];
+
+// Normalisasi FILL_IN — satu-satunya tempat aturan ini hidup, dipakai validator
+// maupun scorer. Hanya trim dan case folding sesuai flag; perbandingan tetap
+// exact. Tidak ada fuzzy matching, stemming, koreksi typo, atau sinonim.
+// Default: trim aktif, case-insensitive.
+function normalizeFillInValue(value, key) {
+  if (typeof value !== "string") return null;
+  const trimEnabled = !key || key.trim !== false;
+  const caseSensitive = !!(key && key.case_sensitive === true);
+  const normalized = trimEnabled ? value.trim() : value;
+  return caseSensitive ? normalized : normalized.toLowerCase();
+}
+
 // Validasi opsi A–E dan kunci untuk tipe berbasis pilihan (SINGLE/COMPLEX).
 // minKeys/maxKeys yang membedakan keduanya; sisanya identik.
 function validateChoiceQuestion(data, minKeys, maxKeys, keyCountMessage) {
@@ -203,6 +220,31 @@ function validateChoiceQuestion(data, minKeys, maxKeys, keyCountMessage) {
     if (available.indexOf(keys[k]) === -1) {
       return "Kunci jawaban " + keys[k] + " menunjuk opsi yang tidak tersedia";
     }
+  }
+  return null;
+}
+
+// Validasi satu daftar item bernomor {id, teks} — bentuk yang sama dipakai
+// pernyataan TRUE_FALSE maupun kolom kiri/kanan MATCHING. Mengembalikan pesan
+// error, atau null plus daftar id yang sah lewat `outIds`.
+// `noun` masuk ke pesan supaya teks error tetap spesifik per tipe.
+function validateQuestionItemList(items, noun, outIds) {
+  if (!Array.isArray(items) || items.length === 0) return "Minimal satu " + noun;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!isPlainQuestionObject(item) ||
+        Object.keys(item).some(function (field) { return field !== "id" && field !== "teks"; })) {
+      return "Struktur " + noun + " tidak valid";
+    }
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    const text = typeof item.teks === "string"
+      ? item.teks.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()
+      : "";
+    if (!id) return "Setiap " + noun + " wajib memiliki id";
+    if (!text) return "Setiap " + noun + " wajib memiliki teks";
+    if (outIds[id]) return "ID " + noun + " harus unik";
+    outIds[id] = true;
   }
   return null;
 }
@@ -228,21 +270,8 @@ const QUESTION_TYPE_VALIDATORS = {
     if (statements.length === 0) return "TRUE_FALSE minimal memiliki satu pernyataan";
 
     const ids = Object.create(null);
-    for (let i = 0; i < statements.length; i++) {
-      const statement = statements[i];
-      if (!isPlainQuestionObject(statement) ||
-          Object.keys(statement).some(function (field) { return field !== "id" && field !== "teks"; })) {
-        return "Struktur pernyataan TRUE_FALSE tidak valid";
-      }
-      const id = typeof statement.id === "string" ? statement.id.trim() : "";
-      const text = typeof statement.teks === "string"
-        ? statement.teks.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()
-        : "";
-      if (!id) return "Setiap pernyataan TRUE_FALSE wajib memiliki id";
-      if (!text) return "Setiap pernyataan TRUE_FALSE wajib memiliki teks";
-      if (ids[id]) return "ID pernyataan TRUE_FALSE harus unik";
-      ids[id] = true;
-    }
+    const itemError = validateQuestionItemList(statements, "pernyataan TRUE_FALSE", ids);
+    if (itemError) return itemError;
 
     const key = parseScoringObject(data.kunci_jawaban);
     if (!key) return "Kunci jawaban TRUE_FALSE harus berupa objek";
@@ -253,6 +282,82 @@ const QUESTION_TYPE_VALIDATORS = {
       if (key[keyIds[i]] !== "BENAR" && key[keyIds[i]] !== "SALAH") {
         return "Kunci TRUE_FALSE hanya boleh BENAR atau SALAH";
       }
+    }
+    return null;
+  },
+  MATCHING: function (data) {
+    if (!isPlainQuestionObject(data.data_soal) ||
+        !Array.isArray(data.data_soal.kiri) || !Array.isArray(data.data_soal.kanan)) {
+      return "MATCHING wajib memiliki daftar kiri dan kanan";
+    }
+    if (Object.keys(data.data_soal).some(function (field) {
+      return field !== "kiri" && field !== "kanan";
+    })) {
+      return "data_soal MATCHING hanya boleh memuat kiri dan kanan";
+    }
+
+    // ID kiri dan kanan hidup di ruang nama terpisah: "A" boleh ada di keduanya.
+    const leftIds = Object.create(null);
+    const leftError = validateQuestionItemList(data.data_soal.kiri, "item kiri MATCHING", leftIds);
+    if (leftError) return leftError;
+    const rightIds = Object.create(null);
+    const rightError = validateQuestionItemList(data.data_soal.kanan, "item kanan MATCHING", rightIds);
+    if (rightError) return rightError;
+
+    // Kunci adalah pemetaan id kiri → id kanan. Persis satu pasangan untuk setiap
+    // item kiri; tidak boleh ada pasangan yatim atau tujuan yang tidak ada.
+    const key = parseScoringObject(data.kunci_jawaban);
+    if (!key) return "Kunci jawaban MATCHING harus berupa objek";
+    const keyIds = Object.keys(key);
+    if (keyIds.length !== Object.keys(leftIds).length) {
+      return "Kunci MATCHING harus memasangkan seluruh item kiri";
+    }
+    for (let i = 0; i < keyIds.length; i++) {
+      if (!leftIds[keyIds[i]]) return "Kunci MATCHING menunjuk item kiri yang tidak ada";
+      const target = key[keyIds[i]];
+      if (typeof target !== "string" || !rightIds[target]) {
+        return "Pasangan MATCHING menunjuk item kanan yang tidak ada";
+      }
+    }
+    return null;
+  },
+  FILL_IN: function (data) {
+    if (!isPlainQuestionObject(data.data_soal)) return "FILL_IN wajib memiliki petunjuk";
+    if (Object.keys(data.data_soal).some(function (field) { return field !== "petunjuk"; })) {
+      return "data_soal FILL_IN hanya boleh memuat petunjuk";
+    }
+    const petunjuk = typeof data.data_soal.petunjuk === "string"
+      ? data.data_soal.petunjuk.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()
+      : "";
+    if (!petunjuk) return "Petunjuk FILL_IN wajib diisi";
+
+    const key = parseScoringObject(data.kunci_jawaban);
+    if (!key) return "Kunci jawaban FILL_IN harus berupa objek";
+    if (Object.keys(key).some(function (field) {
+      return FILL_IN_KEY_FIELDS.indexOf(field) === -1;
+    })) {
+      return "Kunci FILL_IN hanya boleh memuat accepted_answers, case_sensitive, dan trim";
+    }
+    if (key.case_sensitive !== undefined && typeof key.case_sensitive !== "boolean") {
+      return "Flag case_sensitive FILL_IN harus boolean";
+    }
+    if (key.trim !== undefined && typeof key.trim !== "boolean") {
+      return "Flag trim FILL_IN harus boolean";
+    }
+    if (!Array.isArray(key.accepted_answers) || key.accepted_answers.length === 0) {
+      return "FILL_IN minimal memiliki satu accepted answer";
+    }
+
+    // Duplikat ditolak alih-alih di-dedupe diam-diam: guru melihat kesalahannya,
+    // dan makna scoring tidak berubah tanpa sepengetahuannya.
+    const seen = Object.create(null);
+    for (let i = 0; i < key.accepted_answers.length; i++) {
+      const value = key.accepted_answers[i];
+      if (typeof value !== "string") return "Accepted answer FILL_IN harus berupa teks";
+      const normalized = normalizeFillInValue(value, key);
+      if (normalized === "") return "Accepted answer FILL_IN tidak boleh kosong";
+      if (seen[normalized]) return "Accepted answer FILL_IN tidak boleh duplikat";
+      seen[normalized] = true;
     }
     return null;
   },
@@ -394,7 +499,9 @@ function ensureQuestionColumns(sheet) {
 
 function questionRowValues(id_soal, data, statusValue, originId) {
   const tipe = String(data.tipe).toUpperCase();
-  const structuredKey = tipe === "TRUE_FALSE" ? parseScoringObject(data.kunci_jawaban) : null;
+  const structuredKey = STRUCTURED_KEY_TYPES.indexOf(tipe) !== -1
+    ? parseScoringObject(data.kunci_jawaban)
+    : null;
   return [
     id_soal,
     data.nomor_urut,
@@ -406,7 +513,7 @@ function questionRowValues(id_soal, data, statusValue, originId) {
     data.opsi_c,
     data.opsi_d,
     data.opsi_e || "",
-    tipe === "TRUE_FALSE" && structuredKey ? stableStringify(structuredKey) : parseAnswerKeys(data.kunci_jawaban).join(","),
+    structuredKey ? stableStringify(structuredKey) : parseAnswerKeys(data.kunci_jawaban).join(","),
     Number(data.bobot),
     data.kategori || "",
     String(data.id_mapel || "").trim(),
@@ -983,21 +1090,20 @@ function scoreMatching(question, answer) {
   return question.bobot * correct / leftIds.length;
 }
 
+// FILL_IN: full atau nol, tidak ada partial. Kunci atau jawaban rusak bernilai 0,
+// bukan error.
 function scoreFillIn(question, answer) {
   const key = parseScoringObject(question.kunci_jawaban);
   if (!key || !Array.isArray(key.accepted_answers) || typeof answer !== "string") return 0;
 
-  const trim = key.trim !== false;
-  const caseSensitive = key.case_sensitive === true;
-  const normalize = function(value) {
-    let normalized = trim ? value.trim() : value;
-    if (!caseSensitive) normalized = normalized.toLowerCase();
-    return normalized;
-  };
-  const submitted = normalize(answer);
+  const submitted = normalizeFillInValue(answer, key);
+  // Jawaban yang menjadi kosong setelah normalisasi (mis. spasi saja) tidak pernah benar.
+  if (submitted === "") return 0;
+
   for (let i = 0; i < key.accepted_answers.length; i++) {
     const accepted = key.accepted_answers[i];
-    if (typeof accepted === "string" && normalize(accepted) === submitted) return question.bobot;
+    if (typeof accepted !== "string") continue;
+    if (normalizeFillInValue(accepted, key) === submitted) return question.bobot;
   }
   return 0;
 }

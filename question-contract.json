@@ -2,7 +2,7 @@
   "_comment": "Kontrak Question yang dipakai bersama TypeScript (Next.js) dan Google Apps Script. GAS tidak dapat mengimpor TypeScript, jadi berkas ini adalah satu-satunya definisi bersama; kedua sisi punya test yang membandingkan konstanta mereka dengan berkas ini. Ubah berkas ini hanya bersamaan dengan kedua sisi.",
 
   "types_canonical": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
-  "types_implemented": ["SINGLE", "COMPLEX", "TRUE_FALSE"],
+  "types_implemented": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
 
   "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini. data_soal disimpan pada Questions kolom 17 sebagai JSON string.",
   "write_fields": [

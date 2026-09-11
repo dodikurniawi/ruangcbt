@@ -131,16 +131,44 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function hasCompleteTrueFalseStructure(value: unknown): boolean {
-  if (!isPlainObject(value) || !Array.isArray(value.pernyataan)) return false;
-  if (Object.keys(value).some((field) => field !== "pernyataan")) return false;
-  return value.pernyataan.every((item) =>
+/** Daftar {id, teks} yang utuh — bentuk yang sama dipakai TRUE_FALSE dan MATCHING. */
+function isCompleteItemList(value: unknown): boolean {
+  return Array.isArray(value) && value.every((item) =>
     isPlainObject(item) &&
     Object.keys(item).every((field) => field === "id" || field === "teks") &&
     typeof item.id === "string" && item.id.trim() !== "" &&
     typeof item.teks === "string"
   );
 }
+
+function hasCompleteTrueFalseStructure(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  if (Object.keys(value).some((field) => field !== "pernyataan")) return false;
+  return isCompleteItemList(value.pernyataan);
+}
+
+function hasCompleteMatchingStructure(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  if (Object.keys(value).some((field) => field !== "kiri" && field !== "kanan")) return false;
+  return isCompleteItemList(value.kiri) && isCompleteItemList(value.kanan);
+}
+
+function hasCompleteFillInStructure(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  if (Object.keys(value).some((field) => field !== "petunjuk")) return false;
+  return typeof value.petunjuk === "string";
+}
+
+/**
+ * Tipe production-active yang payload rusaknya TIDAK boleh diperbaiki diam-diam
+ * menjadi subset valid — data_soal dibuang seluruhnya agar validator GAS menolak
+ * request, bukan menyimpan separuh soal.
+ */
+const COMPLETE_STRUCTURE_GUARDS: Readonly<Record<string, (value: unknown) => boolean>> = Object.freeze({
+  TRUE_FALSE: hasCompleteTrueFalseStructure,
+  MATCHING: hasCompleteMatchingStructure,
+  FILL_IN: hasCompleteFillInStructure,
+});
 
 /**
  * Normalisasi satu daftar item bernomor: hanya `id` dan `teks` yang bertahan,
@@ -202,11 +230,9 @@ export function sanitizeQuestionPayload(data: Record<string, unknown>): Record<s
 
   if ("data_soal" in clean) {
     const sanitized = sanitizeDataSoal(clean.tipe, clean.data_soal);
-    // TRUE_FALSE sudah production-active: jangan mengubah payload rusak menjadi
-    // subset valid. Hapus seluruh struktur agar validator GAS menolak request.
-    if (clean.tipe === "TRUE_FALSE" && !hasCompleteTrueFalseStructure(clean.data_soal)) {
-      delete clean.data_soal;
-    } else if (sanitized === undefined) delete clean.data_soal;
+    const guard = typeof clean.tipe === "string" ? COMPLETE_STRUCTURE_GUARDS[clean.tipe] : undefined;
+    if (guard && !guard(clean.data_soal)) delete clean.data_soal;
+    else if (sanitized === undefined) delete clean.data_soal;
     else clean.data_soal = sanitized;
   }
 
