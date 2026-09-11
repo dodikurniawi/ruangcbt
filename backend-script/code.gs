@@ -850,6 +850,170 @@ function handleSyncAnswers(params) {
   }
 }
 
+// ===== TYPE-AWARE SCORING =====
+// Semua scorer menerima soal canonical + jawaban yang tidak dipercaya. Kunci
+// selalu berasal dari row Questions di server; scorer tidak membaca nilai dari
+// payload lain dan gagal tertutup (0 poin) untuk bentuk yang rusak.
+function scoringWeight(rawWeight) {
+  if (rawWeight === undefined || rawWeight === null ||
+      (typeof rawWeight === "string" && rawWeight.trim() === "")) return 1;
+  const weight = Number(rawWeight);
+  return isFinite(weight) && weight > 0 ? weight : 0;
+}
+
+function parseScoringObject(value) {
+  if (isPlainQuestionObject(value)) return value;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return isPlainQuestionObject(parsed) ? parsed : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function validScoringIds(items) {
+  if (!Array.isArray(items)) return [];
+  const ids = [];
+  const seen = Object.create(null);
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const id = isPlainQuestionObject(item) && typeof item.id === "string"
+      ? item.id.trim()
+      : "";
+    if (id === "" || seen[id]) continue;
+    seen[id] = true;
+    ids.push(id);
+  }
+  return ids;
+}
+
+function scoreSingle(question, answer) {
+  return answer === question.kunci_jawaban ? question.bobot : 0;
+}
+
+function scoreComplex(question, answer) {
+  const key = String(question.kunci_jawaban).split(",").map(function(value) {
+    return value.trim();
+  }).sort();
+  const submitted = (Array.isArray(answer) ? answer.slice() : String(answer).split(",").map(function(value) {
+    return value.trim();
+  })).sort();
+  return JSON.stringify(key) === JSON.stringify(submitted) ? question.bobot : 0;
+}
+
+function scoreTrueFalse(question, answer) {
+  const data = isPlainQuestionObject(question.data_soal) ? question.data_soal : {};
+  const ids = validScoringIds(data.pernyataan);
+  const key = parseScoringObject(question.kunci_jawaban);
+  const submitted = isPlainQuestionObject(answer) ? answer : null;
+  if (ids.length === 0 || !key || !submitted) return 0;
+
+  let correct = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const expected = key[ids[i]];
+    if ((expected === "BENAR" || expected === "SALAH") && submitted[ids[i]] === expected) correct++;
+  }
+  return question.bobot * correct / ids.length;
+}
+
+function scoreMatching(question, answer) {
+  const data = isPlainQuestionObject(question.data_soal) ? question.data_soal : {};
+  const leftIds = validScoringIds(data.kiri);
+  const rightIds = validScoringIds(data.kanan);
+  const validRight = Object.create(null);
+  for (let i = 0; i < rightIds.length; i++) validRight[rightIds[i]] = true;
+
+  const key = parseScoringObject(question.kunci_jawaban);
+  const submitted = isPlainQuestionObject(answer) ? answer : null;
+  if (leftIds.length === 0 || !key || !submitted) return 0;
+
+  let correct = 0;
+  for (let i = 0; i < leftIds.length; i++) {
+    const expected = key[leftIds[i]];
+    if (typeof expected === "string" && validRight[expected] && submitted[leftIds[i]] === expected) correct++;
+  }
+  return question.bobot * correct / leftIds.length;
+}
+
+function scoreFillIn(question, answer) {
+  const key = parseScoringObject(question.kunci_jawaban);
+  if (!key || !Array.isArray(key.accepted_answers) || typeof answer !== "string") return 0;
+
+  const trim = key.trim !== false;
+  const caseSensitive = key.case_sensitive === true;
+  const normalize = function(value) {
+    let normalized = trim ? value.trim() : value;
+    if (!caseSensitive) normalized = normalized.toLowerCase();
+    return normalized;
+  };
+  const submitted = normalize(answer);
+  for (let i = 0; i < key.accepted_answers.length; i++) {
+    const accepted = key.accepted_answers[i];
+    if (typeof accepted === "string" && normalize(accepted) === submitted) return question.bobot;
+  }
+  return 0;
+}
+
+const QUESTION_SCORERS = {
+  SINGLE: scoreSingle,
+  COMPLEX: scoreComplex,
+  TRUE_FALSE: scoreTrueFalse,
+  MATCHING: scoreMatching,
+  FILL_IN: scoreFillIn,
+};
+
+function scoreQuestion(question, answer) {
+  const weight = scoringWeight(question && question.bobot);
+  if (weight === 0 || !isAnswerFilled(answer)) return 0;
+
+  const tipe = String(question && question.tipe || "");
+  const scorer = QUESTION_SCORERS[tipe];
+  if (!scorer) {
+    console.warn("Tipe soal tidak memiliki scorer: " + tipe);
+    return 0;
+  }
+
+  const canonical = Object.assign({}, question, { bobot: weight });
+  const score = Number(scorer(canonical, answer));
+  if (!isFinite(score) || score <= 0) return 0;
+  return Math.min(score, weight);
+}
+
+function scoringQuestionFromRow(row) {
+  return {
+    id_soal: row[0],
+    tipe: row[2],
+    kunci_jawaban: row[10],
+    bobot: scoringWeight(row[11]),
+    id_mapel: row[13] || null,
+    data_soal: parseDataSoalCell(row[16]),
+  };
+}
+
+function scoreExam(questionRows, answers, examMapel) {
+  const submitted = isPlainQuestionObject(answers) ? answers : {};
+  let totalScore = 0;
+  let maxScore = 0;
+
+  for (let i = 1; i < questionRows.length; i++) {
+    const row = questionRows[i];
+    if (!row || !row[0] || isQuestionArchived(row)) continue;
+
+    const question = scoringQuestionFromRow(row);
+    if (examMapel && question.id_mapel !== examMapel) continue;
+
+    maxScore += question.bobot;
+    totalScore += scoreQuestion(question, submitted[question.id_soal]);
+  }
+
+  return {
+    totalScore: totalScore,
+    maxScore: maxScore,
+    finalScore: maxScore > 0 ? totalScore / maxScore * 100 : 0,
+  };
+}
+
 function handleSubmitExam(params) {
   // Lock dipegang selama seluruh submit agar autosave (yang juga mengunci) tidak
   // berselang-seling, dan agar dua submit bersamaan tidak sama-sama lolos penjaga.
@@ -908,43 +1072,9 @@ function submitExamLocked(params) {
 
   const qSheet = getSheet("Questions");
   const questions = qSheet.getDataRange().getValues();
-
-  let totalScore = 0, maxScore = 0;
-
-  for (let i = 1; i < questions.length; i++) {
-    const q = questions[i];
-    if (!q[0]) continue;
-
-    const id_soal = q[0];
-    const tipe = q[2];
-    const kunci = q[10];
-    const bobot = q[11] || 1;
-    const id_mapel_soal = q[13] || null;
-
-    // Hanya hitung soal yang benar-benar ditampilkan ke siswa
-    if (isQuestionArchived(q)) continue;
-    if (exam_mapel && id_mapel_soal !== exam_mapel) continue;
-
-    const jawaban = answers[id_soal];
-
-    maxScore += bobot;
-    if (!isAnswerFilled(jawaban)) continue;
-
-    if (tipe === "SINGLE") {
-      if (jawaban === kunci) totalScore += bobot;
-    } else if (tipe === "COMPLEX") {
-      const kunciArray = kunci.toString().split(",").map(function(k) { return k.trim(); }).sort();
-      const jawabanArray = Array.isArray(jawaban)
-        ? jawaban.sort()
-        : jawaban.toString().split(",").map(function(j) { return j.trim(); }).sort();
-
-      if (JSON.stringify(kunciArray) === JSON.stringify(jawabanArray)) {
-        totalScore += bobot;
-      }
-    }
-  }
-
-  const finalScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+  const submittedAnswers = isPlainQuestionObject(answers) ? answers : {};
+  const scoring = scoreExam(questions, submittedAnswers, exam_mapel);
+  const finalScore = scoring.finalScore;
 
   const uSheet = getSheet("Users");
   const users = uSheet.getDataRange().getValues();
@@ -977,7 +1107,7 @@ function submitExamLocked(params) {
   ].filter(Boolean).join(" | ");
   rSheet.appendRow([
     new Date(), id_siswa, userName, userClass,
-    JSON.stringify(answers), finalScore.toFixed(2), durasiMenit,
+    JSON.stringify(submittedAnswers), finalScore.toFixed(2), durasiMenit,
     submissionLog, "",
   ]);
 

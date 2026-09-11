@@ -1020,3 +1020,183 @@ console.log("questionBank423: data_soal kolom 17 + integritas historis PASS");
 
 
 console.log("questionBank: validasi, integritas historis, safe edit/delete PASS");
+
+// TASK 4.2.4 — type-aware scoring engine. Tipe baru hanya diuji pada engine;
+// VALID_QUESTION_TYPES tetap SINGLE/COMPLEX sampai task UI/delivery terpisah.
+function scoreFixture(tipe, kunci, bobot, dataSoal) {
+  return { tipe, kunci_jawaban: kunci, bobot, data_soal: dataSoal };
+}
+
+{
+  const gas = loadGas(baseState());
+  let cases = 0;
+  const expectScore = (question, answer, expected, message) => {
+    cases++;
+    assert.equal(gas.scoreQuestion(question, answer), expected, message);
+  };
+
+  const single = scoreFixture("SINGLE", "B", 10, null);
+  expectScore(single, "B", 10, "SINGLE benar = penuh");                         // 1
+  expectScore(single, "A", 0, "SINGLE salah = 0");                             // 2
+  expectScore(single, "", 0, "SINGLE kosong = 0");                             // 3
+
+  const complex = scoreFixture("COMPLEX", "A,C", 20, null);
+  expectScore(complex, ["A", "C"], 20, "COMPLEX exact = penuh");                // 4
+  const reversed = ["C", "A"];
+  expectScore(complex, reversed, 20, "COMPLEX tidak bergantung urutan");         // 5
+  assert.deepEqual(reversed, ["C", "A"], "scorer tidak boleh memutasi jawaban client");
+  expectScore(complex, ["A"], 0, "COMPLEX parsial tetap 0");                    // 6
+  expectScore(complex, ["A", "B"], 0, "COMPLEX salah tetap 0");                // 7
+  expectScore(complex, [], 0, "COMPLEX kosong = 0");                            // 8
+
+  const tfData = { pernyataan: [{ id: "1", teks: "P1" }, { id: "2", teks: "P2" }] };
+  const tf = scoreFixture("TRUE_FALSE", '{"1":"BENAR","2":"SALAH"}', 40, tfData);
+  expectScore(tf, { "1": "BENAR", "2": "SALAH" }, 40, "TRUE_FALSE semua benar"); // 9
+  expectScore(tf, { "1": "BENAR", "2": "BENAR" }, 20, "TRUE_FALSE parsial");     // 10
+  expectScore(tf, { "1": "SALAH", "2": "BENAR" }, 0, "TRUE_FALSE semua salah"); // 11
+  expectScore(tf, {}, 0, "TRUE_FALSE kosong");                                  // 12
+  expectScore(tf, { "1": "BENAR", "2": {} }, 20, "TRUE_FALSE bagian rusak = 0"); // 13
+  expectScore(tf, "bukan-json", 0, "TRUE_FALSE jawaban rusak tidak crash");     // 14
+  expectScore(tf, '{"1":"BENAR","2":"SALAH"}', 0,
+    "TRUE_FALSE jawaban client wajib object canonical");
+  expectScore(scoreFixture("TRUE_FALSE", "{rusak", 40, tfData), { "1": "BENAR" }, 0,
+    "TRUE_FALSE kunci rusak gagal tertutup");                                    // 15
+  expectScore(scoreFixture("TRUE_FALSE", '{"1":"YA","2":"SALAH"}', 40, tfData),
+    { "1": "YA", "2": "SALAH" }, 20, "nilai kunci TF invalid tidak diberi poin"); // 16
+
+  const matchingData = {
+    kiri: [{ id: "1", teks: "K1" }, { id: "2", teks: "K2" }],
+    kanan: [{ id: "A", teks: "R1" }, { id: "B", teks: "R2" }],
+  };
+  const matching = scoreFixture("MATCHING", '{"1":"A","2":"B"}', 40, matchingData);
+  expectScore(matching, { "1": "A", "2": "B" }, 40, "MATCHING semua benar"); // 17
+  expectScore(matching, { "1": "A", "2": "A" }, 20, "MATCHING parsial");     // 18
+  expectScore(matching, { "1": "B", "2": "A" }, 0, "MATCHING semua salah"); // 19
+  expectScore(matching, {}, 0, "MATCHING kosong");                               // 20
+  expectScore(matching, { "1": "A", "2": {} }, 20, "MATCHING bagian rusak = 0"); // 21
+  expectScore(matching, "bukan-json", 0, "MATCHING jawaban rusak tidak crash"); // 22
+  expectScore(matching, '{"1":"A","2":"B"}', 0,
+    "MATCHING jawaban client wajib object canonical");
+  expectScore(scoreFixture("MATCHING", '{"1":"Z","2":"B"}', 40, matchingData),
+    { "1": "Z", "2": "B" }, 20, "target kunci di luar kanan tidak diberi poin"); // 23
+  expectScore(scoreFixture("MATCHING", '{"1":"A"}', 40, { kiri: matchingData.kiri }),
+    { "1": "A" }, 0, "MATCHING tanpa daftar kanan = 0");                       // 24
+
+  const fill = scoreFixture("FILL_IN", '{"accepted_answers":["Jakarta","DKI Jakarta"]}', 10, null);
+  expectScore(fill, "Jakarta", 10, "FILL_IN exact");                            // 25
+  expectScore(fill, "JAKARTA", 10, "FILL_IN default case-insensitive");         // 26
+  expectScore(fill, "  Jakarta  ", 10, "FILL_IN default trim");                 // 27
+  expectScore(fill, "Bandung", 0, "FILL_IN salah");                             // 28
+  expectScore(fill, "", 0, "FILL_IN kosong");                                  // 29
+  expectScore(fill, "dki jakarta", 10, "FILL_IN banyak accepted answer");       // 30
+  expectScore(scoreFixture("FILL_IN", "{rusak", 10, null), "Jakarta", 0,
+    "FILL_IN kunci rusak gagal tertutup");                                       // 31
+  expectScore(fill, "Jakart", 0, "FILL_IN tidak fuzzy");                        // 32
+  expectScore(scoreFixture("FILL_IN", {
+    accepted_answers: ["Jakarta"], case_sensitive: true,
+  }, 10, null), "jakarta", 0, "FILL_IN case_sensitive dihormati");              // 33
+  expectScore(scoreFixture("FILL_IN", {
+    accepted_answers: ["Jakarta"], trim: false,
+  }, 10, null), " Jakarta ", 0, "FILL_IN trim=false dihormati");                 // 34
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(String(message));
+  try {
+    expectScore(scoreFixture("ESSAY", "x", 10, null), "x", 0, "tipe asing = 0"); // 35
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.some((warning) => warning.includes("ESSAY")), true,
+    "tipe asing harus tercatat");
+  expectScore(scoreFixture("SINGLE", "B", 0, null), "B", 0, "bobot nol = 0");  // 36
+  expectScore(scoreFixture("SINGLE", "B", "", null), "B", 1,
+    "bobot kosong legacy tetap default 1");                                      // 37
+
+  assert.ok(cases >= 32, `matrix scoring kurang: ${cases}`);
+}
+
+// Integrasi scoreExam: dispatch campuran, denominator, arsip, dan filter mapel.
+{
+  const gas = loadGas(baseState());
+  const rows = [
+    QUESTION_HEADER,
+    ["S", 1, "SINGLE", "", "", "", "", "", "", "", "A", 10, "", "M", "AKTIF", "", ""],
+    ["C", 2, "COMPLEX", "", "", "", "", "", "", "", "A,C", 20, "", "M", "AKTIF", "", ""],
+    ["T", 3, "TRUE_FALSE", "", "", "", "", "", "", "", '{"1":"BENAR","2":"SALAH"}', 40, "", "M", "AKTIF", "", JSON.stringify({ pernyataan: [{ id: "1" }, { id: "2" }] })],
+    ["P", 4, "MATCHING", "", "", "", "", "", "", "", '{"1":"A","2":"B"}', 40, "", "M", "AKTIF", "", JSON.stringify({ kiri: [{ id: "1" }, { id: "2" }], kanan: [{ id: "A" }, { id: "B" }] })],
+    ["F", 5, "FILL_IN", "", "", "", "", "", "", "", '{"accepted_answers":["Jakarta"]}', 10, "", "M", "AKTIF", "", ""],
+    ["OLD", 6, "SINGLE", "", "", "", "", "", "", "", "A", 100, "", "M", "ARSIP", "", ""],
+    ["OTHER", 7, "SINGLE", "", "", "", "", "", "", "", "A", 100, "", "LAIN", "AKTIF", "", ""],
+  ];
+  const result = gas.scoreExam(rows, {
+    S: "A", C: ["C", "A"], T: { "1": "BENAR", "2": "BENAR" },
+    P: { "1": "A", "2": "A" }, F: "jakarta", OLD: "A", OTHER: "A",
+  }, "M");
+  assert.equal(result.totalScore, 80);
+  assert.equal(result.maxScore, 120, "arsip dan mapel lain keluar dari denominator");
+  assert.equal(result.finalScore.toFixed(2), "66.67");
+}
+
+// Boundary submit: skor dari client diabaikan dan jawaban non-object tidak crash.
+{
+  const state = scoringState();
+  const gas = loadGas(state);
+  const result = post(gas, "submitExam", {
+    id_siswa: "S1", answers: { Q1: "A" }, score: 100,
+  });
+  assert.equal(result.score, "0.00", "server wajib menghitung dari Questions sendiri");
+  assert.equal(gas.__sheets.Users.rows[1][8], "0.00");
+
+  const malformed = post(loadGas(scoringState()), "submitExam", {
+    id_siswa: "S1", answers: null,
+  });
+  assert.equal(malformed.score, "0.00", "answers non-object gagal tertutup");
+}
+
+// Mutation guards A-D: tiap implementasi rusak harus mematahkan assertion,
+// lalu registry asli dipulihkan dan assertion yang sama wajib lulus.
+{
+  const gas = loadGas(baseState());
+  const registry = gas.__eval("QUESTION_SCORERS");
+  const tfData = { pernyataan: [{ id: "1" }, { id: "2" }] };
+  const matchingData = {
+    kiri: [{ id: "1" }, { id: "2" }], kanan: [{ id: "A" }, { id: "B" }],
+  };
+  const tf = scoreFixture("TRUE_FALSE", '{"1":"BENAR","2":"SALAH"}', 40, tfData);
+  const matching = scoreFixture("MATCHING", '{"1":"A","2":"B"}', 40, matchingData);
+  const fill = scoreFixture("FILL_IN", '{"accepted_answers":["Jakarta"]}', 10, null);
+
+  const guardMutation = (type, mutant, expectedAssertion, label) => {
+    const original = registry[type];
+    try {
+      registry[type] = mutant(original);
+      assert.throws(expectedAssertion, undefined, `${label}: test tidak mendeteksi mutasi`);
+    } finally {
+      registry[type] = original;
+    }
+    expectedAssertion();
+  };
+
+  guardMutation("TRUE_FALSE", () => registry.SINGLE,
+    () => assert.equal(gas.scoreQuestion(tf, { "1": "BENAR", "2": "SALAH" }), 40),
+    "A dispatch TRUE_FALSE ke SINGLE");
+
+  guardMutation("TRUE_FALSE", (original) => (question, answer) =>
+    original(question, answer) === question.bobot ? question.bobot : 0,
+  () => assert.equal(gas.scoreQuestion(tf, { "1": "BENAR", "2": "BENAR" }), 20),
+  "B TRUE_FALSE all-or-nothing");
+
+  guardMutation("MATCHING", (original) => (question, answer) =>
+    original(question, answer) === question.bobot ? question.bobot : 0,
+  () => assert.equal(gas.scoreQuestion(matching, { "1": "A", "2": "A" }), 20),
+  "C MATCHING all-or-nothing");
+
+  guardMutation("FILL_IN", (original) => (question, answer) => original(Object.assign({}, question, {
+    kunci_jawaban: { accepted_answers: ["Jakarta"], case_sensitive: true },
+  }), answer),
+  () => assert.equal(gas.scoreQuestion(fill, "jakarta"), 10),
+  "D FILL_IN selalu case-sensitive");
+}
+
+console.log("questionBank424: type-aware scoring 39 cases + mutations A-D PASS");
