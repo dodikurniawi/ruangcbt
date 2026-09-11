@@ -7,6 +7,7 @@ import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage, logout } from "@/lib/api";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
+import ImportWordModal from "@/components/admin/ImportWordModal";
 import {
   EMPTY_TRUE_FALSE_STATEMENT,
   nextTrueFalseStatement,
@@ -213,6 +214,7 @@ export default function QuestionBankPage() {
   };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showImportWord, setShowImportWord] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionForm>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
@@ -767,13 +769,22 @@ export default function QuestionBankPage() {
               <p className="text-xs text-slate-500 font-medium mt-0.5">Kelola bank soal ujian, kategori, dan opsi kunci jawaban</p>
             </div>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 hover:shadow-blue-600/35 transition-all cursor-pointer text-xs uppercase tracking-wider active:scale-95"
-          >
-            <span className="material-symbols-outlined text-lg">add_circle</span>
-            <span>Tambah Soal Baru</span>
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowImportWord(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 font-bold rounded-xl shadow-xs transition-all cursor-pointer text-xs uppercase tracking-wider active:scale-95"
+            >
+              <span className="material-symbols-outlined text-lg">description</span>
+              <span>Import Word</span>
+            </button>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 hover:shadow-blue-600/35 transition-all cursor-pointer text-xs uppercase tracking-wider active:scale-95"
+            >
+              <span className="material-symbols-outlined text-lg">add_circle</span>
+              <span>Tambah Soal Baru</span>
+            </button>
+          </div>
         </div>
 
         {notice && (
@@ -1959,6 +1970,21 @@ export default function QuestionBankPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImportWord && (
+        <ImportWordModal
+          mapelList={mapelList}
+          lastNomorFor={(id_mapel) => questions.reduce(
+            (max, q) => (q.id_mapel === id_mapel ? Math.max(max, Number(q.nomor_urut) || 0) : max), 0
+          )}
+          onClose={() => setShowImportWord(false)}
+          onImported={async (message) => {
+            setShowImportWord(false);
+            setNotice(message);
+            await mutate();
+          }}
+        />
       )}
     </div>
   );

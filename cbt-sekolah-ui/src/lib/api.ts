@@ -146,6 +146,21 @@ export async function deleteQuestion(id_soal: string): Promise<ApiResponse> {
     return fetchApi('deleteQuestion', 'POST', { id_soal });
 }
 
+export interface ImportQuestionsResult {
+    added: number;
+    rejected: { nomor_urut?: number; message: string }[];
+}
+
+/**
+ * Import banyak soal sekaligus (hasil baca dokumen Word). Melewati sanitizer proxy
+ * dan validator GAS yang sama dengan entri manual — tidak ada jalur pintas.
+ */
+export async function importQuestions(
+    questions: (Partial<QuestionWritePayload> & { kunci_jawaban: string })[]
+): Promise<ApiResponse<ImportQuestionsResult>> {
+    return fetchApi<ImportQuestionsResult>('importQuestions', 'POST', { questions });
+}
+
 export async function updateConfig(key: string, value: string | number | boolean): Promise<ApiResponse> {
     return fetchApi('updateConfig', 'POST', { key, value });
 }

@@ -185,6 +185,40 @@ try {
   assert.equal((lastBody.data as Record<string, unknown>).kunci_jawaban, '{"1":"B"}',
     "mapping MATCHING diteruskan apa adanya untuk divalidasi GAS");
 
+  // Import Word: tiap soal disanitasi seperti entri manual sebelum mencapai GAS.
+  const importOk = await handleProxyRequest(
+    request("POST", "importQuestions", adminCookie, {
+      questions: [
+        { tipe: "SINGLE", pertanyaan: "<p onclick=\"steal()\">Soal <script>alert(1)</script>satu</p>", opsi_a: "<b>A</b>", kunci_jawaban: "A" },
+        { tipe: "SINGLE", pertanyaan: "Soal dua", opsi_a: "<img src=x onerror=alert(1)>", kunci_jawaban: "A" },
+      ],
+    }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(importOk.status, 200);
+  const importedQuestions = lastBody.questions as Record<string, unknown>[];
+  assert.equal(importedQuestions.length, 2);
+  assert.equal(JSON.stringify(importedQuestions).includes("onclick"), false, "atribut event wajib dibuang");
+  assert.equal(JSON.stringify(importedQuestions).includes("<script"), false, "script wajib dibuang");
+  assert.equal(JSON.stringify(importedQuestions).includes("onerror"), false, "soal kedua juga wajib disanitasi");
+  assert.equal(importedQuestions[0].opsi_a, "<b>A</b>", "format yang aman tetap dipertahankan");
+
+  const callsBeforeMalformedImport = upstreamCalls;
+  const malformedImport = await handleProxyRequest(
+    request("POST", "importQuestions", adminCookie, { questions: "bukan array" }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(malformedImport.status, 400);
+  assert.equal(upstreamCalls, callsBeforeMalformedImport, "payload import rusak tidak boleh mencapai GAS");
+
+  const callsBeforeStudentImport = upstreamCalls;
+  const studentImport = await handleProxyRequest(
+    request("POST", "importQuestions", undefined, { questions: [] }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(studentImport.status, 401, "import tanpa sesi admin ditolak");
+  assert.equal(upstreamCalls, callsBeforeStudentImport);
+
   const callsBeforeMalformedQuestion = upstreamCalls;
   const malformedQuestion = await handleProxyRequest(
     request("POST", "createQuestion", adminCookie, { data: [] }),

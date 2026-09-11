@@ -803,6 +803,9 @@ function doPost(e) {
       case "deleteQuestion":
         result = handleDeleteQuestion(params);
         break;
+      case "importQuestions":
+        result = handleImportQuestions(params);
+        break;
       case "updateConfig":
         result = handleUpdateConfig(params);
         break;
@@ -1655,6 +1658,63 @@ function handleUpdateQuestion(params) {
   }
 
   return { success: false, message: "Question not found" };
+}
+
+// Import soal dari dokumen Word. Jalurnya persis jalur entri manual: validator,
+// pembangun baris, dan penomoran id yang sama — hanya saja banyak soal sekaligus
+// supaya 60-an soal tidak menjadi 60 kali perjalanan bolak-balik ke server.
+// Soal yang ditolak validator dilaporkan per nomor; sisanya tetap masuk.
+const IMPORT_QUESTIONS_MAX = 200;
+
+function handleImportQuestions(params) {
+  const items = params && params.questions;
+  if (!Array.isArray(items) || items.length === 0) {
+    return { success: false, message: "Tidak ada soal yang dikirim." };
+  }
+  if (items.length > IMPORT_QUESTIONS_MAX) {
+    return {
+      success: false,
+      message: "Maksimal " + IMPORT_QUESTIONS_MAX + " soal sekali import. Bagi dokumen menjadi beberapa bagian.",
+    };
+  }
+
+  // Lock dipegang dari baca id sampai append terakhir supaya dua import bersamaan
+  // tidak menghasilkan id_soal yang sama.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+
+  try {
+    const sheet = getSheet("Questions");
+    if (!sheet) return { success: false, message: "Bank Soal belum tersedia." };
+    const takenIds = collectQuestionIds(sheet.getDataRange().getValues());
+    ensureQuestionColumns(sheet);
+
+    const added = [];
+    const rejected = [];
+    for (let i = 0; i < items.length; i++) {
+      const data = items[i];
+      const invalid = validateQuestionPayload(data);
+      if (invalid) {
+        rejected.push({ nomor_urut: data && data.nomor_urut, message: invalid });
+        continue;
+      }
+      const id_soal = generateQuestionId(takenIds);
+      takenIds[id_soal] = true;
+      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, ""));
+      added.push(id_soal);
+    }
+
+    cache.remove("questions"); cache.remove("questions_all");
+    return {
+      success: true,
+      message: added.length + " soal berhasil ditambahkan ke Bank Soal",
+      data: { added: added.length, rejected: rejected },
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function handleDeleteQuestion(params) {

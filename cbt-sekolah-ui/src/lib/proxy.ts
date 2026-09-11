@@ -91,6 +91,15 @@ export async function handleProxyRequest(
     body = { ...body, data: sanitizeQuestionPayload(body.data) };
   }
 
+  // Import Word mengirim banyak soal sekaligus; tiap soal melewati sanitizer yang
+  // sama dengan entri manual, sebelum GAS memvalidasinya satu per satu.
+  if (parsed.action === "importQuestions") {
+    if (!Array.isArray(body.questions) || !body.questions.every(isPlainObject)) {
+      return NextResponse.json({ success: false, message: "Data soal tidak valid" }, { status: 400 });
+    }
+    body = { ...body, questions: body.questions.map(sanitizeQuestionPayload) };
+  }
+
   const target = await resolveTarget();
   if (!target) {
     return NextResponse.json({ success: false, message: "Sekolah tidak ditemukan" }, { status: 404 });
