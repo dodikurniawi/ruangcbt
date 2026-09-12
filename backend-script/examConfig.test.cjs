@@ -337,4 +337,35 @@ function mutate(find, replaceWith, label) {
   ), undefined, "mutation E tidak terdeteksi");
 }
 
+// ── Sel Config numerik keluar sebagai teks ────────────────────────────────
+// Nomor WA "6285296724570" tersimpan di Sheets sebagai number; client memakainya
+// sebagai string (cari digit, potong, uppercase).
+{
+  const gas = loadGas(examState({
+    Config: [
+      ["key", "value"],
+      ["exam_name", 2026],
+      ["exam_mapel", "MAPEL_A"],
+      ["exam_duration", 90],
+      ["exam_status", "OPEN"],
+      ["admin_wa", 6285296724570],
+    ],
+  }));
+  const cfg = get(gas, "getConfig").data;
+  assert.equal(cfg.admin_wa, "6285296724570");
+  assert.equal(typeof cfg.admin_wa, "string", "admin_wa numerik harus keluar sebagai teks");
+  assert.equal(cfg.exam_name, "2026");
+  assert.equal(typeof cfg.exam_name, "string");
+  assert.equal(typeof cfg.exam_mapel, "string");
+  assert.equal(typeof cfg.exam_status, "string");
+}
+
+// admin_wa yang belum diisi tetap string kosong, bukan undefined.
+{
+  const gas = loadGas(examState());
+  const cfg = get(gas, "getConfig").data;
+  assert.equal(cfg.admin_wa, "");
+  assert.equal(typeof cfg.admin_wa, "string");
+}
+
 console.log("examConfig: validasi, ujian kosong, buka/tutup, integrasi snapshot, monitoring publik + mutations A/B/C/D/E PASS");

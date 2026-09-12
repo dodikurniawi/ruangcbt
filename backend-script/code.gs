@@ -895,17 +895,26 @@ function doPost(e) {
 
 // ===== GET HANDLERS =====
 
+// Sel Sheets bisa berupa number/boolean. Nilai Config yang kontraknya teks selalu
+// keluar sebagai string; kosong tetap "".
+function asConfigText(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
 function handleGetConfig() {
   const config = getConfig();
+  // Sel Config yang dipakai client sebagai teks (dipotong, di-uppercase, dicari
+  // digitnya) distringkan di sini: nomor WA dan nama ujian berupa angka terbaca
+  // Sheets sebagai number, dan method string-nya tidak ada di sisi client.
   const safeConfig = {
-    exam_name: config.exam_name,
+    exam_name: asConfigText(config.exam_name),
     exam_duration: config.exam_duration,
     max_violations: config.max_violations,
     auto_submit: config.auto_submit,
     shuffle_questions: config.shuffle_questions,
-    admin_wa: config.admin_wa || "",
-    exam_status: config.exam_status || "OPEN",
-    exam_mapel: config.exam_mapel || "",
+    admin_wa: asConfigText(config.admin_wa),
+    exam_status: asConfigText(config.exam_status) || "OPEN",
+    exam_mapel: asConfigText(config.exam_mapel),
   };
   return { success: true, data: safeConfig };
 }

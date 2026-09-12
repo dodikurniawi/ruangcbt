@@ -6,8 +6,9 @@ import { login, getConfig } from "@/lib/api";
 import { useExamStore } from "@/store/examStore";
 import { shouldRecover, deserializeAnswers } from "@/lib/answerRecovery";
 
-function buildWaUrl(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
+// Nilai Config bisa datang sebagai number (nomor WA tersimpan sebagai angka).
+function buildWaUrl(raw: unknown): string {
+  const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("62")) return `https://wa.me/${digits}`;
   if (digits.startsWith("0")) return `https://wa.me/62${digits.slice(1)}`;
