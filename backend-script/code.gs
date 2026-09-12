@@ -1063,7 +1063,13 @@ function handleGetUsers(params) {
 
     users.push({
       id_siswa: row[0],
-      username: row[1],
+      // Sheets mengembalikan sel numerik sebagai number (username/password berupa
+      // angka), sedangkan client memperlakukannya sebagai teks. Distringkan di sini,
+      // satu-satunya tempat data ini keluar.
+      username: row[1] === null || row[1] === undefined ? "" : String(row[1]),
+      // Kredensial ikut hanya di payload getUsers (khusus admin, lihat ACTION_RULES)
+      // supaya kartu peserta bisa dicetak tanpa admin membuka sheet satu per satu.
+      password: row[2] === null || row[2] === undefined ? "" : String(row[2]),
       nama_lengkap: row[3],
       kelas: row[4],
       status_login: row[5],

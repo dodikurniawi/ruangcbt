@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
+import { createViolationDeduper, isFullscreenActive } from '@/lib/examFocus';
 import type { ViolationType } from '@/types';
 
 interface UseExamSecurityOptions {
@@ -10,22 +11,20 @@ interface UseExamSecurityOptions {
     enabled?: boolean;
 }
 
-interface UseExamSecurityReturn {
-    violations: number;
-    isBlocked: boolean;
-}
-
 export function useExamSecurity({
     maxViolations,
     onViolation,
     onMaxViolations,
     enabled = true,
-}: UseExamSecurityOptions): UseExamSecurityReturn {
+}: UseExamSecurityOptions): void {
     const violationsRef = useRef(0);
     const isBlockedRef = useRef(false);
+    // Satu tindakan siswa memicu beberapa event; deduper menahan duplikatnya.
+    const shouldReportRef = useRef(createViolationDeduper());
 
     const handleViolation = useCallback((type: ViolationType) => {
         if (!enabled || isBlockedRef.current) return;
+        if (!shouldReportRef.current(type, Date.now())) return;
 
         violationsRef.current += 1;
         const count = violationsRef.current;
@@ -48,6 +47,13 @@ export function useExamSecurity({
         const handleVisibilityChange = () => {
             if (document.hidden) {
                 handleViolation('tab_switch');
+            }
+        };
+
+        // Keluar dari mode layar penuh saat ujian aktif
+        const handleFullscreenChange = () => {
+            if (!isFullscreenActive(document)) {
+                handleViolation('exit_fullscreen');
             }
         };
 
@@ -98,6 +104,7 @@ export function useExamSecurity({
 
         // Add event listeners
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
         window.addEventListener('blur', handleBlur);
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('keydown', handleKeyDown);
@@ -110,6 +117,7 @@ export function useExamSecurity({
 
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
             window.removeEventListener('blur', handleBlur);
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('keydown', handleKeyDown);
@@ -120,9 +128,4 @@ export function useExamSecurity({
             document.body.style.webkitUserSelect = '';
         };
     }, [enabled, handleViolation]);
-
-    return {
-        violations: violationsRef.current,
-        isBlocked: isBlockedRef.current,
-    };
 }

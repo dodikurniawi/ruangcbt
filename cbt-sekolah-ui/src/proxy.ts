@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Rewrite /s/[schoolId]/... → /... so existing pages serve correctly.
+// Proxy (dulu middleware, konvensi Next 16). Rewrite /s/[schoolId]/... → /... so existing pages serve correctly.
 // Browser URL is preserved (NextResponse.rewrite is server-side only),
 // so getApiUrl() and useTenantRouter still see /s/[schoolId]/ in window.location.pathname.
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const match = pathname.match(/^\/s\/([^/]+)(\/.*)?$/);
     if (!match) return NextResponse.next();

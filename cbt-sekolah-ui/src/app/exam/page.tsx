@@ -8,6 +8,7 @@ import {
   syncAnswers, submitExam, reportViolation,
 } from "@/lib/api";
 import { useExamSecurity } from "@/hooks/useExamSecurity";
+import { requestExamFullscreen, exitExamFullscreen, isFullscreenActive, isFullscreenSupported } from "@/lib/examFocus";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
@@ -73,6 +74,11 @@ export default function ExamPage() {
   // Offline selalu menang atas hasil sinkronisasi terakhir saat ditampilkan.
   const displayStatus = isOnline ? syncStatus : 'offline';
 
+  // Gerbang mulai: fullscreen wajib berasal dari klik siswa, bukan dari effect.
+  const [hasStarted, setHasStarted] = useState(false);
+  const [fullscreenGranted, setFullscreenGranted] = useState(false);
+  const [isFullscreenOn, setIsFullscreenOn] = useState(false);
+
   const [raguraguSet, setRaguraguSet] = useState<Set<string>>(new Set());
   const [fontSize, setFontSize] = useState<'sm'|'base'|'lg'>('base');
   const fontSizeClass = { sm: 'text-sm', base: 'text-base', lg: 'text-lg' }[fontSize];
@@ -101,6 +107,8 @@ export default function ExamPage() {
       const latestAnswers = useExamStore.getState().answers;
       const res = await submitExam(user.id_siswa, latestAnswers, forced);
       if (res.success) {
+        // Submit sudah dikonfirmasi server; baru lepas fullscreen.
+        await exitExamFullscreen(document);
         sessionStorage.setItem("exam_score", res.score ?? "0");
         sessionStorage.setItem("exam_status", forced ? "DISKUALIFIKASI" : "SELESAI");
         setIsSubmitted(true);
@@ -131,8 +139,27 @@ export default function ExamPage() {
     maxViolations,
     onViolation: handleViolation,
     onMaxViolations: handleMaxViolations,
-    enabled: !isLoading && !isSubmitting,
+    enabled: hasStarted && !isLoading && !isSubmitting,
   });
+
+  // Status fullscreen dipantau untuk menampilkan ajakan kembali; pelanggaran
+  // sendiri dicatat oleh useExamSecurity supaya tidak ada sistem kedua.
+  useEffect(() => {
+    const sync = () => setIsFullscreenOn(isFullscreenActive(document));
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  // Dipanggil langsung dari klik siswa: gesture masih hidup saat request.
+  const handleStartExam = useCallback(() => {
+    requestExamFullscreen(document, document.documentElement).then(setFullscreenGranted);
+    setHasStarted(true);
+  }, []);
+
+  const handleReenterFullscreen = useCallback(() => {
+    requestExamFullscreen(document, document.documentElement).then(setFullscreenGranted);
+  }, []);
 
   // Load exam data on mount
   useEffect(() => {
@@ -290,6 +317,37 @@ export default function ExamPage() {
           <p className="font-headline-student text-on-surface mt-md">{loadError}</p>
           <button onClick={() => window.location.reload()} className="mt-xl px-xl py-sm bg-primary text-on-primary rounded-lg font-label-bold cursor-pointer">
             Refresh
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasStarted) {
+    const fsSupported = typeof document !== "undefined" && isFullscreenSupported(document, document.documentElement);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 font-body-student p-lg">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-xl text-center">
+          <span className="material-symbols-outlined text-[#2563EB] text-[48px]">fullscreen</span>
+          <h1 className="font-headline-student text-lg font-extrabold text-slate-800 mt-2">Siap mengerjakan ujian?</h1>
+          <p className="font-body-student text-sm text-slate-500 leading-relaxed mt-2">
+            {fsSupported
+              ? "Setelah menekan “Mulai Ujian”, ujian akan dibuka dalam mode layar penuh agar kamu tetap fokus."
+              : "Perangkat ini tidak mendukung mode layar penuh. Ujian tetap dapat dikerjakan seperti biasa."}
+          </p>
+          <ul className="text-left text-xs text-slate-600 mt-4 space-y-1">
+            <li>✓ Koneksi internet stabil</li>
+            <li>✓ Baterai cukup</li>
+            <li>✓ Tidak perlu membuka aplikasi/tab lain</li>
+          </ul>
+          <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
+            Meninggalkan halaman ujian atau keluar dari layar penuh akan tercatat sebagai pelanggaran dan terlihat oleh pengawas.
+          </p>
+          <button
+            onClick={handleStartExam}
+            className="w-full mt-6 h-12 bg-[#2563EB] text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer hover:opacity-95 transition-all"
+          >
+            Mulai Ujian
           </button>
         </div>
       </div>
@@ -788,6 +846,20 @@ export default function ExamPage() {
           <span className="material-symbols-outlined text-[16px]">chevron_right</span>
         </button>
       </div>
+
+      {/* Ajakan kembali ke layar penuh; ujian tetap bisa dikerjakan. */}
+      {fullscreenGranted && !isFullscreenOn && !isSubmitting && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[90] bg-white border border-amber-300 shadow-lg rounded-xl px-5 py-3 flex items-center gap-3">
+          <span className="material-symbols-outlined text-amber-500">warning</span>
+          <span className="font-body-student text-xs text-slate-600">Mode layar penuh telah ditutup.</span>
+          <button
+            onClick={handleReenterFullscreen}
+            className="bg-[#2563EB] text-white rounded-lg px-4 h-9 font-bold text-[11px] uppercase tracking-wider cursor-pointer hover:opacity-95"
+          >
+            Kembali ke Layar Penuh
+          </button>
+        </div>
+      )}
 
       {/* Submit Confirm Modal */}
       {showSubmitConfirm && (

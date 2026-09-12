@@ -39,6 +39,11 @@ export interface SaveExamConfigInput {
 export interface User {
     id_siswa: string;
     username: string;
+    /**
+     * Password login siswa, hanya dikirim pada payload getUsers (admin-only) untuk
+     * dicetak di kartu peserta. Jangan diteruskan ke payload siswa/monitoring/publik.
+     */
+    password?: string;
     nama_lengkap: string;
     kelas: string;
     status_login?: boolean;
@@ -273,6 +278,7 @@ export interface ExamState {
 export type ViolationType =
     | 'tab_switch'
     | 'blur'
+    | 'exit_fullscreen'
     | 'copy'
     | 'paste'
     | 'contextmenu'

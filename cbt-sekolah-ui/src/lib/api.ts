@@ -50,7 +50,15 @@ async function fetchApi<T>(
         }
 
         const response = await fetch(url, options);
-        const data = await response.json();
+        let data: ApiResponse<T>;
+        try {
+            data = await response.json();
+        } catch {
+            data = {
+                success: false,
+                message: `Server returned invalid response (${response.status})`
+            };
+        }
 
         return data;
     } catch (error) {

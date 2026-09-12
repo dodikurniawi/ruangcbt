@@ -8,6 +8,7 @@ import useSWR from "swr";
 import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, logout, type PrintSettings } from "@/lib/api";
 import type { MataPelajaran } from "@/types";
 import type { User } from "@/types";
+import { studentCardCredentials, escapeCardHtml } from "@/lib/examCard";
 import * as XLSX from "xlsx";
 
 
@@ -614,8 +615,10 @@ export default function AdminCetak() {
     });
 
     const cardsHtml = filteredKartu
-      .map(
-        (student) => `
+      .map((student) => {
+        // Kredensial dibaca dari baris siswa ini juga, di dalam map yang sama.
+        const kredensial = studentCardCredentials(student);
+        return `
       <div class="card">
         <div class="card-header">
           <div class="logo-placeholder">
@@ -656,6 +659,16 @@ export default function AdminCetak() {
             <td class="highlight">${student.nama_lengkap.toUpperCase()}</td>
           </tr>
           <tr>
+            <td>Username</td>
+            <td>:</td>
+            <td class="cred">${escapeCardHtml(kredensial.username)}</td>
+          </tr>
+          <tr>
+            <td>Password</td>
+            <td>:</td>
+            <td class="cred">${escapeCardHtml(kredensial.password)}</td>
+          </tr>
+          <tr>
             <td>Tempat/Tanggal Lahir</td>
             <td>:</td>
             <td>${settings?.school_city || "Kota"}, 10 Januari 2011</td>
@@ -690,8 +703,8 @@ export default function AdminCetak() {
           </div>
         </div>
       </div>
-    `
-      )
+    `;
+      })
       .join("");
 
     win.document.write(`
@@ -705,7 +718,7 @@ export default function AdminCetak() {
           * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
           body { padding: 5mm; background: #fff; color: #1e293b; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
-          .card { border: 4px double #2563EB; padding: 16px; page-break-inside: avoid; border-radius: 6px; background: #fff; width: 100%; min-height: 290px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
+          .card { border: 4px double #2563EB; padding: 16px; page-break-inside: avoid; border-radius: 6px; background: #fff; width: 100%; min-height: 330px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
           .card-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px double #2563EB; padding-bottom: 8px; margin-bottom: 12px; }
           .logo-placeholder { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; }
           .header-text { text-align: center; flex: 1; margin: 0 8px; }
@@ -718,6 +731,7 @@ export default function AdminCetak() {
           .info-table td:first-child { width: 130px; font-weight: bold; }
           .info-table td:nth-child(2) { width: 15px; text-align: center; }
           .info-table td.highlight { font-weight: 800; font-size: 11.5px; }
+          .info-table td.cred { font-weight: 900; font-size: 12px; letter-spacing: 0.6px; font-family: 'Courier New', Courier, monospace; word-break: break-all; }
           
           .lower-section { display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; margin-top: auto; }
           .photo-container { width: 75px; height: 95px; border: 1.5px solid #000; padding: 1px; background: #fff; display: flex; align-items: center; justify-content: center; shrink-0; }
@@ -1511,6 +1525,7 @@ export default function AdminCetak() {
                   month: "long",
                   year: "numeric",
                 });
+                const kredensial = studentCardCredentials(student);
                 return (
                   <div key={student.id_siswa} className="bg-white border-4 border-double border-blue-600 rounded-lg p-5 text-xs text-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[300px]">
                     {/* Header */}
@@ -1554,6 +1569,14 @@ export default function AdminCetak() {
                       <div className="flex gap-2 text-[11px]">
                         <span className="text-slate-900 w-36 shrink-0 font-bold">Nama</span>
                         <span className="font-extrabold text-slate-900 uppercase">: {student.nama_lengkap}</span>
+                      </div>
+                      <div className="flex gap-2 text-[11px]">
+                        <span className="text-slate-900 w-36 shrink-0 font-bold">Username</span>
+                        <span className="font-black text-slate-900 font-mono tracking-wide break-all">: {kredensial.username}</span>
+                      </div>
+                      <div className="flex gap-2 text-[11px]">
+                        <span className="text-slate-900 w-36 shrink-0 font-bold">Password</span>
+                        <span className="font-black text-slate-900 font-mono tracking-wide break-all">: {kredensial.password}</span>
                       </div>
                       <div className="flex gap-2 text-[11px]">
                         <span className="text-slate-900 w-36 shrink-0 font-bold">Tempat/Tanggal Lahir</span>
