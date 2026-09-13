@@ -71,6 +71,30 @@ function row(nomor: unknown, soal: unknown, jawaban: unknown, extra: Record<stri
   assert.equal(isReady(parsed.questions[1]), false);
 }
 
+// SINGLE: A-C minimum; D/E opsional, berurutan, dan kunci harus tersedia.
+{
+  const parsed = parseExcelQuestions(xlsxBuffer([
+    HEADER,
+    row(1, "A-C", "A", { 5: "", 6: "" }),
+    row(2, "A-D", "D", { 6: "" }),
+    row(3, "A-E", "E"),
+    row(4, "Kurang C", "A", { 4: "", 5: "", 6: "" }),
+    row(5, "E tanpa D", "E", { 5: "" }),
+    row(6, "Kunci D kosong", "D", { 5: "", 6: "" }),
+    row(7, "Kunci E kosong", "E", { 5: "", 6: "" }),
+    row(8, "Kunci B", "B", { 5: "", 6: "" }),
+  ]));
+  const [abc, abcd, abcde, kurangC, eTanpaD, keyD, keyE, keyB] = parsed.questions;
+  assert.equal(isReady(abc), true, "A-C valid");
+  assert.equal(isReady(abcd), true, "A-D valid");
+  assert.equal(isReady(abcde), true, "A-E valid");
+  assert.match(kurangC.issues.join(" "), /Opsi C wajib diisi/);
+  assert.match(eTanpaD.issues.join(" "), /Urutan opsi tidak berurutan/);
+  assert.match(keyD.issues.join(" "), /Kunci jawaban D menunjuk opsi yang tidak tersedia/);
+  assert.match(keyE.issues.join(" "), /Kunci jawaban E menunjuk opsi yang tidak tersedia/);
+  assert.equal(isReady(keyB), true, "kunci A/B/C pada tiga opsi tetap valid");
+}
+
 // ── Jawaban kosong → PERLU DICEK, tidak diimport diam-diam ──────────────────
 {
   const parsed = parseExcelQuestions(xlsxBuffer([HEADER, row(1, "Tanpa kunci", "")]));
@@ -92,7 +116,7 @@ function row(nomor: unknown, soal: unknown, jawaban: unknown, extra: Record<stri
   const [tanpaSoal, opsiKosong, bobotSalah, sehat] = parsed.questions;
   assert.ok(tanpaSoal.issues.some((i) => /Pertanyaan tidak terbaca/.test(i)), `${tanpaSoal.issues.join("|")}`);
   assert.equal(isReady(tanpaSoal), false);
-  assert.ok(opsiKosong.issues.some((i) => /Opsi C tidak ditemukan/.test(i)));
+  assert.ok(opsiKosong.issues.some((i) => /Opsi C wajib diisi/.test(i)));
   assert.equal(isReady(opsiKosong), false);
   assert.ok(bobotSalah.issues.some((i) => /Bobot harus angka/.test(i)));
   assert.equal(isReady(bobotSalah), false);

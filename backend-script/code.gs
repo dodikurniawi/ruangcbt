@@ -362,14 +362,20 @@ function normalizeFillInValue(value, key) {
 }
 
 // Validasi opsi A–E dan kunci untuk tipe berbasis pilihan (SINGLE/COMPLEX).
-// minKeys/maxKeys yang membedakan keduanya; sisanya identik.
-function validateChoiceQuestion(data, minKeys, maxKeys, keyCountMessage) {
+// requiredOptionCount mempertahankan aturan tiap tipe tanpa mencampurnya.
+function validateChoiceQuestion(data, minKeys, maxKeys, keyCountMessage, requiredOptionCount) {
   const available = [];
+  let foundGap = false;
   for (let i = 0; i < OPTION_LETTERS.length; i++) {
     const letter = OPTION_LETTERS[i];
     const value = String(data["opsi_" + letter.toLowerCase()] || "").replace(/<[^>]*>/g, "").trim();
-    if (value !== "") available.push(letter);
-    else if (i < 4) return "Opsi A sampai D wajib diisi";
+    if (value !== "") {
+      if (foundGap) return "Opsi harus berurutan tanpa huruf kosong";
+      available.push(letter);
+    } else {
+      if (i < requiredOptionCount) return "Opsi A sampai " + OPTION_LETTERS[requiredOptionCount - 1] + " wajib diisi";
+      foundGap = true;
+    }
   }
 
   const keys = parseAnswerKeys(data.kunci_jawaban);
@@ -412,10 +418,10 @@ function validateQuestionItemList(items, noun, outIds) {
 // satu conditional raksasa. Hanya tipe yang ada di tabel ini yang diterima.
 const QUESTION_TYPE_VALIDATORS = {
   SINGLE: function (data) {
-    return validateChoiceQuestion(data, 1, 1, "Soal SINGLE hanya boleh punya satu kunci jawaban");
+    return validateChoiceQuestion(data, 1, 1, "Soal SINGLE hanya boleh punya satu kunci jawaban", 3);
   },
   COMPLEX: function (data) {
-    return validateChoiceQuestion(data, 2, 0, "Soal COMPLEX minimal punya dua kunci jawaban");
+    return validateChoiceQuestion(data, 2, 0, "Soal COMPLEX minimal punya dua kunci jawaban", 4);
   },
   TRUE_FALSE: function (data) {
     if (!isPlainQuestionObject(data.data_soal) || !Array.isArray(data.data_soal.pernyataan)) {

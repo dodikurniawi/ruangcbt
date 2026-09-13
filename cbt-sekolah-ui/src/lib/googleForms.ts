@@ -1,3 +1,5 @@
+import { OPTION_KEYS, validateSingleOptions } from "./wordImport.ts";
+
 export type GoogleSupportedQuestionType = "SINGLE" | "TRUE_FALSE" | "FILL_IN";
 
 export interface GoogleFormListItem {
@@ -94,7 +96,6 @@ interface GoogleFormResource {
 }
 
 const OPTION_FIELDS = ["opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e"] as const;
-const OPTION_KEYS = ["A", "B", "C", "D", "E"] as const;
 
 export async function listGoogleForms(
   accessToken: string,
@@ -166,7 +167,8 @@ export function mapGoogleForm(
 }
 
 export function isGoogleQuestionReady(question: GooglePreviewQuestion): boolean {
-  return question.tipe !== null && question.issues.length === 0 && question.pertanyaan.trim() !== "";
+  return question.tipe !== null && question.issues.length === 0 && question.pertanyaan.trim() !== "" &&
+    (question.tipe !== "SINGLE" || validateSingleOptions(question).length === 0);
 }
 
 export function markGoogleImageFailed(question: GooglePreviewQuestion): GooglePreviewQuestion {
@@ -265,9 +267,6 @@ function mapSingleQuestionItem(
     const values = options.map((option) => text(option.value));
     if (options.some((option) => option.isOther === true)) base.issues.push("Pilihan 'Lainnya' belum didukung RuangCBT.");
     if (options.some((option) => option.image)) base.issues.push("Gambar di dalam pilihan jawaban belum didukung RuangCBT.");
-    if (values.length < 4 || values.slice(0, 4).some((value) => !value)) {
-      base.issues.push("Opsi A sampai D belum lengkap.");
-    }
     if (values.length > 5) base.issues.push("Soal memiliki lebih dari lima opsi.");
     const duplicateValues = new Set(values).size !== values.length;
     if (duplicateValues) base.issues.push("Ada pilihan jawaban dengan teks yang sama.");
@@ -286,6 +285,7 @@ function mapSingleQuestionItem(
         base.kunci_jawaban = OPTION_KEYS[answerIndex];
       }
     }
+    base.issues.push(...validateSingleOptions(base));
     return base;
   }
 

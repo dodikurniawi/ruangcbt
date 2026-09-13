@@ -43,6 +43,38 @@ export interface ParsedQuestion {
   imageRelId: string | null;
 }
 
+type SingleOptionValues = Pick<
+  ParsedQuestion,
+  "opsi_a" | "opsi_b" | "opsi_c" | "opsi_d" | "opsi_e" | "kunci_jawaban"
+>;
+
+/** Kontrak SINGLE: A-C wajib, D/E opsional tetapi tidak boleh melompati huruf. */
+export function validateSingleOptions(question: SingleOptionValues): string[] {
+  const values = OPTION_KEYS.map((key) => question[`opsi_${key.toLowerCase()}` as keyof SingleOptionValues].trim());
+  const issues: string[] = [];
+  const missingRequired = OPTION_KEYS.slice(0, 3).filter((_, index) => !values[index]);
+  if (missingRequired.length > 0) issues.push(`Opsi ${missingRequired.join(", ")} wajib diisi`);
+
+  let foundGap = false;
+  for (const value of values) {
+    if (!value) foundGap = true;
+    else if (foundGap) {
+      issues.push("Urutan opsi tidak berurutan");
+      break;
+    }
+  }
+
+  const keyIndex = OPTION_KEYS.indexOf(question.kunci_jawaban as OptionKey);
+  if (keyIndex >= 0 && !values[keyIndex]) {
+    issues.push(`Kunci jawaban ${question.kunci_jawaban} menunjuk opsi yang tidak tersedia`);
+  }
+  return issues;
+}
+
+export function isSingleOptionIssue(issue: string): boolean {
+  return /^(Opsi .* (?:tidak ditemukan|wajib diisi)|Opsi A sampai D belum lengkap|Urutan opsi|Kunci jawaban [A-E] menunjuk opsi yang tidak tersedia)/.test(issue);
+}
+
 export interface ParseResult {
   questions: ParsedQuestion[];
   /** Paragraf bernomor yang tidak punya opsi sama sekali (mis. petunjuk ujian). */
@@ -166,9 +198,6 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
     values[expected] = option.text;
   });
 
-  const missing = OPTION_KEYS.filter((key) => !values[key] || values[key].trim() === "");
-  if (missing.length > 0) issues.push(`Opsi ${missing.join(", ")} tidak ditemukan`);
-
   // ── Kunci jawaban ──────────────────────────────────────────────────────────
   // Bagian "KUNCI JAWABAN" eksplisit adalah sumber paling bisa dipercaya. Cetak
   // tebal baru dipakai bila tidak ada konflik; konflik antar indikator tidak
@@ -193,6 +222,11 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
     issues.push("Kunci jawaban belum ditemukan — beberapa pilihan dicetak tebal");
   }
 
+  issues.push(...validateSingleOptions({
+    opsi_a: values.A ?? "", opsi_b: values.B ?? "", opsi_c: values.C ?? "",
+    opsi_d: values.D ?? "", opsi_e: values.E ?? "", kunci_jawaban,
+  }));
+
   return {
     nomor_urut: candidate.nomor,
     pertanyaan,
@@ -212,7 +246,9 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
 
 /** Soal siap diimport: struktur utuh dan kunci jawaban sudah terisi. */
 export function isReady(question: ParsedQuestion): boolean {
-  return question.issues.length === 0 && OPTION_SET.has(question.kunci_jawaban);
+  return question.issues.length === 0 &&
+    validateSingleOptions(question).length === 0 &&
+    OPTION_SET.has(question.kunci_jawaban);
 }
 
 /** Alasan yang ditampilkan guru pada soal yang belum siap. */

@@ -81,11 +81,32 @@ function questionRows(gas) {
   assert.ok(admin.data.some((q) => q.pertanyaan === "Soal import nomor 3" && q.kunci_jawaban === "B"));
 }
 
+// SINGLE menerima A-C, A-D, A-E; kunci A/B/C tetap sah pada tiga opsi.
+{
+  const validCases = [
+    imported(2, { opsi_d: "", opsi_e: "", kunci_jawaban: "A" }),
+    imported(3, { opsi_d: "", opsi_e: "", kunci_jawaban: "B" }),
+    imported(4, { opsi_d: "", opsi_e: "", kunci_jawaban: "C" }),
+    imported(5, { opsi_e: "", kunci_jawaban: "D" }),
+    imported(6, { kunci_jawaban: "E" }),
+  ];
+  const gas = loadGas(importState());
+  const res = post(gas, "importQuestions", { questions: validCases });
+  assert.equal(res.data.added, 5, JSON.stringify(res.data.rejected));
+  assert.deepEqual(questionRows(gas).slice(1).map((row) => row[10]), ["A", "B", "C", "D", "E"]);
+  assert.equal(questionRows(gas)[1][8], "", "D tidak boleh dikarang");
+  assert.equal(questionRows(gas)[1][9], "", "E tidak boleh dikarang");
+}
+
 // ── R/T. Validasi server tetap berlaku; soal invalid tidak tersimpan ────────
 {
   const invalidCases = [
     [imported(2, { pertanyaan: "   " }), /Redaksi soal wajib diisi/],
-    [imported(2, { opsi_d: "" }), /Opsi A sampai D wajib diisi/],
+    [imported(2, { opsi_c: "" }), /Opsi A sampai C wajib diisi/],
+    [imported(2, { opsi_d: "" }), /Opsi harus berurutan/],
+    [imported(2, { opsi_d: "", opsi_e: "", kunci_jawaban: "D" }), /opsi yang tidak tersedia/],
+    [imported(2, { opsi_d: "", opsi_e: "", kunci_jawaban: "E" }), /opsi yang tidak tersedia/],
+    [imported(2, { tipe: "COMPLEX", opsi_d: "", opsi_e: "", kunci_jawaban: "A,B" }), /Opsi A sampai D wajib diisi/],
     [imported(2, { kunci_jawaban: "" }), /Kunci jawaban wajib diisi/],
     [imported(2, { kunci_jawaban: "Z" }), /opsi yang tidak tersedia/],
     [imported(2, { kunci_jawaban: "A,B" }), /satu kunci jawaban/],
@@ -199,6 +220,18 @@ function mutate(find, replaceWith, label) {
   };
 }
 {
+  // G. Minimum SINGLE dimutasi kembali dari A-C menjadi A-D.
+  const requireD = mutate(
+    'return validateChoiceQuestion(data, 1, 1, "Soal SINGLE hanya boleh punya satu kunci jawaban", 3);',
+    'return validateChoiceQuestion(data, 1, 1, "Soal SINGLE hanya boleh punya satu kunci jawaban", 4);',
+    "G",
+  );
+  const gasG = loadGas(importState(), requireD);
+  assert.throws(() => assert.equal(
+    post(gasG, "importQuestions", { questions: [imported(2, { opsi_d: "", opsi_e: "", kunci_jawaban: "A" })] }).data.added,
+    1,
+  ), undefined, "mutation G tidak terdeteksi");
+
   // E. Import melewati validasi server.
   const skipValidation = mutate(
     "      const invalid = validateQuestionPayload(data);\n      if (invalid) {",
@@ -222,4 +255,4 @@ function mutate(find, replaceWith, label) {
     undefined, "mutation F tidak terdeteksi");
 }
 
-console.log("importQuestions: jalur Bank Soal, validasi server, regresi tipe lain, snapshot aman + mutations E/F PASS");
+console.log("importQuestions: opsi SINGLE fleksibel, validasi server, regresi tipe lain, snapshot aman + mutations E/F/G PASS");

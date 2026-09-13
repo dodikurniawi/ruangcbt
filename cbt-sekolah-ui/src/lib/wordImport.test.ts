@@ -121,12 +121,45 @@ const HEADER: DocxBlock[] = [
   assert.equal(q.nomor_urut, 7, "nomor dokumen dipertahankan untuk pencocokan kunci");
 }
 
-// ── F. Opsi E hilang → PERLU DICEK, bukan diimport diam-diam ────────────────
+// ── F. SINGLE menerima A-C, A-D, atau A-E; D/E tidak pernah dikarang ────────
 {
-  const q = parseQuestions([numbered(1, "Soal tanpa E"), ...options(FIVE.slice(0, 4))]).questions[0];
-  assert.equal(q.opsi_e, "");
-  assert.ok(q.issues.some((issue) => /Opsi E tidak ditemukan/.test(issue)), q.issues.join("|"));
-  assert.equal(isReady(q), false);
+  for (const count of [3, 4, 5]) {
+    const q = parseQuestions([
+      numbered(count, `Soal ${count} opsi`), ...options(FIVE.slice(0, count)),
+      plain("KUNCI JAWABAN"), plain(`${count}. ${"ABCDE"[count - 1]}`),
+    ]).questions[0];
+    assert.equal(q.issues.length, 0, `${count} opsi: ${q.issues.join("|")}`);
+    assert.equal(isReady(q), true, `A-${"ABCDE"[count - 1]} harus siap`);
+    if (count === 3) assert.deepEqual([q.opsi_d, q.opsi_e], ["", ""], "D/E tetap kosong");
+  }
+}
+
+// ── F2. Kurang dari A-C, opsi melompat, dan kunci ke opsi kosong ditolak ────
+{
+  const kurang = parseQuestions([
+    numbered(1, "Kurang opsi"), ...options(FIVE.slice(0, 2)),
+    plain("KUNCI JAWABAN"), plain("1. A"),
+  ]).questions[0];
+  assert.match(kurang.issues.join(" "), /Opsi C wajib diisi/);
+  assert.equal(isReady(kurang), false);
+
+  const melompat = parseQuestions([
+    numbered(2, "E tanpa D"),
+    ...["A", "B", "C", "E"].map((letter, index) => ({
+      text: FIVE[index], marker: { kind: "letter" as const, value: letter, listId: "gap:0" },
+      hasImage: false, isTable: false, bold: false, imageRelId: null,
+    })),
+    plain("KUNCI JAWABAN"), plain("2. E"),
+  ]).questions[0];
+  assert.match(melompat.issues.join(" "), /Urutan opsi tidak berurutan/);
+  assert.equal(isReady(melompat), false);
+
+  const keyKosong = parseQuestions([
+    numbered(1, "Jawaban D kosong"), ...options(FIVE.slice(0, 3)),
+    plain("KUNCI JAWABAN"), plain("1. D"),
+  ]).questions[0];
+  assert.match(keyKosong.issues.join(" "), /Kunci jawaban D menunjuk opsi yang tidak tersedia/);
+  assert.equal(isReady(keyKosong), false);
 }
 
 // ── G. Nomor ambigu: paragraf bernomor tanpa opsi bukan soal ────────────────
@@ -250,15 +283,15 @@ const HEADER: DocxBlock[] = [
 {
   const result = parseQuestions([
     numbered(1, "Soal lengkap"), ...options(FIVE),
-    numbered(2, "Soal tanpa E"), ...options(FIVE.slice(0, 4)),
+    numbered(2, "Soal tiga opsi"), ...options(FIVE.slice(0, 3)),
     numbered(3, "Soal lengkap dua"), ...options(FIVE),
     plain("KUNCI JAWABAN"),
     plain("1. A 2. B 3. C"),
   ]);
   assert.equal(result.questions.length, 3);
   const ready = result.questions.filter(isReady);
-  assert.deepEqual(ready.map((q) => q.nomor_urut), [1, 3], "soal PERLU DICEK tidak boleh lolos");
-  assert.deepEqual(ready.map((q) => q.kunci_jawaban), ["A", "C"]);
+  assert.deepEqual(ready.map((q) => q.nomor_urut), [1, 2, 3], "A-C juga harus lolos import");
+  assert.deepEqual(ready.map((q) => q.kunci_jawaban), ["A", "B", "C"]);
 }
 
 // ── Varian penanda manual: "1)", "1 -", "1:", "A)", "a." ────────────────────

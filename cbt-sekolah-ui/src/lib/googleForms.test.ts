@@ -177,6 +177,29 @@ const FORM = {
 }
 
 {
+  const threeOptionForm = {
+    formId: "FORM_ABC",
+    info: { title: "Form tiga opsi" },
+    items: [{
+      itemId: "item-abc",
+      title: "Pilih satu",
+      questionItem: { question: {
+        questionId: "question-abc",
+        grading: { correctAnswers: { answers: [{ value: "C" }] } },
+        choiceQuestion: { type: "RADIO", options: ["A", "B", "C"].map((value) => ({ value })) },
+      } },
+    }],
+  };
+  const question = mapGoogleForm(threeOptionForm).questions[0];
+  assert.deepEqual([question.opsi_a, question.opsi_b, question.opsi_c, question.opsi_d, question.opsi_e],
+    ["A", "B", "C", "", ""], "Google Form tidak mengarang D/E");
+  assert.equal(question.kunci_jawaban, "C");
+  assert.equal(isGoogleQuestionReady(question), true, "Google Form A-C harus siap diimport");
+  const built = await buildGoogleImportPayload([question], 0, "MAPEL_A", async () => "");
+  assert.equal(built.payload.length, 1, "tombol import punya satu soal siap");
+}
+
+{
   let authorization = "";
   let requestedUrl = "";
   const fetcher: typeof fetch = async (input, init) => {

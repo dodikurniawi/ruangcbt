@@ -93,9 +93,19 @@ async function expectKilled(
 }
 
 async function main() {
-  console.log("mutation: mematikan 11 perilaku penting (Word 4, Excel 1, Google Form 6)");
+  console.log("mutation: mematikan 12 perilaku penting (Word 5, Excel 1, Google Form 6)");
 
   const wordSrc = readFileSync(join(here, "wordImport.ts"), "utf8");
+
+  // Minimum SINGLE kembali dipaksa A-D: soal A-C harus membuat mutant gagal.
+  await expectKilled("single-require-abcd", wordSrc,
+    "OPTION_KEYS.slice(0, 3)", "OPTION_KEYS.slice(0, 4)",
+    (m) => {
+      const r = (m as WordModule).parseQuestions([
+        numbered(1, "Tiga opsi"), ...letters(FIVE.slice(0, 3), [true, false, false]),
+      ]);
+      assert.equal((m as WordModule).isReady(r.questions[0]), true, "A-C harus tetap siap");
+    });
 
   // 1. Kunci bold: hapus deteksi opsi tebal → kunci hilang, soal tersangkut PERLU DICEK.
   await expectKilled("bold-key", wordSrc,
@@ -111,8 +121,8 @@ async function main() {
   // 2. isReady: abaikan struktur-benar → soal bermasalah (gambar tak terbaca)
   //    tetap lolos "siap", meski kunci sudah jelas.
   await expectKilled("no-key-ready", wordSrc,
-    "return question.issues.length === 0 && OPTION_SET.has(question.kunci_jawaban);",
-    "return OPTION_SET.has(question.kunci_jawaban);",
+    "return question.issues.length === 0 &&",
+    "return true &&",
     (m) => {
       const r = (m as WordModule).parseQuestions([
         numbered(1, "Gambar tak terbaca", { hasImage: true }),
@@ -204,8 +214,8 @@ async function main() {
 
   // 8. READY mengabaikan kegagalan gambar.
   await expectKilled("google-image-ready", googleSrc,
-    'return question.tipe !== null && question.issues.length === 0 && question.pertanyaan.trim() !== "";',
-    'return question.tipe !== null && question.pertanyaan.trim() !== "";',
+    'question.issues.length === 0 &&',
+    'true &&',
     (m) => {
       const question = (m as GoogleModule).mapGoogleForm(googleNoKey).questions[0];
       question.kunci_jawaban = "A";

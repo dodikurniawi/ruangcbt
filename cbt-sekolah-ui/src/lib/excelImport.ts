@@ -10,7 +10,7 @@
 // preview dan perbaikan guru identik untuk kedua sumber.
 
 import * as XLSX from "xlsx";
-import { OPTION_KEYS, type ParsedQuestion } from "./wordImport.ts";
+import { OPTION_KEYS, validateSingleOptions, type ParsedQuestion } from "./wordImport.ts";
 
 export const SOAL_TEMPLATE_HEADERS = [
   "No", "Soal", "A", "B", "C", "D", "E", "Jawaban", "Bobot",
@@ -86,7 +86,7 @@ export function parseExcelQuestions(data: ArrayBuffer): { questions: ParsedQuest
   if (colOf.soal === undefined) {
     throw new Error(
       "Format kolom tidak sesuai template RuangCBT. " +
-      "Download template, lalu isi kolom Soal, opsi A sampai E, dan Jawaban.",
+      "Download template, lalu isi kolom Soal, minimal opsi A sampai C, dan Jawaban.",
     );
   }
 
@@ -112,8 +112,11 @@ export function parseExcelQuestions(data: ArrayBuffer): { questions: ParsedQuest
     if (kunciRaw && kunciJawaban === "") issues.push(`Kunci jawaban "${kunciRaw}" tidak valid`);
 
     if (!soal) issues.push("Pertanyaan tidak terbaca");
-    const missing = OPTION_KEYS.filter((key) => cell(`opsi_${key.toLowerCase()}` as SoalField) === "");
-    if (missing.length > 0) issues.push(`Opsi ${missing.join(", ")} tidak ditemukan`);
+    const optionValues = {
+      opsi_a: cell("opsi_a"), opsi_b: cell("opsi_b"), opsi_c: cell("opsi_c"),
+      opsi_d: cell("opsi_d"), opsi_e: cell("opsi_e"), kunci_jawaban: kunciJawaban,
+    };
+    issues.push(...validateSingleOptions(optionValues));
 
     const bobotRaw = cell("bobot");
     const bobot = bobotRaw === "" ? 1 : Number(bobotRaw);
@@ -130,9 +133,7 @@ export function parseExcelQuestions(data: ArrayBuffer): { questions: ParsedQuest
     questions.push({
       nomor_urut,
       pertanyaan: soal,
-      opsi_a: cell("opsi_a"), opsi_b: cell("opsi_b"), opsi_c: cell("opsi_c"),
-      opsi_d: cell("opsi_d"), opsi_e: cell("opsi_e"),
-      kunci_jawaban: kunciJawaban,
+      ...optionValues,
       bobot: Number.isFinite(bobot) && bobot > 0 ? bobot : 1,
       issues,
       image: null,

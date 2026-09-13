@@ -5,10 +5,12 @@ import { extractDocxBlocks, docxErrorMessage, extractDocxImages } from "@/lib/do
 import {
   OPTION_KEYS,
   buildImportPayload,
+  isSingleOptionIssue,
   isReady,
   parseQuestions,
   resolveImages,
   statusReasons,
+  validateSingleOptions,
   type ParsedQuestion,
 } from "@/lib/wordImport";
 import { downloadSoalTemplate, parseExcelQuestions } from "@/lib/excelImport";
@@ -65,7 +67,7 @@ const WORD_GUIDE = (
       <h4 className="font-black text-xs text-slate-900 mb-1.5">Langkah 1 — Siapkan dokumen Word</h4>
       <ul className="text-[11px] font-medium text-slate-600 space-y-1 list-disc list-outside ml-4">
         <li>Setiap soal diberi nomor.</li>
-        <li>Pilihan jawaban memakai huruf A sampai E.</li>
+        <li>Minimal pilihan A, B, C. Pilihan D dan E boleh dikosongkan.</li>
         <li>Gambar boleh berada di dalam dokumen — sistem akan mengambilnya.</li>
         <li>Untuk kunci jawaban, tebalkan pilihan yang benar. Sistem membaca pilihan tebal itu sebagai kunci.</li>
       </ul>
@@ -339,7 +341,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
         if (parsed.questions.length === 0) {
           setError(
             "Tidak ada soal pilihan ganda yang terbaca dari dokumen ini. " +
-            "Pastikan setiap soal bernomor dan punya pilihan A sampai E."
+            "Pastikan setiap soal bernomor dan punya minimal pilihan A sampai C."
           );
         }
         const relIds = new Set(parsed.questions.map((q) => q.imageRelId).filter(Boolean) as string[]);
@@ -366,9 +368,8 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
       const row = { ...next[index], ...patch };
       // Perbaikan guru menghapus keluhan struktur yang sudah tidak berlaku lagi:
       // isian kosong dinilai ulang dari isi terbaru, bukan dari hasil parsing awal.
-      row.issues = row.issues.filter((issue) => !/Opsi .* tidak ditemukan|Pertanyaan tidak terbaca|Urutan opsi/.test(issue));
-      const empty = OPTION_FIELDS.filter((option) => !row[option.field].trim()).map((option) => option.key);
-      if (empty.length > 0) row.issues.push(`Opsi ${empty.join(", ")} tidak ditemukan`);
+      row.issues = row.issues.filter((issue) => !isSingleOptionIssue(issue) && !/Pertanyaan tidak terbaca/.test(issue));
+      row.issues.push(...validateSingleOptions(row));
       if (!row.pertanyaan.trim()) row.issues.push("Pertanyaan tidak terbaca");
       next[index] = row;
       return next;
@@ -381,13 +382,11 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
       const questions = [...current.questions];
       const question = { ...questions[index], ...patch };
       if (question.tipe === "SINGLE") {
-        question.issues = question.issues.filter((issue) => !(
-          /Pertanyaan tidak terbaca|Opsi A sampai D belum lengkap|Kunci jawaban belum tersedia|Kunci jawaban tidak cocok/.test(issue)
+        question.issues = question.issues.filter((issue) => !isSingleOptionIssue(issue) && !(
+          /Pertanyaan tidak terbaca|Kunci jawaban belum tersedia|Kunci jawaban tidak cocok|Kunci jawaban tidak dapat dipetakan/.test(issue)
         ));
         if (!question.pertanyaan.trim()) question.issues.push("Pertanyaan tidak terbaca.");
-        if ([question.opsi_a, question.opsi_b, question.opsi_c, question.opsi_d].some((value) => !value.trim())) {
-          question.issues.push("Opsi A sampai D belum lengkap.");
-        }
+        question.issues.push(...validateSingleOptions(question));
         if (!(OPTION_KEYS as readonly string[]).includes(question.kunci_jawaban)) {
           question.issues.push("Kunci jawaban belum tersedia. Soal akan ditandai PERLU DICEK.");
         }
@@ -895,7 +894,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
                 ? "Pilih sumber soal Anda"
                 : stage === "google"
                   ? "Periksa sebelum masuk Bank Soal"
-                  : "Soal pilihan ganda A–E"}
+                  : "Soal pilihan ganda minimal A–C"}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-red-500 cursor-pointer" aria-label="Tutup">
