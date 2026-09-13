@@ -82,6 +82,23 @@ export function hasPatternData(stats: Pick<StudentStats, "categories">): boolean
 }
 
 /**
+ * Satu-satunya aturan "boleh mengirim request AI sekarang" — dipakai tombol
+ * maupun handler, jadi keduanya tidak bisa berbeda pendapat.
+ *
+ * false bila: nilai sudah mencapai KKM, tidak ada kategori untuk dibaca polanya,
+ * analisis untuk hasil ujian ini sudah ada di cache, atau request masih berjalan.
+ */
+export function canRequestAiAnalysis(
+  stats: Pick<StudentStats, "score" | "kkm" | "categories"> | null,
+  options: { cached?: unknown; isRunning?: boolean } = {},
+): boolean {
+  if (!stats) return false;
+  if (options.isRunning) return false;
+  if (options.cached) return false;
+  return isEligibleForAi(stats) && hasPatternData(stats);
+}
+
+/**
  * Payload minimal untuk Gemini: hanya angka agregat + nama materi.
  *
  * Yang sengaja tidak ikut: nama siswa, id siswa, username/password, kelas, token,

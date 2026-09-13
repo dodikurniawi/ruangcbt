@@ -40,4 +40,36 @@ assert.match(analysisPage, /\$\{LS_CACHE\}:\$\{schoolId\}:\$\{provider\}/);
 assert.match(analysisPage, /questionSourceHash/);
 assert.match(resultPanel, /\$\{CACHE_PREFIX\}:\$\{schoolId\}:\$\{provider\}:\$\{idSiswa\}:\$\{resultHash\}/);
 
-console.log("aiSecurity: browser-only keys, no GAS/server key path, no logs/URL, centralized providers/cache PASS");
+// ── Single-flight & 429: invariant yang tidak boleh hilang dari source ──────
+// Satu aksi guru = satu request aktif; 429 berhenti, tidak di-retry, dan tidak
+// pindah provider diam-diam.
+assert.match(provider, /const inFlight = new Map<string, Promise<AIResult<string>>>\(\)/);
+assert.match(provider, /if \(running\) return running;/);
+assert.match(provider, /inFlight\.delete\(key\)/);
+// Tidak ada loop retry / penjadwalan ulang request di jalur provider.
+assert.doesNotMatch(provider, /setTimeout\([^)]*retry|for \(let attempt|while \(attempt|retries|backoff/i);
+// 429 mengembalikan kegagalan, bukan lanjut ke model/provider berikutnya.
+assert.match(provider, /if \(response\.status === 429\) return failure\("groq", "rate_limited"\)/);
+assert.match(provider, /if \(response\.status === 429\) return failure\("gemini", "rate_limited"\)/);
+// Pemilihan provider hanya dari pilihan guru; tidak ada percabangan "coba yang lain".
+assert.doesNotMatch(provider, /callGroq\(apiKey, request, fetchImpl\)[\s\S]{0,120}callGemini\(apiKey, request, fetchImpl\)[\s\S]{0,40}\|\|/);
+
+// AI hanya dipanggil dari handler tombol, tidak pernah otomatis dari effect atau
+// SWR: membuka halaman Analisis tidak memakai kuota guru.
+for (const [label, source] of [["panel hasil belajar", resultPanel], ["rekap cetak", printPage]] as const) {
+  // Potongan setelah tiap "useEffect(" sampai penutup dependency array-nya.
+  const effects = source.split("useEffect(").slice(1)
+    .map((chunk) => chunk.slice(0, chunk.indexOf("]);") + 3));
+  assert.ok(effects.length > 0, "source wajib punya useEffect untuk diperiksa");
+  for (const effect of effects) {
+    assert.doesNotMatch(effect, /generateAI/, `${label}: effect tidak boleh memanggil AI`);
+  }
+  assert.doesNotMatch(source, /useSWR\([^)]*generateAI/, `${label}: SWR tidak boleh memanggil AI`);
+}
+assert.match(resultPanel, /canRequestAiAnalysis\(stats, \{ isRunning: isAnalyzing \}\)/);
+// Batch analisis butir soal: tombol terkunci saat berjalan dan berhenti di 429.
+assert.match(analysisPage, /if \(isBatchAnalyzing\) return;/);
+assert.match(analysisPage, /disabled=\{isBatchAnalyzing \|\|/);
+assert.match(analysisPage, /failureKind === "rate_limited"/);
+
+console.log("aiSecurity: browser-only keys, no GAS/server key path, no logs/URL, centralized providers/cache, single-flight & 429 stop PASS");

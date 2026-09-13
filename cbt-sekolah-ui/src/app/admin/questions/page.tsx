@@ -186,7 +186,7 @@ export default function QuestionBankPage() {
     }
     return pathname.includes(path);
   };
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showImportSoal, setShowImportSoal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -567,7 +567,7 @@ export default function QuestionBankPage() {
       </div>
 
       {/* Sidebar Panel */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-slate-900 border-r border-slate-800/80 shadow-2xl z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-slate-900 border-r border-slate-800/80 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Header Branding */}
         <div className="p-5 flex justify-between items-center border-b border-slate-800/80 bg-slate-950/40">
           <Link href={tenantPath("/")} className="flex items-center gap-3 group">
@@ -583,8 +583,8 @@ export default function QuestionBankPage() {
               </span>
             </div>
           </Link>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white p-1 cursor-pointer">
-            <span className="material-symbols-outlined text-2xl">close</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" title="Sembunyikan Sidebar">
+            <span className="material-symbols-outlined text-2xl">menu_open</span>
           </button>
         </div>
         
@@ -728,10 +728,19 @@ export default function QuestionBankPage() {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/40 z-40 md:hidden" />}
 
       {/* Main */}
-      <main className="flex-grow md:ml-64 p-4 md:p-8">
+      <main className={`flex-grow p-4 md:p-8 transition-all ${isSidebarOpen ? "md:ml-64" : "ml-0"}`}>
         {/* Header Title Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center gap-3.5">
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                title="Tampilkan Sidebar"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+            )}
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
               <span className="material-symbols-outlined text-2xl">inventory_2</span>
             </div>

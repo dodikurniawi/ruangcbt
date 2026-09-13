@@ -39,6 +39,17 @@ interface GoogleModule {
   ) => Promise<{ payload: unknown[] }>;
 }
 
+interface AIProviderModule {
+  generateAIText: (
+    request: { prompt: string; systemInstruction?: string },
+    options: {
+      provider?: "gemini" | "groq";
+      storage?: { getItem(key: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void } | null;
+      fetchImpl?: typeof fetch;
+    },
+  ) => Promise<{ ok: boolean; failure?: string; message?: string; provider?: string }>;
+}
+
 interface AISettingsModule {
   isNonEmptyApiKey: (apiKey: string) => boolean;
 }
@@ -81,14 +92,14 @@ async function expectKilled(
   source: string,
   find: string,
   replaceWith: string,
-  check: (mod: WordModule | ExcelModule | GoogleModule | GoogleOAuthModule | AISettingsModule) => void | Promise<void>,
+  check: (mod: WordModule | ExcelModule | GoogleModule | GoogleOAuthModule | AISettingsModule | AIProviderModule) => void | Promise<void>,
 ) {
   const mutated = source.replace(find, replaceWith);
   assert.notEqual(mutated, source, `anchor mutation ${label} tidak ditemukan di source`);
   const file = join(here, `.mutant_${label}_${Date.now()}_${Math.random().toString(36).slice(2)}.ts`);
   writeFileSync(file, mutated, "utf8");
   try {
-    const mod = (await import(pathToFileURL(file).href)) as WordModule & ExcelModule & GoogleModule & GoogleOAuthModule & AISettingsModule;
+    const mod = (await import(pathToFileURL(file).href)) as WordModule & ExcelModule & GoogleModule & GoogleOAuthModule & AISettingsModule & AIProviderModule;
     await assert.rejects(async () => { await check(mod); }, `mutation ${label} tidak terdeteksi`);
     console.log(`  KILLED  ${label}`);
   } finally {
@@ -97,7 +108,7 @@ async function expectKilled(
 }
 
 async function main() {
-  console.log("mutation: mematikan 16 perilaku penting (Word 5, Excel 1, Google Form 6, API key opaque 4)");
+  console.log("mutation: mematikan 19 perilaku penting (Word 5, Excel 1, Google Form 6, API key opaque 4, request AI 3)");
 
   const wordSrc = readFileSync(join(here, "wordImport.ts"), "utf8");
 
@@ -305,6 +316,60 @@ async function main() {
         "penolakan berbasis bentuk key harus mati");
       assert.equal((m as AISettingsModule).isNonEmptyApiKey(" "), false);
     });
+  // ── Satu aksi guru = satu request AI; 429 berhenti ─────────────────────────
+  const providerSrc = readFileSync(join(here, "aiProvider.ts"), "utf8");
+  const keyStore = {
+    data: { ruangcbt_ai_gemini_api_key: "key-gemini", ruangcbt_ai_groq_api_key: "key-groq", ruangcbt_ai_provider: "gemini" } as Record<string, string>,
+    getItem(key: string) { return this.data[key] ?? null; },
+    setItem(key: string, value: string) { this.data[key] = value; },
+    removeItem(key: string) { delete this.data[key]; },
+  };
+
+  // 12. Guard single-flight dihapus → dua klik menghasilkan dua request.
+  await expectKilled("ai-single-flight", providerSrc,
+    "  if (running) return running;", "  if (false && running) return running;",
+    async (m) => {
+      let calls = 0;
+      const releases: Array<() => void> = [];
+      const slow = (async () => {
+        calls++;
+        await new Promise<void>((resolve) => { releases.push(resolve); });
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }), { status: 200 });
+      }) as unknown as typeof fetch;
+      const provider = m as AIProviderModule;
+      const first = provider.generateAIText({ prompt: "sama" }, { storage: keyStore, fetchImpl: slow });
+      const second = provider.generateAIText({ prompt: "sama" }, { storage: keyStore, fetchImpl: slow });
+      const observed = calls;
+      releases.forEach((resolve) => resolve());
+      await Promise.all([first, second]);
+      assert.equal(observed, 1, "klik kedua tidak boleh menambah request penyedia");
+    });
+
+  // 13. Retry otomatis pada 429 → request tambahan ke endpoint yang membatasi.
+  await expectKilled("ai-no-retry-on-429", providerSrc,
+    '  if (response.status === 429) return failure("gemini", "rate_limited");',
+    '  if (response.status === 429) { await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent`, { method: "POST" }, fetchImpl); return failure("gemini", "rate_limited"); }',
+    async (m) => {
+      let calls = 0;
+      const limited = (async () => { calls++; return new Response("{}", { status: 429 }); }) as unknown as typeof fetch;
+      await (m as AIProviderModule).generateAIText({ prompt: "kuota" }, { storage: keyStore, fetchImpl: limited });
+      assert.equal(calls, 1, "429 wajib berhenti tanpa retry");
+    });
+
+  // 14. Fallback diam-diam Gemini → Groq saat 429.
+  await expectKilled("ai-no-silent-fallback", providerSrc,
+    '  if (response.status === 429) return failure("gemini", "rate_limited");',
+    '  if (response.status === 429) return callGroq(apiKey, request, fetchImpl);',
+    async (m) => {
+      const urls: string[] = [];
+      const limited = (async (input: string | URL | Request) => {
+        urls.push(String(input));
+        return new Response("{}", { status: 429 });
+      }) as unknown as typeof fetch;
+      await (m as AIProviderModule).generateAIText({ prompt: "kuota" }, { storage: keyStore, fetchImpl: limited });
+      assert.ok(!urls.some((url) => url.includes("api.groq.com")), "429 Gemini tidak boleh pindah ke Groq diam-diam");
+    });
+
 }
 
 await main();

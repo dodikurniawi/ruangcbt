@@ -41,7 +41,7 @@ export default function AdminDashboard() {
     }
     return pathname.includes(path);
   };
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("All Classes");
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
@@ -182,7 +182,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Sidebar Panel - #FFFFFF Sidebar on #F7F9FC Content Background */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#FFFFFF] shadow-sm border-r border-slate-200/80 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#FFFFFF] shadow-sm border-r border-slate-200/80 z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 flex justify-between items-center border-b border-slate-100">
           <div>
             <Link href={tenantPath("/")} className="flex items-center gap-2.5 text-slate-900 hover:opacity-95 transition-opacity">
@@ -193,8 +193,12 @@ export default function AdminDashboard() {
             </Link>
             <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Portal Pengawas Ujian</p>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-500 p-1 cursor-pointer">
-            <span className="material-symbols-outlined text-2xl">close</span>
+          <button 
+            onClick={() => setIsSidebarOpen(false)} 
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Sembunyikan Sidebar"
+          >
+            <span className="material-symbols-outlined text-2xl">menu_open</span>
           </button>
         </div>
         
@@ -319,11 +323,22 @@ export default function AdminDashboard() {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden"></div>}
 
       {/* Main Content Area (#F7F9FC) */}
-      <main className="flex-1 md:ml-64 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10">
+      <main className={`flex-1 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10 ${isSidebarOpen ? "md:ml-64" : "ml-0"}`}>
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <h2 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Dashboard Monitoring Ujian</h2>
-            <p className="text-xs uppercase font-black tracking-wider text-[#1D4ED8] mt-1">{examName}</p>
+          <div className="flex items-center gap-3">
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                title="Tampilkan Sidebar"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+            )}
+            <div>
+              <h2 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Dashboard Monitoring Ujian</h2>
+              <p className="text-xs uppercase font-black tracking-wider text-[#1D4ED8] mt-1">{examName}</p>
+            </div>
           </div>
           <button onClick={() => mutateUsers()} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all shadow-xs cursor-pointer hover:border-blue-300">
             <span className="material-symbols-outlined text-[18px] text-[#1D4ED8]">refresh</span>

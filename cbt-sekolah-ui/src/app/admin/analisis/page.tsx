@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { getAdminQuestions, getMataPelajaran, logout } from "@/lib/api";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
 import HasilBelajarPanel from "@/components/admin/HasilBelajarPanel";
-import { generateAIText } from "@/lib/aiProvider";
+import { generateAIText, type AIFailure } from "@/lib/aiProvider";
 import {
   AI_SETTINGS_CHANGED_EVENT,
   getProviderApiKey,
@@ -179,7 +179,7 @@ export default function AnalisisButirSoalPage() {
     return pathname.includes(path);
   };
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"butir" | "hasil">("butir");
 
   const [provider, setProvider] = useState<AIProvider>("gemini");
@@ -236,12 +236,14 @@ export default function AnalisisButirSoalPage() {
     return matchMapel && matchRating && matchSearch;
   });
 
-  const handleAnalyze = async (q: ImplementedAdminQuestion) => {
+  // Mengembalikan "rate_limited" supaya batch berhenti di 429, bukan lanjut
+  // menembaki endpoint yang justru sedang membatasi kuota.
+  const handleAnalyze = async (q: ImplementedAdminQuestion): Promise<AIFailure | null> => {
     if (!getProviderApiKey(provider)) {
       setErrors(prev => ({ ...prev, [q.id_soal]: missingProviderKeyMessage(provider) }));
-      return;
+      return "missing_key";
     }
-    if (analyzing.has(q.id_soal)) return;
+    if (analyzing.has(q.id_soal)) return null;
 
     setAnalyzing(prev => {
       const n = new Set(prev);
@@ -258,7 +260,9 @@ export default function AnalisisButirSoalPage() {
       temperature: 0.2,
     }, { provider });
 
+    let failureKind: AIFailure | null = null;
     if (!res.ok) {
+      failureKind = res.failure;
       setErrors(prev => ({ ...prev, [q.id_soal]: res.message }));
     } else {
       const parsed = parseAnalysisResponse(res.data, q.id_soal, questionSourceHash(q), `${res.provider}/${res.model}`);
@@ -278,9 +282,11 @@ export default function AnalisisButirSoalPage() {
       n.delete(q.id_soal);
       return n;
     });
+    return failureKind;
   };
 
   const handleBatchAnalyze = async () => {
+    if (isBatchAnalyzing) return;
     if (!getProviderApiKey(provider)) {
       setErrors(prev => ({ ...prev, __settings: missingProviderKeyMessage(provider) }));
       return;
@@ -292,8 +298,17 @@ export default function AnalisisButirSoalPage() {
     setBatchProgress({ done: 0, total: toAnalyze.length });
 
     for (let i = 0; i < toAnalyze.length; i++) {
-      await handleAnalyze(toAnalyze[i]);
+      const failureKind = await handleAnalyze(toAnalyze[i]);
       setBatchProgress({ done: i + 1, total: toAnalyze.length });
+      // 429 = batas penggunaan penyedia. Batch berhenti; guru melanjutkan manual
+      // beberapa saat kemudian. Tidak ada retry otomatis.
+      if (failureKind === "rate_limited" || failureKind === "missing_key") {
+        setErrors(prev => ({
+          ...prev,
+          __settings: "Analisis massal dihentikan karena batas penggunaan penyedia AI tercapai. Coba lagi beberapa saat.",
+        }));
+        break;
+      }
       // Delay between requests to avoid rate limiting (Mandatory 800ms)
       if (i < toAnalyze.length - 1) {
         await new Promise(r => setTimeout(r, 800));
@@ -330,7 +345,7 @@ export default function AnalisisButirSoalPage() {
       </div>
 
       {/* Sidebar Panel */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#0F172A] shadow-xl border-r border-slate-800 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#0F172A] shadow-xl border-r border-slate-800 z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 flex justify-between items-center border-b border-slate-800">
           <div>
             <Link href={tenantPath("/")} className="flex items-center gap-2 text-white hover:opacity-90 transition-opacity">
@@ -339,8 +354,8 @@ export default function AnalisisButirSoalPage() {
             </Link>
             <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Institutional Portal</p>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-white p-1 cursor-pointer">
-            <span className="material-symbols-outlined text-2xl">close</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" title="Sembunyikan Sidebar">
+            <span className="material-symbols-outlined text-2xl">menu_open</span>
           </button>
         </div>
         
@@ -465,19 +480,30 @@ export default function AnalisisButirSoalPage() {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-40 md:hidden"></div>}
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10">
+      <main className={`flex-1 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10 ${isSidebarOpen ? "md:ml-64" : "ml-0"}`}>
         {/* SECTION 1: Page header */}
         <header className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#1E40AF] text-3xl">analytics</span>
-              <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis</h1>
+          <div className="flex items-center gap-3">
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                title="Tampilkan Sidebar"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#1E40AF] text-3xl">analytics</span>
+                <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis</h1>
+              </div>
+              <p className="text-sm text-slate-400 mt-1">
+                {activeTab === "butir"
+                  ? "Analisis kualitas butir soal"
+                  : "Pola kesalahan dan rekomendasi tindak lanjut per siswa"}
+              </p>
             </div>
-            <p className="text-sm text-slate-400 mt-1">
-              {activeTab === "butir"
-                ? "Analisis kualitas butir soal"
-                : "Pola kesalahan dan rekomendasi tindak lanjut per siswa"}
-            </p>
           </div>
 
           <div className={`flex flex-wrap items-center gap-2 ${activeTab === "butir" ? "" : "hidden"}`}>
@@ -634,7 +660,7 @@ export default function AnalisisButirSoalPage() {
             ) : (
               <button 
                 onClick={handleBatchAnalyze}
-                disabled={filtered.filter(q => !getAnalysisResult(q)).length === 0}
+                disabled={isBatchAnalyzing || filtered.filter(q => !getAnalysisResult(q)).length === 0}
                 className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white rounded-xl px-5 h-11 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
               >
                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>

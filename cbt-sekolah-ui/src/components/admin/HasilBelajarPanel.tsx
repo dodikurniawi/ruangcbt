@@ -16,8 +16,7 @@ import {
   STUDENT_SCHEMA,
   STUDENT_SYSTEM_INSTRUCTION,
   buildStudentPayload,
-  hasPatternData,
-  isEligibleForAi,
+  canRequestAiAnalysis,
   validateStudentAnalysis,
   type StudentAnalysis,
   type StudentStats,
@@ -118,8 +117,12 @@ export default function HasilBelajarPanel() {
   };
 
   const handleAnalyze = async () => {
-    if (!stats || !selectedId) return;
-    if (!isEligibleForAi(stats) || !hasPatternData(stats)) return;
+    // Guard yang sama dengan tombol. Klik saat request masih berjalan tidak
+    // menghasilkan request penyedia baru; generateAIJson juga men-dedupe request
+    // identik (lihat aiProvider.ts). Analisis yang sudah ada di cache tampil tanpa
+    // memanggil AI — hanya klik "Analisis Ulang" yang meminta request baru.
+    if (!selectedId || !canRequestAiAnalysis(stats, { isRunning: isAnalyzing })) return;
+    if (!stats) return;
     const provider = getSelectedProvider();
     if (!getProviderApiKey(provider)) {
       setAiError(`API key ${provider === "gemini" ? "Gemini" : "Groq"} belum diatur. Buka Pengaturan AI untuk menambahkannya.`);
@@ -287,7 +290,7 @@ export default function HasilBelajarPanel() {
               </h4>
               <button
                 onClick={handleAnalyze}
-                disabled={isAnalyzing || !perluTindakLanjut || stats.categories.length === 0}
+                disabled={!canRequestAiAnalysis(stats, { isRunning: isAnalyzing })}
                 title={
                   !perluTindakLanjut
                     ? "Nilai siswa sudah mencapai KKM"

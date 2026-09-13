@@ -45,7 +45,7 @@ export default function DataKelasPage() {
   const router = useTenantRouter();
   const tenantPath = useTenantPath();
   const pathname = usePathname();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
@@ -172,7 +172,7 @@ export default function DataKelasPage() {
       </div>
 
       {/* Sidebar Panel */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-white shadow-sm border-r border-slate-200 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-white shadow-sm border-r border-slate-200 z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 flex justify-between items-center border-b border-slate-100">
           <div>
             <Link href={tenantPath("/")} className="flex items-center gap-2.5 text-slate-900 hover:opacity-95 transition-opacity">
@@ -183,8 +183,8 @@ export default function DataKelasPage() {
             </Link>
             <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Portal Pengawas Ujian</p>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-500 p-1 cursor-pointer">
-            <span className="material-symbols-outlined text-2xl">close</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer" title="Sembunyikan Sidebar">
+            <span className="material-symbols-outlined text-2xl">menu_open</span>
           </button>
         </div>
 
@@ -249,9 +249,18 @@ export default function DataKelasPage() {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-40 md:hidden"></div>}
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10">
+      <main className={`flex-1 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10 ${isSidebarOpen ? "md:ml-64" : "ml-0"}`}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div className="flex items-center gap-3">
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                title="Tampilkan Sidebar"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+            )}
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#1D4ED8] border border-blue-200/60 flex items-center justify-center">
               <span className="material-symbols-outlined text-2xl">class</span>
             </div>

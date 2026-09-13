@@ -12,7 +12,7 @@ export default function MataPelajaranPage() {
   const router = useTenantRouter();
   const tenantPath = useTenantPath();
   const pathname = usePathname();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingMapel, setEditingMapel] = useState<MataPelajaran | null>(null);
@@ -189,7 +189,7 @@ export default function MataPelajaranPage() {
       </div>
 
       {/* Sidebar Panel */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#0F172A] shadow-xl border-r border-slate-800 z-50 transform md:transform-none md:translate-x-0 transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed left-0 top-0 h-full w-64 flex flex-col bg-[#0F172A] shadow-xl border-r border-slate-800 z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 flex justify-between items-center border-b border-slate-800">
           <div>
             <Link href={tenantPath("/")} className="flex items-center gap-2 text-white hover:opacity-90 transition-opacity">
@@ -198,8 +198,8 @@ export default function MataPelajaranPage() {
             </Link>
             <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-1">Institutional Portal</p>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-white p-1 cursor-pointer">
-            <span className="material-symbols-outlined text-2xl">close</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" title="Sembunyikan Sidebar">
+            <span className="material-symbols-outlined text-2xl">menu_open</span>
           </button>
         </div>
         
@@ -324,10 +324,19 @@ export default function MataPelajaranPage() {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-40 md:hidden"></div>}
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10">
+      <main className={`flex-1 min-h-screen p-6 md:p-10 w-full transition-all pt-24 md:pt-10 ${isSidebarOpen ? "md:ml-64" : "ml-0"}`}>
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div className="flex items-center gap-3">
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                title="Tampilkan Sidebar"
+              >
+                <span className="material-symbols-outlined text-2xl">menu</span>
+              </button>
+            )}
             <span className="material-symbols-outlined text-[#2563EB] text-3xl">book_2</span>
             <div>
               <h1 className="font-bold text-2xl text-slate-800">Mata Pelajaran</h1>
