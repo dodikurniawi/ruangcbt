@@ -30,21 +30,26 @@ export default function KebijakanPrivasiPage() {
     },
     {
       num: "5",
-      title: "Kebijakan Cookies",
-      content: "Kami tidak menggunakan tracking cookies, pelacakan iklan (profiling), ataupun integrasi pihak ketiga yang mencurigakan. Kami hanya menggunakan penyimpanan lokal browser (Session Storage) sementara untuk menjaga otentikasi login admin tetap aman.",
+      title: "Integrasi Google Forms",
+      content: "Untuk fitur 'Import Soal dari Google Form', RuangCBT terhubung ke akun Google Bapak/Ibu hanya ketika fitur ini benar-benar dipakai, yaitu setelah menekan tombol 'Hubungkan Akun Google'. Izin yang diminta RuangCBT bersifat baca saja dan terbatas pada: isi Google Form yang dipilih (untuk keperluan import soal) dan metadata Google Drive (nama serta waktu perubahan Form, agar daftar Google Form bisa ditampilkan). RuangCBT tidak mengakses isi berkas lain di Google Drive, tidak membaca jawaban yang dikirim responden, serta tidak membuat atau mengubah Google Form Anda. Data yang dibaca hanya digunakan untuk menampilkan daftar Google Form, mengambil Form yang Anda pilih, membaca soal, pilihan jawaban, dan informasi kunci jawaban yang tersedia di dalam Form, lalu mengubahnya menjadi soal Bank Soal RuangCBT. Setelah diimport, soal menjadi bagian Bank Soal sekolah dan mengikuti mekanisme penyimpanan RuangCBT yang sudah ada — termasuk kunci jawaban, gambar, dan bobot — di Google Drive serta Google Sheets milik sekolah Anda. Kredensial akses dari Google disimpan sementara dalam cookie terenkripsi di browser Anda yang hanya dapat dibaca sistem RuangCBT (tidak disimpan di server RuangCBT), terikat pada sesi login admin, dan tidak lagi dianggap sah saat masa berlakunya habis atau sesi berakhir. RuangCBT tidak menjual data Google Anda dan tidak menggunakannya untuk iklan maupun profiling. Koneksi dapat diputus kapan saja melalui tombol 'Putuskan Koneksi' pada halaman Import Soal; RuangCBT juga meminta Google mencabut izin yang telah diberikan.",
     },
     {
       num: "6",
+      title: "Kebijakan Cookies",
+      content: "Kami tidak menggunakan tracking cookies, pelacakan iklan (profiling), ataupun integrasi pihak ketiga yang mencurigakan. Kami hanya menggunakan penyimpanan lokal browser (Session Storage) sementara untuk menjaga otentikasi login admin tetap aman. Khusus fitur 'Import Soal dari Google Form', RuangCBT menyimpan sebuah cookie terenkripsi sementara untuk akses Google — penjelasan lengkapnya ada pada bagian Integrasi Google Forms.",
+    },
+    {
+      num: "7",
       title: "Hak Pengguna",
       content: "Sebagai pemilik data berdaulat penuh, pihak sekolah berhak menghapus berkas spreadsheet, me-reset seluruh konfigurasi, mengunduh salinan cadangan, serta bermigrasi kapan saja tanpa ada intervensi dari pihak kami.",
     },
     {
-      num: "7",
+      num: "8",
       title: "Keamanan Sistem",
       content: "Semua pengiriman data menggunakan protokol aman terenkripsi HTTPS (TLS 1.3). Google Drive sekolah Anda juga dijamin keamanannya oleh infrastruktur tangguh kelas dunia bersertifikasi ISO 27001 milik Google.",
     },
     {
-      num: "8",
+      num: "9",
       title: "Kontak Layanan",
       content: "Apabila bapak/ibu memiliki pertanyaan atau membutuhkan konsultasi lebih lanjut terkait dengan kebijakan perlindungan data pribadi ini, Anda dapat menghubungi tim kami secara langsung via WhatsApp resmi.",
     },
@@ -62,7 +67,7 @@ export default function KebijakanPrivasiPage() {
             Dokumen Kebijakan Resmi
           </span>
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-            Diperbarui: 1 Jan 2026
+            Diperbarui: 13 Sep 2026
           </span>
         </div>
 
