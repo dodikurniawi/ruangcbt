@@ -1652,7 +1652,7 @@ export default function AdminCetak() {
             <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead className="bg-[#202E3B] text-white">
+                  <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200">
                     <tr>
                       <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-24 text-center">No</th>
                       <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Nama Siswa</th>

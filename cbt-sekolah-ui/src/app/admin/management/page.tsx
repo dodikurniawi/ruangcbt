@@ -600,7 +600,7 @@ export default function AdminManagement() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[720px]">
-                <thead className="bg-[#202E3B] text-white">
+                <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-16 text-center">No</th>
                     <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-28 text-center">Foto</th>

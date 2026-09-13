@@ -487,40 +487,50 @@ export default function AnalisisButirSoalPage() {
             {!isSidebarOpen && (
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
+                className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#1D4ED8] transition-all shadow-xs cursor-pointer flex items-center justify-center shrink-0"
                 title="Tampilkan Sidebar"
               >
                 <span className="material-symbols-outlined text-2xl">menu</span>
               </button>
             )}
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#1E40AF] text-3xl">analytics</span>
-                <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis</h1>
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#1D4ED8] to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                <span className="material-symbols-outlined text-2xl">analytics</span>
               </div>
-              <p className="text-sm text-slate-400 mt-1">
-                {activeTab === "butir"
-                  ? "Analisis kualitas butir soal"
-                  : "Pola kesalahan dan rekomendasi tindak lanjut per siswa"}
-              </p>
+              <div>
+                <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis Soal</h1>
+                <p className="text-xs uppercase font-extrabold tracking-wider text-[#1D4ED8] mt-0.5">
+                  {activeTab === "butir"
+                    ? "Evaluasi Kualitas & Efektivitas Pilihan Ganda"
+                    : "Pola Kesalahan & Rekomendasi Tindak Lanjut Siswa"}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className={`flex flex-wrap items-center gap-2 ${activeTab === "butir" ? "" : "hidden"}`}>
+          <div className={`flex flex-wrap items-center gap-2.5 ${activeTab === "butir" ? "" : "hidden"}`}>
             <Link
               href={tenantPath("/admin/management#ai-settings")}
-              className={`rounded-xl px-4 h-11 flex items-center gap-2 text-xs font-bold shadow-sm transition-all ${providerConfigured ? "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" : "bg-amber-500 hover:bg-amber-600 text-white"}`}
+              className={`rounded-2xl px-4 h-11 flex items-center gap-2.5 text-xs font-black shadow-xs transition-all border ${
+                providerConfigured 
+                  ? "border-emerald-200/90 bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100" 
+                  : "border-amber-300 bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+              }`}
             >
+              <span className="relative flex h-2 w-2">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${providerConfigured ? "bg-emerald-400" : "bg-white"}`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${providerConfigured ? "bg-emerald-500" : "bg-white"}`}></span>
+              </span>
               <span className="material-symbols-outlined text-[18px]">vpn_key</span>
-              <span>{provider === "gemini" ? "Gemini" : "Groq"}: {providerConfigured ? "Siap" : "Atur API Key"}</span>
+              <span className="uppercase tracking-wide">{provider === "gemini" ? "Gemini" : "Groq"}: {providerConfigured ? "Siap" : "Atur API Key"}</span>
             </Link>
 
             {Object.keys(results).length > 0 && (
               <button 
                 onClick={handleClearCache}
-                className="border border-red-200 text-red-500 text-xs font-bold rounded-xl px-3 h-11 flex items-center gap-1.5 hover:bg-red-50 cursor-pointer shadow-sm transition-all uppercase tracking-wider"
+                className="border border-red-200 bg-white text-red-600 hover:bg-red-50 text-xs font-extrabold rounded-2xl px-4 h-11 flex items-center gap-2 cursor-pointer shadow-xs transition-all uppercase tracking-wider"
               >
-                <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                <span className="material-symbols-outlined text-[18px] text-red-500">delete_sweep</span>
                 <span>Hapus Cache</span>
               </button>
             )}
@@ -528,24 +538,25 @@ export default function AnalisisButirSoalPage() {
         </header>
 
         {errors.__settings && activeTab === "butir" && (
-          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            {errors.__settings}{" "}
-            <Link href={tenantPath("/admin/management#ai-settings")} className="font-bold underline">
-              Buka Pengaturan AI
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs font-bold text-amber-900 flex items-center gap-2 shadow-xs">
+            <span className="material-symbols-outlined text-amber-600 text-lg shrink-0">warning</span>
+            <span className="flex-1">{errors.__settings}</span>
+            <Link href={tenantPath("/admin/management#ai-settings")} className="underline text-[#1D4ED8] font-black uppercase tracking-wider ml-auto">
+              Buka Pengaturan AI &rarr;
             </Link>
           </div>
         )}
 
         {/* Tab switcher */}
-        <div className="flex gap-2 mb-6">
+        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/70 backdrop-blur-xs mb-8 gap-1.5">
           {([["butir", "Butir Soal"], ["hasil", "Hasil Belajar Siswa"]] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`px-4 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 activeTab === key
-                  ? "bg-[#2563EB] text-white shadow-sm"
-                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  ? "bg-[#1D4ED8] text-white shadow-md shadow-blue-700/20 scale-[1.02]"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60 font-extrabold"
               }`}
             >
               {label}
@@ -559,65 +570,65 @@ export default function AnalisisButirSoalPage() {
         <>
         {/* SECTION 2: Stats summary */}
         {questions.length > 0 && (
-          <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             {/* Total Soal */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-blue-600 text-[20px]">quiz</span>
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-[#1D4ED8]">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
+                <span className="material-symbols-outlined text-2xl">quiz</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Soal</p>
-                <h3 className="font-black text-2xl text-slate-800 mt-0.5">{questions.length}</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Total Soal</p>
+                <h3 className="font-black text-3xl text-slate-900 mt-0.5 tracking-tight">{questions.length}</h3>
               </div>
             </div>
 
             {/* Sudah Dianalisis */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-emerald-600 text-[20px]">check_circle</span>
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-emerald-500">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/25">
+                <span className="material-symbols-outlined text-2xl">check_circle</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sudah Dianalisis</p>
-                <h3 className="font-black text-2xl text-slate-800 mt-0.5">{analyzed}</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Sudah Dianalisis</p>
+                <h3 className="font-black text-3xl text-slate-900 mt-0.5 tracking-tight">{analyzed}</h3>
               </div>
             </div>
 
             {/* Perlu Revisi */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-red-600 text-[20px]">edit_note</span>
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-rose-500">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/25">
+                <span className="material-symbols-outlined text-2xl">edit_note</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Perlu Revisi</p>
-                <h3 className="font-black text-2xl text-slate-800 mt-0.5">{ratingRevisi}</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Perlu Revisi</p>
+                <h3 className="font-black text-3xl text-slate-900 mt-0.5 tracking-tight">{ratingRevisi}</h3>
               </div>
             </div>
 
             {/* Soal Baik */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-amber-600 text-[20px]">star</span>
+            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-amber-500">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/25">
+                <span className="material-symbols-outlined text-2xl">star</span>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Soal Baik</p>
-                <h3 className="font-black text-2xl text-slate-800 mt-0.5">{ratingBaik}</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Soal Baik</p>
+                <h3 className="font-black text-3xl text-slate-900 mt-0.5 tracking-tight">{ratingBaik}</h3>
               </div>
             </div>
           </section>
         )}
 
         {/* SECTION 3: Toolbar */}
-        <section className="flex flex-wrap items-center gap-3 mb-6 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm justify-between">
+        <section className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs mb-8 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-3 flex-1">
             {/* Search */}
-            <div className="relative min-w-[240px] flex-1 max-w-sm">
+            <div className="relative min-w-[240px] flex-1 max-w-md">
               <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
               <input 
                 type="text"
-                placeholder="Cari pertanyaan..."
+                placeholder="Cari pertanyaan soal..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 text-xs font-semibold text-slate-700 focus:border-[#1E40AF] focus:ring-2 focus:ring-[#1E40AF]/10 outline-none transition-all"
+                className="w-full h-11 bg-slate-50/80 border border-slate-200 rounded-xl pl-10 pr-4 text-xs font-bold text-slate-700 placeholder-slate-400 focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none transition-all"
               />
             </div>
 
@@ -625,7 +636,7 @@ export default function AnalisisButirSoalPage() {
             <select
               value={filterMapel}
               onChange={(e) => setFilterMapel(e.target.value)}
-              className="h-11 border border-slate-200 rounded-xl px-3 text-xs font-bold text-slate-700 bg-white focus:border-[#1E40AF] outline-none cursor-pointer shrink-0 min-w-[160px]"
+              className="h-11 border border-slate-200 rounded-xl px-4 text-xs font-extrabold text-slate-700 bg-white focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none cursor-pointer shrink-0 min-w-[160px] shadow-2xs"
             >
               <option value="">Semua Mapel</option>
               {mapelList.map(m => (
@@ -639,7 +650,7 @@ export default function AnalisisButirSoalPage() {
             <select
               value={filterRating}
               onChange={(e) => setFilterRating(e.target.value)}
-              className="h-11 border border-slate-200 rounded-xl px-3 text-xs font-bold text-slate-700 bg-white focus:border-[#1E40AF] outline-none cursor-pointer shrink-0 min-w-[160px]"
+              className="h-11 border border-slate-200 rounded-xl px-4 text-xs font-extrabold text-slate-700 bg-white focus:border-[#1D4ED8] focus:ring-2 focus:ring-[#1D4ED8]/10 outline-none cursor-pointer shrink-0 min-w-[160px] shadow-2xs"
             >
               <option value="">Semua Rating</option>
               <option value="Baik">Baik</option>
@@ -648,20 +659,20 @@ export default function AnalisisButirSoalPage() {
             </select>
           </div>
 
-          <div className="shrink-0 mt-2 sm:mt-0">
+          <div className="shrink-0">
             {isBatchAnalyzing ? (
               <button 
                 disabled
-                className="bg-slate-100 text-slate-500 rounded-xl px-5 h-11 text-xs font-bold flex items-center gap-2 cursor-not-allowed border border-slate-200"
+                className="bg-slate-100 text-slate-500 rounded-2xl px-6 h-11 text-xs font-black flex items-center justify-center gap-2.5 cursor-not-allowed border border-slate-200"
               >
-                <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                <span className="material-symbols-outlined text-[18px] animate-spin text-[#1D4ED8]">sync</span>
                 <span>{batchProgress.done}/{batchProgress.total} Dianalisis...</span>
               </button>
             ) : (
               <button 
                 onClick={handleBatchAnalyze}
                 disabled={isBatchAnalyzing || filtered.filter(q => !getAnalysisResult(q)).length === 0}
-                className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white rounded-xl px-5 h-11 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
+                className="bg-gradient-to-r from-[#1D4ED8] via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl px-6 h-11 text-xs font-black flex items-center justify-center gap-2.5 shadow-md shadow-blue-700/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider cursor-pointer active:scale-95"
               >
                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
                 <span>Analisis Semua ({filtered.filter(q => !getAnalysisResult(q)).length} soal)</span>
@@ -671,34 +682,34 @@ export default function AnalisisButirSoalPage() {
         </section>
 
         {/* SECTION 4: Question list table */}
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+        <section className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden mb-8">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse font-body-student">
-              <thead>
-                <tr className="bg-[#0F172A] text-white text-[11px] font-bold uppercase tracking-wider border-b border-outline-variant">
-                  <th className="px-6 py-4 text-center w-12">No</th>
-                  <th className="px-6 py-4">Pertanyaan</th>
-                  <th className="px-6 py-4 w-28">Mapel</th>
-                  <th className="px-6 py-4 w-28">Kategori</th>
-                  <th className="px-6 py-4 w-40">Rating</th>
-                  <th className="px-6 py-4 w-44 text-center">Aksi</th>
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider w-16 text-center text-slate-700">No</th>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider text-slate-700">Pertanyaan</th>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider w-28 text-slate-700">Mapel</th>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider w-32 text-slate-700">Kategori</th>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider w-44 text-slate-700">Rating</th>
+                  <th className="px-6 py-4 font-black text-xs uppercase tracking-wider text-center w-60 min-w-[220px] text-slate-700">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {questionsLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-500 text-sm font-semibold">
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="material-symbols-outlined animate-spin text-[#1E40AF]">sync</span>
-                        <span>Memuat soal...</span>
+                    <td colSpan={6} className="text-center py-16 text-slate-400 font-extrabold text-xs uppercase tracking-wider">
+                      <div className="flex flex-col items-center gap-3">
+                        <span className="material-symbols-outlined animate-spin text-3xl text-[#1D4ED8]">sync</span>
+                        <span>Memuat data soal...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-400 text-sm font-semibold">
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="material-symbols-outlined text-[48px] text-slate-300">inventory_2</span>
+                    <td colSpan={6} className="text-center py-16 text-slate-400 font-extrabold text-xs uppercase tracking-wider">
+                      <div className="flex flex-col items-center gap-3">
+                        <span className="material-symbols-outlined text-5xl text-slate-300">inventory_2</span>
                         <span>Belum ada soal atau hasil saringan kosong.</span>
                       </div>
                     </td>
@@ -713,20 +724,20 @@ export default function AnalisisButirSoalPage() {
 
                     return (
                       <React.Fragment key={q.id_soal}>
-                        <tr className="hover:bg-slate-50/50 transition-colors text-slate-700 text-xs">
+                        <tr className="hover:bg-blue-50/40 transition-colors">
                           {/* No */}
-                          <td className="px-6 py-4 text-center font-bold text-slate-400">{idx + 1}</td>
+                          <td className="px-6 py-4 text-center font-bold text-xs text-slate-400">{idx + 1}</td>
 
                           {/* Pertanyaan */}
                           <td className="px-6 py-4 max-w-sm">
-                            <p className="font-semibold text-slate-800 text-xs leading-relaxed" title={cleanPertanyaan}>
-                              {cleanPertanyaan.length > 90 ? cleanPertanyaan.slice(0, 90) + "..." : cleanPertanyaan || "Tanpa Redaksi"}
+                            <p className="font-extrabold text-xs text-slate-900 leading-relaxed" title={cleanPertanyaan}>
+                              {cleanPertanyaan.length > 90 ? cleanPertanyaan.slice(0, 90) + "..." : cleanPertanyaan || "Tanpa Redaksi Teks"}
                             </p>
                           </td>
 
                           {/* Mapel */}
                           <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#2563EB]/10 text-[#2563EB] border border-[#2563EB]/20 uppercase">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-blue-50 text-[#1D4ED8] border border-blue-200/60 uppercase tracking-wide shadow-2xs">
                               {mapelList.find(m => m.id_mapel === q.id_mapel)?.kode_mapel ?? "—"}
                             </span>
                           </td>
@@ -734,72 +745,81 @@ export default function AnalisisButirSoalPage() {
                           {/* Kategori */}
                           <td className="px-6 py-4">
                             {q.kategori === "Mudah" && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100">Mudah</span>
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">Mudah</span>
                             )}
                             {q.kategori === "Sedang" && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-50 text-amber-600 text-[10px] font-bold border border-amber-100">Sedang</span>
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-200">Sedang</span>
                             )}
                             {q.kategori === "Sulit" && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-orange-50 text-orange-600 text-[10px] font-bold border border-orange-100">Sulit</span>
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-orange-50 text-orange-700 text-xs font-bold border border-orange-200">Sulit</span>
                             )}
                             {q.kategori === "Sangat Sulit" && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold border border-red-100">Sangat Sulit</span>
+                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200">Sangat Sulit</span>
                             )}
                             {!q.kategori && (
-                              <span className="text-slate-300">—</span>
+                              <span className="text-slate-300 font-bold">—</span>
                             )}
                           </td>
 
                           {/* Rating */}
                           <td className="px-6 py-4">
                             {isAnalyzing ? (
-                              <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
-                                <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                              <div className="flex items-center gap-2 text-blue-600 font-extrabold text-xs">
+                                <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
                                 <span>Menganalisis...</span>
                               </div>
                             ) : errorMsg ? (
-                              <div className="flex items-center gap-1 text-red-500 font-bold text-[11px]" title={errorMsg}>
-                                <span className="material-symbols-outlined text-[14px]">error</span>
+                              <div className="flex items-center gap-1.5 text-red-600 font-bold text-xs" title={errorMsg}>
+                                <span className="material-symbols-outlined text-[16px]">error</span>
                                 <span>Gagal</span>
                               </div>
                             ) : res ? (
-                              <div>
+                              <div className="space-y-1">
                                 {res.rating === "Baik" && (
-                                  <span className="inline-flex px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">BAIK</span>
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-emerald-500 text-white shadow-xs shadow-emerald-500/30 tracking-wide uppercase">
+                                    <span className="material-symbols-outlined text-[13px]">star</span>
+                                    <span>BAIK</span>
+                                  </span>
                                 )}
                                 {res.rating === "Cukup" && (
-                                  <span className="inline-flex px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 border border-amber-200">CUKUP</span>
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-amber-500 text-white shadow-xs shadow-amber-500/30 tracking-wide uppercase">
+                                    <span className="material-symbols-outlined text-[13px]">tune</span>
+                                    <span>CUKUP</span>
+                                  </span>
                                 )}
                                 {res.rating === "Perlu Revisi" && (
-                                  <span className="inline-flex px-2.5 py-0.5 text-[10px] font-black rounded-full bg-red-100 text-red-700 border border-red-200">PERLU REVISI</span>
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-rose-600 text-white shadow-xs shadow-rose-600/30 tracking-wide uppercase">
+                                    <span className="material-symbols-outlined text-[13px]">warning</span>
+                                    <span>PERLU REVISI</span>
+                                  </span>
                                 )}
-                                <div className="text-[9px] text-slate-400 mt-1 font-semibold">
-                                  Redaksi: {res.skor_kejelasan}% · Distraktor: {res.skor_distraktor}%
+                                <div className="text-[10px] text-slate-500 font-bold">
+                                  Redaksi: <span className="text-slate-900">{res.skor_kejelasan}%</span> · Distraktor: <span className="text-slate-900">{res.skor_distraktor}%</span>
                                 </div>
-                                <div className="text-[8px] text-slate-300 mt-0.5 font-bold uppercase tracking-wider">
+                                <div className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">
                                   via {res.model_used.split("-")[0]}
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-slate-300">—</span>
+                              <span className="text-slate-300 font-bold">—</span>
                             )}
                           </td>
 
                           {/* Aksi */}
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 text-center">
                             <div className="flex items-center justify-center gap-2">
                               {res ? (
                                 <>
                                   <button
                                     onClick={() => handleAnalyze(q)}
                                     disabled={isAnalyzing}
-                                    className="border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-lg px-3 h-8 text-[11px] font-semibold cursor-pointer transition-all shrink-0"
+                                    className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl px-3.5 h-8.5 text-xs font-extrabold cursor-pointer transition-all shrink-0 shadow-2xs whitespace-nowrap"
                                   >
                                     Analisis Ulang
                                   </button>
                                   <button
                                     onClick={() => setExpandedId(isExpanded ? null : q.id_soal)}
-                                    className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white rounded-lg px-3 h-8 text-[11px] font-semibold cursor-pointer transition-all shrink-0 shadow-sm"
+                                    className="bg-[#1D4ED8] hover:bg-blue-700 text-white font-black text-xs px-4 h-8.5 rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer shrink-0 whitespace-nowrap"
                                   >
                                     {isExpanded ? "Tutup" : "Lihat Detail"}
                                   </button>
@@ -808,9 +828,10 @@ export default function AnalisisButirSoalPage() {
                                 <button
                                   onClick={() => handleAnalyze(q)}
                                   disabled={isAnalyzing}
-                                  className="w-full bg-[#1E40AF]/10 hover:bg-[#1E40AF] text-[#1E40AF] hover:text-white border border-[#1E40AF]/20 rounded-lg px-3 h-8 text-[11px] font-bold transition-all cursor-pointer"
+                                  className="px-5 h-8.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
                                 >
-                                  {isAnalyzing ? "..." : "Analisis"}
+                                  <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                                  <span>{isAnalyzing ? "..." : "Analisis"}</span>
                                 </button>
                               )}
                             </div>
@@ -819,29 +840,35 @@ export default function AnalisisButirSoalPage() {
 
                         {/* Expanded Detail Row */}
                         {isExpanded && res && (
-                          <tr className="bg-slate-50/50">
-                            <td colSpan={6} className="px-6 py-0">
-                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 my-3 shadow-inner grid grid-cols-1 md:grid-cols-2 gap-6 transition-all">
+                          <tr className="bg-blue-50/20">
+                            <td colSpan={6} className="px-6 py-2">
+                              <div className="bg-gradient-to-br from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/90 rounded-2xl p-6 my-2 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-6 transition-all">
                                 {/* Left Column: Catatan */}
                                 <div>
-                                  <h4 className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 mb-2">Catatan Analisis</h4>
-                                  <p className="text-xs text-slate-700 leading-relaxed font-semibold bg-white p-3.5 rounded-xl border border-slate-200/50 shadow-sm">
+                                  <h4 className="text-[10px] uppercase font-black tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-sm">lightbulb</span>
+                                    Catatan Analisis
+                                  </h4>
+                                  <p className="text-xs text-slate-800 leading-relaxed font-bold bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                     {res.catatan || "Tidak ada catatan analisis khusus."}
                                   </p>
                                 </div>
 
                                 {/* Right Column: Saran */}
                                 <div>
-                                  <h4 className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 mb-2">Saran Perbaikan</h4>
+                                  <h4 className="text-[10px] uppercase font-black tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-sm">check_circle_outline</span>
+                                    Saran Perbaikan
+                                  </h4>
                                   {res.saran.length === 0 ? (
-                                    <p className="text-xs text-slate-500 font-semibold bg-white p-3.5 rounded-xl border border-slate-200/50 shadow-sm">
+                                    <p className="text-xs text-slate-600 font-bold bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                       Tidak ada saran perbaikan khusus. Butir soal sudah sangat baik!
                                     </p>
                                   ) : (
-                                    <ul className="space-y-1.5 bg-white p-3.5 rounded-xl border border-slate-200/50 shadow-sm">
+                                    <ul className="space-y-2 bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                       {res.saran.map((s, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-xs text-slate-700 font-semibold">
-                                          <span className="material-symbols-outlined text-[#1E40AF] text-[16px] shrink-0 mt-0.5">chevron_right</span>
+                                        <li key={i} className="flex items-start gap-2 text-xs text-slate-800 font-bold">
+                                          <span className="material-symbols-outlined text-[#1D4ED8] text-[16px] shrink-0 mt-0.5">chevron_right</span>
                                           <span>{s}</span>
                                         </li>
                                       ))}
@@ -850,7 +877,7 @@ export default function AnalisisButirSoalPage() {
                                 </div>
 
                                 {/* Bottom Info */}
-                                <div className="md:col-span-2 text-[9px] text-slate-400 font-bold text-right">
+                                <div className="md:col-span-2 text-[10px] text-slate-400 font-extrabold text-right border-t border-slate-200/60 pt-3">
                                   Dianalisis: {new Date(res.analyzed_at).toLocaleString("id-ID")} menggunakan {res.model_used}
                                 </div>
                               </div>
