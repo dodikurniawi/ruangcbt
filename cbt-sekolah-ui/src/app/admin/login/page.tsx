@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
 import { adminLogin } from "@/lib/api";
+import { ShieldCheck } from "lucide-react";
 
 export default function AdminLogin() {
   const router = useTenantRouter();
@@ -38,7 +39,7 @@ export default function AdminLogin() {
         {/* Logo & Header */}
         <div className="text-center mb-6 flex flex-col items-center">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-500/25 ring-4 ring-blue-100/60 animate-float mb-3">
-            <span className="material-symbols-outlined text-white text-[36px]">admin_panel_settings</span>
+            <ShieldCheck className="w-8 h-8 text-white stroke-[2.2]" />
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/60 mb-2">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
