@@ -42,6 +42,10 @@ export const ACTION_RULES: Readonly<Record<string, ActionRule>> = Object.freeze(
   getAdminQuestions: { method: "GET", role: "admin" },
   getUsers: { method: "GET", role: "admin" },
   exportResults: { method: "GET", role: "admin" },
+  // Dipanggil route AI (src/lib/aiAnalysis.ts) yang menyuntik id_siswa sendiri.
+  // Lewat proxy biasa action ini tidak berguna: body GET selalu kosong, jadi GAS
+  // menolaknya karena id_siswa tidak ada.
+  getStudentAnalysis: { method: "GET", role: "admin" },
   getMataPelajaran: { method: "GET", role: "admin" },
   getKelas: { method: "GET", role: "admin" },
   getPrintSettings: { method: "GET", role: "admin" },

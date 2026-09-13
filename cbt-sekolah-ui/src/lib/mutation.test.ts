@@ -39,6 +39,10 @@ interface GoogleModule {
   ) => Promise<{ payload: unknown[] }>;
 }
 
+interface AISettingsModule {
+  isNonEmptyApiKey: (apiKey: string) => boolean;
+}
+
 interface GoogleOAuthModule {
   googleConnectionStatus: (configured: boolean, token: GoogleTokenSession | null) => Record<string, unknown>;
   validGoogleToken: (
@@ -77,14 +81,14 @@ async function expectKilled(
   source: string,
   find: string,
   replaceWith: string,
-  check: (mod: WordModule | ExcelModule | GoogleModule | GoogleOAuthModule) => void | Promise<void>,
+  check: (mod: WordModule | ExcelModule | GoogleModule | GoogleOAuthModule | AISettingsModule) => void | Promise<void>,
 ) {
   const mutated = source.replace(find, replaceWith);
   assert.notEqual(mutated, source, `anchor mutation ${label} tidak ditemukan di source`);
   const file = join(here, `.mutant_${label}_${Date.now()}_${Math.random().toString(36).slice(2)}.ts`);
   writeFileSync(file, mutated, "utf8");
   try {
-    const mod = (await import(pathToFileURL(file).href)) as WordModule & ExcelModule & GoogleModule & GoogleOAuthModule;
+    const mod = (await import(pathToFileURL(file).href)) as WordModule & ExcelModule & GoogleModule & GoogleOAuthModule & AISettingsModule;
     await assert.rejects(async () => { await check(mod); }, `mutation ${label} tidak terdeteksi`);
     console.log(`  KILLED  ${label}`);
   } finally {
@@ -93,7 +97,7 @@ async function expectKilled(
 }
 
 async function main() {
-  console.log("mutation: mematikan 12 perilaku penting (Word 5, Excel 1, Google Form 6)");
+  console.log("mutation: mematikan 16 perilaku penting (Word 5, Excel 1, Google Form 6, API key opaque 4)");
 
   const wordSrc = readFileSync(join(here, "wordImport.ts"), "utf8");
 
@@ -262,6 +266,44 @@ async function main() {
         false,
         "token tenant A tidak boleh dipakai tenant B",
       );
+    });
+
+  // ── API key opaque: setiap validasi format yang kembali harus mati ──────────
+  // API key adalah credential opaque. Empat mutant di bawah memasang kembali
+  // asumsi format (prefix startsWith, regex ^AIza, panjang minimum, penolakan
+  // non-AIza) dan semuanya harus terdeteksi: key valid berformat baru tidak boleh
+  // pernah ditolak di browser.
+  const settingsSrc = readFileSync(join(here, "aiSettings.ts"), "utf8");
+  const NON_AIZA_KEY = "gemini_pk_v2_format_baru";
+  const anchor = '  return apiKey.trim() !== "";';
+
+  await expectKilled("apikey-prefix-startswith", settingsSrc,
+    anchor, '  return apiKey.trim().startsWith("AIza");',
+    (m) => {
+      assert.equal((m as AISettingsModule).isNonEmptyApiKey(NON_AIZA_KEY), true,
+        "key tanpa prefix AIza wajib diterima");
+    });
+
+  await expectKilled("apikey-prefix-regex", settingsSrc,
+    anchor, '  return /^AIza/.test(apiKey.trim());',
+    (m) => {
+      assert.equal((m as AISettingsModule).isNonEmptyApiKey(NON_AIZA_KEY), true,
+        "regex prefix tidak boleh jadi syarat");
+    });
+
+  await expectKilled("apikey-min-length", settingsSrc,
+    anchor, '  return apiKey.trim().length >= 39;',
+    (m) => {
+      assert.equal((m as AISettingsModule).isNonEmptyApiKey("x"), true,
+        "panjang key bukan Business Rule");
+    });
+
+  await expectKilled("apikey-reject-non-aiza", settingsSrc,
+    anchor, ['  const v = apiKey.trim();', '  return v !== "" && !v.startsWith("gemini_");'].join("\n"),
+    (m) => {
+      assert.equal((m as AISettingsModule).isNonEmptyApiKey(NON_AIZA_KEY), true,
+        "penolakan berbasis bentuk key harus mati");
+      assert.equal((m as AISettingsModule).isNonEmptyApiKey(" "), false);
     });
 }
 

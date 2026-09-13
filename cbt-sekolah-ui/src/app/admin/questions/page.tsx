@@ -32,6 +32,8 @@ import {
   type MatchingDraft,
 } from "@/lib/matching";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
+import { generateAIText } from "@/lib/aiProvider";
+import { getProviderApiKey, getSelectedProvider, missingProviderKeyMessage } from "@/lib/aiSettings";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface QuestionForm {
@@ -99,34 +101,6 @@ function hasLegacyOptions(
   question: ImplementedAdminQuestion,
 ): question is Extract<ImplementedAdminQuestion, { tipe: "SINGLE" | "COMPLEX" }> {
   return usesLegacyOptions(question.tipe);
-}
-
-const GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
-];
-
-async function callGroq(apiKey: string, prompt: string): Promise<string> {
-  for (const model of GROQ_MODELS) {
-    try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? "";
-    } catch { continue; }
-  }
-  throw new Error("Semua model Groq gagal. Periksa API key Anda.");
 }
 
 // ─── Toolbar Button ─────────────────────────────────────────────────────────
@@ -532,8 +506,8 @@ export default function QuestionBankPage() {
   };
 
   const handleAiGenerate = async () => {
-    const apiKey = localStorage.getItem("groq_api_key") ?? "";
-    if (!apiKey) { setAiError("API key Groq belum diatur. Masukkan di kotak di bawah."); return; }
+    const provider = getSelectedProvider();
+    if (!getProviderApiKey(provider)) { setAiError(missingProviderKeyMessage(provider)); return; }
     if (!aiTopic.trim()) { setAiError("Isi topik soal terlebih dahulu."); return; }
 
     setAiGenerating(true);
@@ -554,7 +528,9 @@ export default function QuestionBankPage() {
 }`;
 
     try {
-      const raw = await callGroq(apiKey, prompt);
+      const response = await generateAIText({ prompt, temperature: 0.7, maxOutputTokens: 1024 }, { provider });
+      if (!response.ok) throw new Error(response.message);
+      const raw = response.data;
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error("AI tidak menghasilkan JSON yang valid.");
       const parsed = JSON.parse(match[0]);
@@ -1140,24 +1116,14 @@ export default function QuestionBankPage() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-purple-900 block mb-1.5 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-purple-600 text-sm">key</span>
-                          Groq API Key
-                        </span>
-                        <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 text-[11px] normal-case font-semibold hover:underline flex items-center gap-0.5">
-                          <span>Dapatkan API Key Gratis</span>
-                          <span className="material-symbols-outlined text-xs">open_in_new</span>
-                        </a>
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="gsk_..."
-                        defaultValue={typeof window !== "undefined" ? (localStorage.getItem("groq_api_key") ?? "") : ""}
-                        onChange={e => localStorage.setItem("groq_api_key", e.target.value)}
-                        className="w-full h-10 px-3.5 border border-purple-200 rounded-xl text-xs font-mono text-slate-800 bg-white focus:border-purple-600 focus:ring-4 focus:ring-purple-500/10 outline-none shadow-sm"
-                      />
+                    <div className="bg-white/80 border border-purple-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-purple-900">Menggunakan provider dari Pengaturan AI</p>
+                        <p className="text-[11px] text-purple-600 mt-0.5">API key tidak perlu dimasukkan ulang di sini.</p>
+                      </div>
+                      <Link href={tenantPath("/admin/management#ai-settings")} className="text-xs font-bold text-purple-700 underline">
+                        Buka Pengaturan AI
+                      </Link>
                     </div>
 
                     {aiError && (

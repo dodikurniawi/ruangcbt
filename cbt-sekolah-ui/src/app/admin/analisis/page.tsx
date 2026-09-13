@@ -7,25 +7,24 @@ import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getAdminQuestions, getMataPelajaran, logout } from "@/lib/api";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
+import HasilBelajarPanel from "@/components/admin/HasilBelajarPanel";
+import { generateAIText } from "@/lib/aiProvider";
+import {
+  AI_SETTINGS_CHANGED_EVENT,
+  getProviderApiKey,
+  getSelectedProvider,
+  missingProviderKeyMessage,
+  type AIProvider,
+} from "@/lib/aiSettings";
 
-// ─── GROQ AI UTILITY ────────────────────────────────────────────────────────
+// ─── AI ANALYSIS CACHE ──────────────────────────────────────────────────────
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-// Multi-fallback model list — try in order until one succeeds
-const GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
-  "gemma2-9b-it",
-] as const;
-
-const LS_API_KEY = "groq_api_key";
-const LS_CACHE   = "groq_analysis_cache";
+const LS_CACHE = "ruangcbt_ai_item_analysis_cache";
+const LEGACY_CACHE = "groq_analysis_cache";
 
 interface AnalysisResult {
   id_soal: string;
+  source_hash: string;
   model_used: string;
   rating: "Baik" | "Cukup" | "Perlu Revisi";
   skor_kejelasan: number;      // 0–100
@@ -35,76 +34,44 @@ interface AnalysisResult {
   analyzed_at: string;         // ISO timestamp
 }
 
-interface GroqResponse {
-  success: boolean;
-  content?: string;
-  model?: string;
-  error?: string;
+function cacheStorageKey(provider: AIProvider): string {
+  const schoolId = typeof window === "undefined"
+    ? "default"
+    : window.location.pathname.match(/^\/s\/([^/]+)/)?.[1] ?? "default";
+  return `${LS_CACHE}:${schoolId}:${provider}`;
 }
 
-async function callGroqWithFallback(
-  apiKey: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<GroqResponse> {
-  for (const model of GROQ_MODELS) {
-    try {
-      const res = await fetch(GROQ_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.2,
-          max_tokens: 1024,
-          response_format: { type: "json_object" }, // force JSON output
-        }),
-      });
-
-      // Auth failure — stop immediately, do not try other models
-      if (res.status === 401) {
-        return { success: false, error: "API key tidak valid atau kadaluarsa." };
-      }
-
-      // Rate limit / server error — try next model
-      if (res.status === 429 || res.status >= 500) continue;
-
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content ?? "";
-        return { success: true, content, model };
-      }
-
-      // Other client errors (400, 404) — try next model
-      continue;
-
-    } catch {
-      // Network error — try next model
-      continue;
-    }
+function questionSourceHash(question: ImplementedAdminQuestion): string {
+  const text = JSON.stringify(question);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return { 
-    success: false, 
-    error: "Semua model Groq tidak tersedia saat ini. Coba beberapa saat lagi." 
-  };
+  return (hash >>> 0).toString(36);
 }
 
-function loadCache(): Record<string, AnalysisResult> {
+function loadCache(provider: AIProvider): Record<string, AnalysisResult> {
   try {
     if (typeof window !== "undefined") {
-      return JSON.parse(localStorage.getItem(LS_CACHE) ?? "{}");
+      const current = localStorage.getItem(cacheStorageKey(provider));
+      if (current) return JSON.parse(current);
+      if (provider === "groq") {
+        const legacy = localStorage.getItem(LEGACY_CACHE);
+        if (legacy) {
+          localStorage.setItem(cacheStorageKey(provider), legacy);
+          if (localStorage.getItem(cacheStorageKey(provider)) === legacy) {
+            localStorage.removeItem(LEGACY_CACHE);
+          }
+          return JSON.parse(legacy);
+        }
+      }
     }
     return {};
   } catch { return {}; }
 }
 
-function saveCache(cache: Record<string, AnalysisResult>) {
+function saveCache(provider: AIProvider, cache: Record<string, AnalysisResult>) {
   try {
     if (Object.keys(cache).length > 200) {
       // Remove oldest 50 entries
@@ -112,7 +79,7 @@ function saveCache(cache: Record<string, AnalysisResult>) {
         .sort((a, b) => a[1].analyzed_at.localeCompare(b[1].analyzed_at));
       sorted.slice(0, 50).forEach(([k]) => delete cache[k]);
     }
-    localStorage.setItem(LS_CACHE, JSON.stringify(cache));
+    localStorage.setItem(cacheStorageKey(provider), JSON.stringify(cache));
   } catch { /* quota exceeded — ignore */ }
 }
 
@@ -173,6 +140,7 @@ Panduan rating:
 function parseAnalysisResponse(
   raw: string, 
   id_soal: string, 
+  source_hash: string,
   model: string
 ): AnalysisResult | null {
   try {
@@ -185,6 +153,7 @@ function parseAnalysisResponse(
     
     return {
       id_soal,
+      source_hash,
       model_used: model,
       rating: parsed.rating,
       skor_kejelasan: Math.min(100, Math.max(0, parsed.skor_kejelasan)),
@@ -211,13 +180,10 @@ export default function AnalisisButirSoalPage() {
   };
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"butir" | "hasil">("butir");
 
-  // API Key state with lazy localStorage load for SSR safety
-  const [apiKey, setApiKey] = useState<string>("");
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [keyInput, setKeyInput] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [inlineKeyError, setInlineKeyError] = useState("");
+  const [provider, setProvider] = useState<AIProvider>("gemini");
+  const [providerConfigured, setProviderConfigured] = useState(false);
 
   const [filterMapel, setFilterMapel] = useState("");
   const [filterRating, setFilterRating] = useState("");
@@ -233,10 +199,15 @@ export default function AnalisisButirSoalPage() {
   const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setApiKey(localStorage.getItem(LS_API_KEY) ?? "");
-      setResults(loadCache());
-    }
+    const refreshAISettings = () => {
+      const selected = getSelectedProvider();
+      setProvider(selected);
+      setProviderConfigured(Boolean(getProviderApiKey(selected)));
+      setResults(loadCache(selected));
+    };
+    refreshAISettings();
+    window.addEventListener(AI_SETTINGS_CHANGED_EVENT, refreshAISettings);
+    return () => window.removeEventListener(AI_SETTINGS_CHANGED_EVENT, refreshAISettings);
   }, []);
 
   // Auth guard
@@ -252,19 +223,22 @@ export default function AnalisisButirSoalPage() {
   const getMapelNama = (q: ImplementedAdminQuestion) =>
     mapelList.find(m => m.id_mapel === q.id_mapel)?.nama_mapel ?? "Umum";
 
+  const getAnalysisResult = (question: ImplementedAdminQuestion) => {
+    const result = results[question.id_soal];
+    return result?.source_hash === questionSourceHash(question) ? result : undefined;
+  };
+
   const filtered = questions.filter(q => {
     const matchMapel   = !filterMapel  || q.id_mapel === filterMapel;
-    const matchRating  = !filterRating || results[q.id_soal]?.rating === filterRating;
+    const matchRating  = !filterRating || getAnalysisResult(q)?.rating === filterRating;
     const matchSearch  = !search       || 
       q.pertanyaan.toLowerCase().includes(search.toLowerCase());
     return matchMapel && matchRating && matchSearch;
   });
 
   const handleAnalyze = async (q: ImplementedAdminQuestion) => {
-    if (!apiKey) {
-      setKeyInput("");
-      setInlineKeyError("");
-      setShowKeyModal(true);
+    if (!getProviderApiKey(provider)) {
+      setErrors(prev => ({ ...prev, [q.id_soal]: missingProviderKeyMessage(provider) }));
       return;
     }
     if (analyzing.has(q.id_soal)) return;
@@ -277,16 +251,21 @@ export default function AnalisisButirSoalPage() {
     setErrors(prev => { const n = {...prev}; delete n[q.id_soal]; return n; });
 
     const { system, user } = buildPrompts(q, getMapelNama(q));
-    const res = await callGroqWithFallback(apiKey, system, user);
+    const res = await generateAIText({
+      systemInstruction: system,
+      prompt: user,
+      schema: { type: "object" },
+      temperature: 0.2,
+    }, { provider });
 
-    if (!res.success || !res.content) {
-      setErrors(prev => ({ ...prev, [q.id_soal]: res.error ?? "Analisis gagal." }));
+    if (!res.ok) {
+      setErrors(prev => ({ ...prev, [q.id_soal]: res.message }));
     } else {
-      const parsed = parseAnalysisResponse(res.content, q.id_soal, res.model ?? "");
+      const parsed = parseAnalysisResponse(res.data, q.id_soal, questionSourceHash(q), `${res.provider}/${res.model}`);
       if (parsed) {
         setResults(prev => {
           const newResults = { ...prev, [q.id_soal]: parsed };
-          saveCache(newResults);
+          saveCache(provider, newResults);
           return newResults;
         });
       } else {
@@ -302,13 +281,11 @@ export default function AnalisisButirSoalPage() {
   };
 
   const handleBatchAnalyze = async () => {
-    if (!apiKey) {
-      setKeyInput("");
-      setInlineKeyError("");
-      setShowKeyModal(true);
+    if (!getProviderApiKey(provider)) {
+      setErrors(prev => ({ ...prev, __settings: missingProviderKeyMessage(provider) }));
       return;
     }
-    const toAnalyze = filtered.filter(q => !results[q.id_soal]);
+    const toAnalyze = filtered.filter(q => !getAnalysisResult(q));
     if (toAnalyze.length === 0) return;
 
     setIsBatchAnalyzing(true);
@@ -326,31 +303,19 @@ export default function AnalisisButirSoalPage() {
     setIsBatchAnalyzing(false);
   };
 
-  const handleSaveKey = () => {
-    const trimmed = keyInput.trim();
-    if (!trimmed.startsWith("gsk_")) {
-      setInlineKeyError("API key Groq harus diawali dengan \"gsk_\"");
-      return;
-    }
-    localStorage.setItem(LS_API_KEY, trimmed);
-    setApiKey(trimmed);
-    setKeyInput("");
-    setInlineKeyError("");
-    setShowKeyModal(false);
-  };
-
   const handleClearCache = () => {
     if (confirm("Apakah Anda yakin ingin menghapus seluruh riwayat analisis AI?")) {
-      localStorage.removeItem(LS_CACHE);
+      localStorage.removeItem(cacheStorageKey(provider));
       setResults({});
     }
   };
 
   // Stats computation
-  const analyzed     = Object.keys(results).length;
-  const ratingBaik   = Object.values(results).filter(r => r.rating === "Baik").length;
-  const ratingCukup  = Object.values(results).filter(r => r.rating === "Cukup").length;
-  const ratingRevisi = Object.values(results).filter(r => r.rating === "Perlu Revisi").length;
+  const currentResults = questions.map(getAnalysisResult).filter((result): result is AnalysisResult => Boolean(result));
+  const analyzed     = currentResults.length;
+  const ratingBaik   = currentResults.filter(r => r.rating === "Baik").length;
+  const ratingCukup  = currentResults.filter(r => r.rating === "Cukup").length;
+  const ratingRevisi = currentResults.filter(r => r.rating === "Perlu Revisi").length;
 
   return (
     <div className="bg-[#f8fafc] text-slate-800 font-body-student min-h-screen flex">
@@ -507,37 +472,23 @@ export default function AnalisisButirSoalPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[#1E40AF] text-3xl">analytics</span>
-              <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis Butir Soal</h1>
+              <h1 className="font-black text-2xl md:text-3xl text-slate-900 tracking-tight">Analisis</h1>
             </div>
-            <p className="text-sm text-slate-400 mt-1">Analisis kualitas soal menggunakan Groq AI secara instan</p>
+            <p className="text-sm text-slate-400 mt-1">
+              {activeTab === "butir"
+                ? "Analisis kualitas butir soal"
+                : "Pola kesalahan dan rekomendasi tindak lanjut per siswa"}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {apiKey ? (
-              <button 
-                onClick={() => {
-                  setKeyInput(apiKey);
-                  setInlineKeyError("");
-                  setShowKeyModal(true);
-                }}
-                className="border border-slate-200 bg-white rounded-xl px-4 h-11 flex items-center gap-2 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer shadow-sm transition-all"
-              >
-                <span className="material-symbols-outlined text-amber-500 text-[18px]">vpn_key</span>
-                <span>API Key: ••••{apiKey.slice(-4)}</span>
-              </button>
-            ) : (
-              <button 
-                onClick={() => {
-                  setKeyInput("");
-                  setInlineKeyError("");
-                  setShowKeyModal(true);
-                }}
-                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-4 h-11 flex items-center gap-2 text-xs font-black cursor-pointer shadow-md transition-all animate-pulse uppercase tracking-wider"
-              >
-                <span className="material-symbols-outlined text-[18px]">vpn_key</span>
-                <span>Set Groq API Key</span>
-              </button>
-            )}
+          <div className={`flex flex-wrap items-center gap-2 ${activeTab === "butir" ? "" : "hidden"}`}>
+            <Link
+              href={tenantPath("/admin/management#ai-settings")}
+              className={`rounded-xl px-4 h-11 flex items-center gap-2 text-xs font-bold shadow-sm transition-all ${providerConfigured ? "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" : "bg-amber-500 hover:bg-amber-600 text-white"}`}
+            >
+              <span className="material-symbols-outlined text-[18px]">vpn_key</span>
+              <span>{provider === "gemini" ? "Gemini" : "Groq"}: {providerConfigured ? "Siap" : "Atur API Key"}</span>
+            </Link>
 
             {Object.keys(results).length > 0 && (
               <button 
@@ -551,6 +502,36 @@ export default function AnalisisButirSoalPage() {
           </div>
         </header>
 
+        {errors.__settings && activeTab === "butir" && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+            {errors.__settings}{" "}
+            <Link href={tenantPath("/admin/management#ai-settings")} className="font-bold underline">
+              Buka Pengaturan AI
+            </Link>
+          </div>
+        )}
+
+        {/* Tab switcher */}
+        <div className="flex gap-2 mb-6">
+          {([["butir", "Butir Soal"], ["hasil", "Hasil Belajar Siswa"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`px-4 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === key
+                  ? "bg-[#2563EB] text-white shadow-sm"
+                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "hasil" && <HasilBelajarPanel />}
+
+        {activeTab === "butir" && (
+        <>
         {/* SECTION 2: Stats summary */}
         {questions.length > 0 && (
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -654,11 +635,11 @@ export default function AnalisisButirSoalPage() {
             ) : (
               <button 
                 onClick={handleBatchAnalyze}
-                disabled={filtered.filter(q => !results[q.id_soal]).length === 0}
+                disabled={filtered.filter(q => !getAnalysisResult(q)).length === 0}
                 className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white rounded-xl px-5 h-11 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
               >
                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-                <span>Analisis Semua ({filtered.filter(q => !results[q.id_soal]).length} soal)</span>
+                <span>Analisis Semua ({filtered.filter(q => !getAnalysisResult(q)).length} soal)</span>
               </button>
             )}
           </div>
@@ -701,7 +682,7 @@ export default function AnalisisButirSoalPage() {
                   filtered.map((q, idx) => {
                     const cleanPertanyaan = q.pertanyaan.replace(/<[^>]+>/g, "").trim();
                     const isExpanded = expandedId === q.id_soal;
-                    const res = results[q.id_soal];
+                    const res = getAnalysisResult(q);
                     const isAnalyzing = analyzing.has(q.id_soal);
                     const errorMsg = errors[q.id_soal];
 
@@ -859,106 +840,10 @@ export default function AnalisisButirSoalPage() {
             </table>
           </div>
         </section>
+        </>
+        )}
       </main>
 
-      {/* ── API KEY MODAL ── */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100 transition-all">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-amber-500 text-[22px]">vpn_key</span>
-              </div>
-              <div>
-                <h2 className="font-bold text-lg text-slate-800">Konfigurasi Groq API Key</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Gunakan API Key Anda untuk analisis instan</p>
-              </div>
-            </div>
-
-            {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-xs text-blue-700 leading-relaxed font-semibold">
-              API key Anda disimpan hanya di browser ini (localStorage) dan tidak pernah dikirim ke server kami. Dapatkan API key gratis di{" "}
-              <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" className="underline font-bold text-blue-800 hover:text-blue-900">
-                console.groq.com
-              </a>
-            </div>
-
-            {/* Input Row */}
-            <div className="mb-4">
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Groq API Key</label>
-              <div className="relative">
-                <input 
-                  type={showKey ? "text" : "password"}
-                  placeholder="gsk_xxxxxxxxxxxxxxxxxxxx"
-                  value={keyInput}
-                  onChange={(e) => {
-                    setKeyInput(e.target.value);
-                    setInlineKeyError("");
-                  }}
-                  className="w-full h-11 border border-slate-200 rounded-xl pl-4 pr-12 font-mono text-xs focus:border-[#1E40AF] focus:ring-2 focus:ring-[#1E40AF]/10 outline-none transition-all text-slate-700 font-semibold"
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {showKey ? "visibility_off" : "visibility"}
-                  </span>
-                </button>
-              </div>
-
-              {inlineKeyError && (
-                <p className="text-red-500 text-[10px] font-bold mt-1.5 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">error</span>
-                  <span>{inlineKeyError}</span>
-                </p>
-              )}
-            </div>
-
-            {/* Current key active status */}
-            {apiKey && (
-              <div className="bg-slate-50 rounded-xl p-3 flex justify-between items-center text-xs font-semibold text-slate-600 mb-4 border border-slate-100">
-                <span>Key aktif: ••••{apiKey.slice(-6)}</span>
-                <button 
-                  onClick={() => {
-                    localStorage.removeItem(LS_API_KEY);
-                    setApiKey("");
-                    setKeyInput("");
-                  }}
-                  className="text-red-500 text-[10px] font-bold hover:underline uppercase tracking-wider"
-                >
-                  Hapus
-                </button>
-              </div>
-            )}
-
-            {/* Model fallback info */}
-            <div className="bg-slate-50 rounded-xl p-3 text-[10px] text-slate-400 border border-slate-100 font-medium leading-relaxed">
-              <span className="font-bold block text-slate-500 mb-0.5">Model fallback:</span>
-              <span>{GROQ_MODELS.join(" → ")}</span>
-            </div>
-
-            {/* Button Row */}
-            <div className="flex justify-end gap-2 mt-6">
-              <button 
-                onClick={() => setShowKeyModal(false)}
-                className="border border-slate-200 text-slate-600 rounded-xl px-5 h-10 text-xs font-bold hover:bg-slate-50 cursor-pointer transition-all"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleSaveKey}
-                disabled={!keyInput.trim() || !keyInput.trim().startsWith("gsk_")}
-                className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white rounded-xl px-5 h-10 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all uppercase tracking-wider"
-              >
-                Simpan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

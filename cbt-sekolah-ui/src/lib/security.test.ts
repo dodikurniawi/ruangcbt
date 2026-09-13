@@ -65,7 +65,7 @@ for (const action of [
   "createKelas", "updateKelas", "deleteKelas", "deleteAllKelas",
   "createMataPelajaran", "updateMataPelajaran", "deleteMataPelajaran", "deleteAllMataPelajaran",
   "setExamStatus", "getPrintSettings", "savePrintSettings",
-  "saveExamConfig", "getExamSummary", "importQuestions",
+  "saveExamConfig", "getExamSummary", "importQuestions", "getStudentAnalysis",
 ]) {
   assert.equal(ACTION_RULES[action]?.role, "admin", `${action} harus admin-only`);
 }

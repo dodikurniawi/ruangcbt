@@ -752,6 +752,9 @@ function doGet(e) {
       case "exportResults":
         result = handleExportResults();
         break;
+      case "getStudentAnalysis":
+        result = handleGetStudentAnalysis(e.parameter);
+        break;
       case "getExamPinStatus":
         result = handleGetExamPinStatus();
         break;
@@ -921,6 +924,7 @@ function handleGetConfig() {
     admin_wa: asConfigText(config.admin_wa),
     exam_status: asConfigText(config.exam_status) || "OPEN",
     exam_mapel: asConfigText(config.exam_mapel),
+    kkm: resolveKkm(config),
   };
   return { success: true, data: safeConfig };
 }
@@ -1100,6 +1104,167 @@ function handleGetUsers(params) {
   }
 
   return { success: true, data: users };
+}
+
+// ===== ANALISIS HASIL BELAJAR — STATISTIK DETERMINISTIC =====
+// Semua angka yang dipakai fitur "Analisis dengan AI" dihitung di sini, memakai
+// kunci jawaban dan scorer yang sama dengan penilaian ujian. AI hanya menafsirkan
+// hasil ini; ia tidak pernah menghitung, tidak pernah mengubah nilai, dan tidak
+// pernah menerima nama siswa (handler ini tidak mengembalikannya).
+const DEFAULT_KKM = 70;
+
+// KKM tunggal seluruh sistem: Config.kkm bila diisi guru, jika tidak 70.
+function resolveKkm(config) {
+  const raw = Number((config || {}).kkm);
+  return isFinite(raw) && raw > 0 && raw <= 100 ? raw : DEFAULT_KKM;
+}
+
+// Baris Responses terakhir milik satu siswa. Ujian ulang menambah baris baru, jadi
+// yang terakhir adalah hasil yang berlaku — sama dengan skor pada baris Users.
+function latestResponseRow(id_siswa) {
+  const sheet = getSheet("Responses");
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (rows[i][1] === id_siswa) return rows[i];
+  }
+  return null;
+}
+
+function parseResponseAnswers(raw) {
+  try {
+    const parsed = JSON.parse(String(raw || "{}"));
+    return isPlainQuestionObject(parsed) ? parsed : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+// Statistik per kategori dari soal yang benar-benar dikerjakan siswa (snapshot
+// attempt bila ada). `correct` tetap berarti jumlah soal dengan skor penuh;
+// partial credit dipertahankan lewat earnedScore/maxScore dan menentukan accuracy.
+// ponytail: kategori kosong tidak dikarang namanya — soal tanpa kategori hanya
+// masuk hitungan total, dan UI/AI menyatakan data belum cukup bila semuanya kosong.
+function buildCategoryStats(questionRows, answers) {
+  const order = [];
+  const byName = {};
+  const totals = {
+    total: 0, correct: 0, partial: 0, wrong: 0, unanswered: 0, uncategorized: 0,
+  };
+
+  for (let i = 0; i < questionRows.length; i++) {
+    const row = questionRows[i];
+    if (!row || !row[0]) continue;
+    const question = scoringQuestionFromRow(row);
+    const answer = answers[question.id_soal];
+    const score = scoreQuestion(question, answer);
+    const isCorrect = question.bobot > 0 && score >= question.bobot;
+
+    totals.total++;
+    if (!isAnswerFilled(answer)) totals.unanswered++;
+    if (isCorrect) totals.correct++;
+    else if (score > 0) totals.partial++;
+    else totals.wrong++;
+
+    const name = String(row[12] || "").trim();
+    if (!name) {
+      totals.uncategorized++;
+      continue;
+    }
+    if (!byName[name]) {
+      byName[name] = {
+        name: name, correct: 0, total: 0, earnedScore: 0, maxScore: 0, accuracy: 0,
+      };
+      order.push(name);
+    }
+    byName[name].total++;
+    if (isCorrect) byName[name].correct++;
+    byName[name].earnedScore += score;
+    byName[name].maxScore += question.bobot;
+  }
+
+  const categories = [];
+  for (let c = 0; c < order.length; c++) {
+    const entry = byName[order[c]];
+    entry.earnedScore = Math.round(entry.earnedScore * 10000) / 10000;
+    entry.maxScore = Math.round(entry.maxScore * 10000) / 10000;
+    entry.accuracy = entry.maxScore > 0
+      ? Math.round((entry.earnedScore / entry.maxScore) * 1000) / 10
+      : 0;
+    categories.push(entry);
+  }
+  // Area terlemah lebih dulu; akurasi sama → soal lebih banyak lebih dulu.
+  categories.sort(function (a, b) {
+    if (a.accuracy !== b.accuracy) return a.accuracy - b.accuracy;
+    return b.total - a.total;
+  });
+
+  return { categories: categories, totals: totals };
+}
+
+function handleGetStudentAnalysis(params) {
+  const id_siswa = String((params && params.id_siswa) || "").trim();
+  if (!id_siswa) return { success: false, message: "id_siswa wajib diisi" };
+
+  const usersSheet = getSheet("Users");
+  const usersData = usersSheet ? usersSheet.getDataRange().getValues() : [];
+  const userIndex = findUserRowIndex(usersData, id_siswa);
+  if (userIndex === -1) return { success: false, message: "Siswa tidak ditemukan" };
+
+  const response = latestResponseRow(id_siswa);
+  if (!response) return { success: false, message: "Siswa belum menyelesaikan ujian" };
+
+  const config = getConfig();
+  const kkm = resolveKkm(config);
+  const binding = parseExamBinding(usersData[userIndex]);
+  const exam_mapel = String(response[10] || (binding ? binding.exam_mapel : "") || "");
+  const answers = parseResponseAnswers(response[4]);
+
+  // Soal yang dinilai = soal yang dibekukan attempt; attempt lama tanpa binding
+  // memakai soal aktif pada mapel yang tercatat di baris Responses.
+  const questionRows = binding
+    ? resolveBoundQuestionRows(binding)
+    : collectExamQuestionRows(exam_mapel);
+
+  const stats = buildCategoryStats(questionRows, answers);
+  const score = Math.round(Number(response[5] || 0) * 100) / 100;
+
+  const mapelSheet = getSheet("MataPelajaran");
+  let mapel_nama = "";
+  if (mapelSheet && exam_mapel) {
+    const mapelData = mapelSheet.getDataRange().getValues();
+    for (let m = 1; m < mapelData.length; m++) {
+      if (String(mapelData[m][0]) === exam_mapel) {
+        mapel_nama = String(mapelData[m][2] || "");
+        break;
+      }
+    }
+  }
+
+  return {
+    success: true,
+    data: {
+      exam_id: String(response[9] || (binding ? binding.exam_id : "")),
+      exam_mapel: exam_mapel,
+      mapel_nama: mapel_nama,
+      kelas: String(response[3] || usersData[userIndex][4] || ""),
+      score: score,
+      kkm: kkm,
+      status: score >= kkm ? "TUNTAS" : "PERLU_TINDAK_LANJUT",
+      total_questions: stats.totals.total,
+      correct: stats.totals.correct,
+      partial: stats.totals.partial,
+      wrong: stats.totals.wrong,
+      unanswered: stats.totals.unanswered,
+      uncategorized: stats.totals.uncategorized,
+      categories: stats.categories,
+      // Sidik jari hasil: jawaban/skor/soal berubah → cache analisis jadi stale.
+      result_hash: hashToken([
+        String(response[9] || ""), String(response[4] || ""), String(response[5] || ""),
+        String(stats.totals.total), String(stats.totals.correct), String(stats.totals.partial),
+        stableStringify(stats.categories),
+      ].join("")),
+    },
+  };
 }
 
 function handleExportResults() {

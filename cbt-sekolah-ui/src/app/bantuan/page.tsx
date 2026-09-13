@@ -46,7 +46,7 @@ export default function BantuanPage() {
     },
     {
       q: "Apa itu fitur Analisis Butir Soal AI?",
-      a: "Fitur canggih yang memanfaatkan teknologi kecerdasan buatan Groq AI untuk mengevaluasi tingkat kesukaran, distorsi jawaban, kualitas soal, serta memformulasikan rekomendasi pembelajaran siswa secara otomatis.",
+      a: "Fitur ini memakai provider yang dipilih pada Pengaturan AI untuk mengevaluasi kejelasan, distraktor, kualitas soal, dan menyusun rekomendasi pembelajaran.",
     },
     {
       q: "Bagaimana cara mencetak kartu ujian?",

@@ -172,7 +172,9 @@ async function parseRequest(request: NextRequest, method: ProxyMethod) {
   }
 }
 
-async function callGas(
+// Diekspor supaya route AI (yang butuh menyuntik parameter turunan server, bukan
+// meneruskan query klien) memakai jalur pemanggilan GAS yang sama dengan proxy.
+export async function callGas(
   target: ProxyTarget,
   method: ProxyMethod,
   action: string,

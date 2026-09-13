@@ -9,6 +9,7 @@ import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, reset
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
 import type { User } from "@/types";
+import AISettingsPanel from "@/components/admin/AISettingsPanel";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
   const map = {
@@ -700,6 +701,8 @@ export default function AdminManagement() {
             </div>
           </div>
         </section>
+
+        <AISettingsPanel />
 
         {/* Config Section */}
         <section>

@@ -315,3 +315,42 @@ export const getPrintSettings = () =>
 
 export const savePrintSettings = (settings: PrintSettings) =>
   fetchApi('savePrintSettings', 'POST', { settings });
+
+// ===== DATA ANALISIS HASIL BELAJAR =====
+// Endpoint admin-only ini hanya menyiapkan statistik. Personal API key dan
+// panggilan provider AI tetap di browser.
+
+import type { ClassStats, StudentStats } from './learningAnalysis';
+
+function getAiUrl(): string {
+  if (typeof window !== 'undefined') {
+    const match = window.location.pathname.match(/^\/s\/([^/]+)/);
+    if (match) return `/api/${match[1]}/ai-analysis`;
+  }
+  return '/api/ai-analysis';
+}
+
+async function postAi<T>(body: Record<string, unknown>): Promise<ApiResponse<T>> {
+  try {
+    const res = await fetch(getAiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    try {
+      return await res.json() as ApiResponse<T>;
+    } catch {
+      return { success: false, message: `Server returned invalid response (${res.status})` };
+    }
+  } catch {
+    return { success: false, message: 'Analisis AI belum dapat dibuat. Silakan coba lagi beberapa saat.' };
+  }
+}
+
+/** Statistik deterministic saja — tidak memanggil AI, tidak memakai kuota. */
+export const getStudentStats = (id_siswa: string) =>
+  postAi<{ stats: StudentStats }>({ mode: 'stats', id_siswa });
+
+/** Statistik anonim rekap kelas; tidak memanggil provider AI. */
+export const getClassStats = (kelas: string) =>
+  postAi<{ stats: ClassStats; names: Record<string, string>; kelas: string }>({ mode: 'class_stats', kelas });

@@ -15,6 +15,7 @@ export interface ExamConfig {
     exam_status?: 'OPEN' | 'CLOSED';
     admin_wa?: string;  // nomor WA admin sekolah, misal "628123456789"
     exam_mapel?: string; // id_mapel yang diujikan, kosong = semua mapel
+    kkm?: number; // handleGetConfig resolve Config.kkm; fallback 70
 }
 
 /** Ringkasan layar "Adakan Ujian": konfigurasi aktif + jumlah soal aktif per mapel. */

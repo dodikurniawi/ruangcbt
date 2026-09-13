@@ -5,221 +5,87 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, logout, type PrintSettings } from "@/lib/api";
+import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, logout, getClassStats, type PrintSettings } from "@/lib/api";
 import type { MataPelajaran } from "@/types";
 import type { User } from "@/types";
 import { studentCardCredentials, escapeCardHtml } from "@/lib/examCard";
+import { CLASS_SCHEMA, CLASS_SYSTEM_INSTRUCTION, isPassingScore, resolveKkm, restoreLabels, validateClassAnalysis } from "@/lib/learningAnalysis";
+import { generateAIJson } from "@/lib/aiProvider";
+import { getProviderApiKey, getSelectedProvider } from "@/lib/aiSettings";
 import * as XLSX from "xlsx";
 
 
 interface RekapAIResult {
-  siswa_perlu_perhatian: string[];   // array of student names
-  catatan_perhatian: string;         // narrative paragraph
-  siswa_berprestasi: string[];       // array of student names
-  catatan_prestasi: string;          // narrative paragraph
-  catatan_mapel: string;             // subject-level notes
-  rekomendasi_wali: string;          // homeroom teacher recommendations
-  model_used: string;                // e.g. "llama-3.3-70b-versatile"
+  catatan_perhatian: string;
+  catatan_prestasi: string;
+  catatan_mapel: string;
+  rekomendasi_wali: string;
+  model_used: string;                // mis. "gemini-2.5-flash"
   analyzed_at: string;               // ISO timestamp
-}
-
-const LS_REKAP_CACHE = 'groq_rekap_cache';
-const LS_API_KEY     = 'groq_api_key'; // same key as Analisis Butir Soal
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-
-const GROQ_MODELS = [
-  'llama-3.3-70b-versatile',
-  'llama-3.1-70b-versatile',
-  'llama-3.1-8b-instant',
-  'mixtral-8x7b-32768',
-  'gemma2-9b-it',
-] as const;
-
-async function callGroqWithFallback(
-  apiKey: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<{ success: boolean; content?: string; model?: string; error?: string }> {
-  for (const model of GROQ_MODELS) {
-    try {
-      const res = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 1200,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (res.status === 401)
-        return { success: false, error: 'API key tidak valid.' };
-      if (res.status === 429 || res.status >= 500) continue;
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          success: true,
-          content: data.choices?.[0]?.message?.content ?? '',
-          model,
-        };
-      }
-      continue;
-    } catch { continue; }
-  }
-  return { success: false, error: 'Semua model tidak tersedia. Coba lagi nanti.' };
-}
-
-// Format model name for display: "llama-3.3-70b-versatile" → "GROQ LLAMA 3.3"
-function formatModelName(model: string): string {
-  if (model.startsWith('llama-3.3')) return 'GROQ LLAMA 3.3';
-  if (model.startsWith('llama-3.1')) return 'GROQ LLAMA 3.1';
-  if (model.startsWith('mixtral'))   return 'GROQ MIXTRAL 8X7B';
-  if (model.startsWith('gemma'))     return 'GROQ GEMMA 2';
-  return 'GROQ AI';
-}
-
-// Cache helpers
-function loadRekapCache(): Record<string, RekapAIResult> {
-  try { return JSON.parse(localStorage.getItem(LS_REKAP_CACHE) ?? '{}'); }
-  catch { return {}; }
-}
-function saveRekapCache(cache: Record<string, RekapAIResult>) {
-  try { localStorage.setItem(LS_REKAP_CACHE, JSON.stringify(cache)); }
-  catch { /* quota exceeded */ }
-}
-
-// Build a stable cache key from kelas + mapel
-function buildCacheKey(kelas: string, mapel: string): string {
-  return `${kelas}__${mapel}`.replace(/\s+/g, '_');
 }
 
 interface AIAnalysisPanelProps {
   users: User[];          // already filtered & sorted students for this class
   kelas: string;          // selected class name
-  mapelNama: string;      // subject name (from settings or config)
-  kkm: number;            // KKM value (75)
-  rataRata: number;
-  tuntas: number;
-  totalPeserta: number;
 }
 
-function AIAnalysisPanel({
-  users, kelas, mapelNama, kkm, rataRata, tuntas, totalPeserta
-}: AIAnalysisPanelProps) {
-  const [result, setResult] = useState<RekapAIResult | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const cache = loadRekapCache();
-    return cache[buildCacheKey(kelas, mapelNama)] ?? null;
-  });
+// Statistik kelas dihitung server-side. Browser hanya mengirim statistik anonim
+// ke provider; personal key tidak pernah masuk server RuangCBT.
+// ponytail: tanpa cache lokal — panggilan sudah eksplisit lewat tombol, dan rekap
+// yang berubah tidak boleh menampilkan analisis lama.
+function AIAnalysisPanel({ users, kelas }: AIAnalysisPanelProps) {
+  const tenantPath = useTenantPath();
+  const [result, setResult] = useState<RekapAIResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
 
-  // Re-initialize when kelas or mapel changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const cache = loadRekapCache();
-    setResult(cache[buildCacheKey(kelas, mapelNama)] ?? null);
-    setError('');
-  }, [kelas, mapelNama]);
-
+  // Parent mengganti key saat kelas berubah, sehingga hasil lama ikut ter-reset.
   const selesaiUsersCount = users.filter(u => u.status_ujian === 'SELESAI').length;
   const isAnalyzeDisabled = users.length === 0 || selesaiUsersCount === 0;
 
   const handleAnalyze = async () => {
-    const apiKey = typeof window !== 'undefined'
-      ? localStorage.getItem(LS_API_KEY) ?? ''
-      : '';
-
-    if (!apiKey) {
-      setError('API key Groq belum diatur. Silakan set di halaman Analisis Butir Soal.');
+    const provider = getSelectedProvider();
+    if (!getProviderApiKey(provider)) {
+      setError(`API key ${provider === "gemini" ? "Gemini" : "Groq"} belum diatur. Buka Pengaturan AI untuk menambahkannya.`);
       return;
     }
-
     setIsAnalyzing(true);
     setError('');
 
-    // Build student data for prompt
-    const selesai = users.filter(u => u.status_ujian === 'SELESAI' && u.skor_akhir != null);
-    const studentLines = selesai
-      .map(u => `- ${u.nama_lengkap} (Kelas: ${u.kelas}): ${u.skor_akhir}`)
-      .join('\n');
-
-    const tidakTuntas = selesai.filter(u => (u.skor_akhir ?? 0) < kkm);
-
-    const systemPrompt = `Kamu adalah konsultan pendidikan Indonesia yang ahli dalam 
-analisis data hasil ujian. Berikan analisis yang tepat, personal, dan actionable.
-Gunakan Bahasa Indonesia formal. Selalu respons dalam format JSON valid.`;
-
-    const userPrompt = `Analisis hasil ujian kelas berikut dan berikan insight untuk guru:
-
-KONTEKS UJIAN:
-- Kelas: ${kelas || 'Semua Kelas'}
-- Mata Pelajaran: ${mapelNama}
-- KKM: ${kkm}
-- Total Peserta: ${totalPeserta}
-- Sudah Mengerjakan: ${selesai.length}
-- Rata-rata Nilai: ${rataRata.toFixed(2)}
-- Tuntas: ${tuntas} siswa (${totalPeserta > 0 ? ((tuntas/totalPeserta)*100).toFixed(1) : 0}%)
-- Tidak Tuntas: ${tidakTuntas.length} siswa
-
-DATA NILAI SISWA (yang sudah mengerjakan):
-${studentLines || 'Belum ada siswa yang mengerjakan.'}
-
-Kembalikan JSON dengan schema PERSIS ini:
-{
-  "siswa_perlu_perhatian": ["nama siswa 1", "nama siswa 2"],
-  "catatan_perhatian": "<paragraf 2-3 kalimat tentang kondisi siswa di bawah KKM dan apa yang perlu dilakukan>",
-  "siswa_berprestasi": ["nama siswa 1", "nama siswa 2"],
-  "catatan_prestasi": "<paragraf 2-3 kalimat tentang siswa berprestasi dan apresiasi yang disarankan>",
-  "catatan_mapel": "<paragraf 2-3 kalimat tentang kondisi mata pelajaran ${mapelNama} berdasarkan data ini>",
-  "rekomendasi_wali": "<paragraf 3-4 kalimat berisi rekomendasi tindak lanjut konkret untuk wali kelas>"
-}
-
-Aturan:
-- siswa_perlu_perhatian: ambil maksimal 5 siswa dengan nilai terendah di bawah KKM
-- siswa_berprestasi: ambil maksimal 5 siswa dengan nilai >= 85, urutkan tertinggi
-- Jika tidak ada siswa di bawah KKM, set siswa_perlu_perhatian: [] dan catatan_perhatian menjelaskan hal positif ini
-- Sebutkan nama siswa dengan bold HTML (<strong>Nama</strong>) di dalam catatan
-- Jadikan analisis spesifik berdasarkan angka, bukan generik`;
-
-    const res = await callGroqWithFallback(apiKey, systemPrompt, userPrompt);
-
-    if (!res.success || !res.content) {
-      setError(res.error ?? 'Analisis gagal. Coba lagi.');
+    const statsRes = await getClassStats(kelas);
+    if (!statsRes.success || !statsRes.data) {
+      setError(statsRes.message ?? 'Data analisis belum dapat dimuat. Silakan coba lagi.');
       setIsAnalyzing(false);
       return;
     }
 
-    try {
-      const jsonStr = res.content.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-      const parsed = JSON.parse(jsonStr);
-      const newResult: RekapAIResult = {
-        siswa_perlu_perhatian: parsed.siswa_perlu_perhatian ?? [],
-        catatan_perhatian:     parsed.catatan_perhatian ?? '',
-        siswa_berprestasi:     parsed.siswa_berprestasi ?? [],
-        catatan_prestasi:      parsed.catatan_prestasi ?? '',
-        catatan_mapel:         parsed.catatan_mapel ?? '',
-        rekomendasi_wali:      parsed.rekomendasi_wali ?? '',
-        model_used:            res.model ?? '',
-        analyzed_at:           new Date().toISOString(),
-      };
-      const cache = loadRekapCache();
-      cache[buildCacheKey(kelas, mapelNama)] = newResult;
-      saveRekapCache(cache);
-      setResult(newResult);
-    } catch {
-      setError('Respons AI tidak dapat diproses. Coba analisis ulang.');
+    const aiRes = await generateAIJson<unknown>({
+      systemInstruction: CLASS_SYSTEM_INSTRUCTION,
+      prompt: JSON.stringify({ kelas: statsRes.data.kelas, ...statsRes.data.stats }),
+      schema: CLASS_SCHEMA,
+      maxOutputTokens: 1200,
+    }, { provider });
+    if (!aiRes.ok) {
+      setError(aiRes.message);
+      setIsAnalyzing(false);
+      return;
     }
+    const analysis = validateClassAnalysis(aiRes.data);
+    if (!analysis) {
+      setError('Respons AI tidak dapat diproses.');
+      setIsAnalyzing(false);
+      return;
+    }
+    const names = new Map(Object.entries(statsRes.data.names));
 
+    setResult({
+      catatan_perhatian: restoreLabels(analysis.catatan_perhatian, names),
+      catatan_prestasi: restoreLabels(analysis.catatan_prestasi, names),
+      catatan_mapel: restoreLabels(analysis.catatan_mapel, names),
+      rekomendasi_wali: restoreLabels(analysis.rekomendasi_wali, names),
+      model_used: `${aiRes.provider}/${aiRes.model}`,
+      analyzed_at: new Date().toISOString(),
+    });
     setIsAnalyzing(false);
   };
 
@@ -240,11 +106,11 @@ Aturan:
             </h3>
             {result ? (
               <p className="text-[10px] font-bold text-[#2563EB] uppercase tracking-widest mt-0.5">
-                POWERED BY {formatModelName(result.model_used)}
+                POWERED BY {result.model_used.toUpperCase()}
               </p>
             ) : (
               <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">
-                Powered by Groq AI • Multi-model fallback
+                Menggunakan provider dari Pengaturan AI
               </p>
             )}
           </div>
@@ -289,6 +155,11 @@ Aturan:
             <div>
               <p className="font-bold text-red-700 text-sm">Analisis Gagal</p>
               <p className="text-red-600 text-sm mt-0.5">{error}</p>
+              {error.includes("Pengaturan AI") && (
+                <Link href={tenantPath("/admin/management#ai-settings")} className="block text-red-700 text-xs font-bold underline mt-2">
+                  Buka Pengaturan AI
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -318,8 +189,8 @@ Aturan:
               Belum ada analisis
             </p>
             <p className="text-slate-400 text-xs max-w-xs mx-auto">
-              Klik "Mulai Analisis" untuk mendapatkan insight AI tentang 
-              performa kelas ini. Membutuhkan Groq API key.
+              Klik &ldquo;Mulai Analisis&rdquo; untuk mendapatkan insight AI tentang
+              performa kelas ini.
             </p>
           </div>
         )}
@@ -336,10 +207,9 @@ Aturan:
                   Siswa Perlu Perhatian
                 </h4>
               </div>
-              <p
-                className="text-slate-700 text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: result.catatan_perhatian }}
-              />
+              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                {result.catatan_perhatian}
+              </p>
             </div>
 
             {/* Card 2: Siswa Berprestasi */}
@@ -350,10 +220,9 @@ Aturan:
                   Siswa Berprestasi
                 </h4>
               </div>
-              <p
-                className="text-slate-700 text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: result.catatan_prestasi }}
-              />
+              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                {result.catatan_prestasi}
+              </p>
             </div>
 
             {/* Card 3: Catatan Mata Pelajaran */}
@@ -364,10 +233,9 @@ Aturan:
                   Catatan Mata Pelajaran
                 </h4>
               </div>
-              <p
-                className="text-slate-700 text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: result.catatan_mapel }}
-              />
+              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                {result.catatan_mapel}
+              </p>
             </div>
 
             {/* Card 4: Rekomendasi Wali Kelas */}
@@ -378,10 +246,9 @@ Aturan:
                   Rekomendasi Wali Kelas
                 </h4>
               </div>
-              <p
-                className="text-slate-700 text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: result.rekomendasi_wali }}
-              />
+              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                {result.rekomendasi_wali}
+              </p>
             </div>
 
             {/* Footer timestamp */}
@@ -452,12 +319,14 @@ export default function AdminCetak() {
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
+  const kkm = resolveKkm(config?.kkm);
   const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
 
   // Initialize local print settings and custom logos on mount
   useEffect(() => {
     const saved = localStorage.getItem("print_settings");
     if (saved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate browser-only settings after SSR.
       setLocalSettings(JSON.parse(saved));
     }
     const savedLogoKiri = localStorage.getItem("logo_kiri_base64");
@@ -525,7 +394,6 @@ export default function AdminCetak() {
 
   const stats = useMemo(() => {
     const selesaiUsers = filteredUsers.filter(u => u.status_ujian === 'SELESAI' && u.skor_akhir != null);
-    const KKM = 75;
     const totalPeserta = filteredUsers.length;
 
     const toNum = (v: unknown) => (v !== null && v !== undefined && v !== "" ? Number(v) : 0);
@@ -542,10 +410,10 @@ export default function AdminCetak() {
       ? Math.min(...selesaiUsers.map(u => toNum(u.skor_akhir)))
       : 0;
 
-    const tuntas = selesaiUsers.filter(u => toNum(u.skor_akhir) >= KKM).length;
+    const tuntas = selesaiUsers.filter(u => isPassingScore(toNum(u.skor_akhir), kkm)).length;
 
     return { rataRata, nilaiTertinggi, nilaiTerendah, tuntas, totalPeserta };
-  }, [filteredUsers]);
+  }, [filteredUsers, kkm]);
 
   const { rataRata, nilaiTertinggi, nilaiTerendah, tuntas, totalPeserta } = stats;
 
@@ -759,7 +627,6 @@ export default function AdminCetak() {
   const handleExportXLSX = () => {
     setIsExportingXlsx(true);
     try {
-      const KKM = 75;
       const today = new Date().toLocaleDateString('id-ID', { 
         day: 'numeric', month: 'long', year: 'numeric' 
       });
@@ -771,7 +638,7 @@ export default function AdminCetak() {
           ? 'Didiskualifikasi'
           : skor === null
             ? 'Belum Mengerjakan'
-            : skor >= KKM ? 'Tuntas' : 'Tidak Tuntas';
+            : isPassingScore(skor, kkm) ? 'Tuntas' : 'Tidak Tuntas';
         return {
           'No': idx + 1,
           'Nama Siswa': u.nama_lengkap,
@@ -790,7 +657,7 @@ export default function AdminCetak() {
         { 'No': 'Rata-rata', 'Nama Siswa': rataRata.toFixed(2) },
         { 'No': 'Nilai Tertinggi', 'Nama Siswa': nilaiTertinggi },
         { 'No': 'Nilai Terendah', 'Nama Siswa': nilaiTerendah },
-        { 'No': `Tuntas (KKM ${KKM})`, 'Nama Siswa': `${tuntas} dari ${totalPeserta}` },
+        { 'No': `Tuntas (KKM ${kkm})`, 'Nama Siswa': `${tuntas} dari ${totalPeserta}` },
       ];
 
       const ws = XLSX.utils.json_to_sheet([...rows, ...summaryRows]);
@@ -820,7 +687,6 @@ export default function AdminCetak() {
   };
 
   const handleExportPDF = () => {
-    const KKM = 75;
     const today = new Date().toLocaleDateString('id-ID', { 
       day: 'numeric', month: 'long', year: 'numeric' 
     });
@@ -839,7 +705,7 @@ export default function AdminCetak() {
         ? '<span style="color:#dc2626">Didiskualifikasi</span>'
         : skor == null
           ? '<span style="color:#94a3b8">Belum</span>'
-          : skor >= KKM
+          : isPassingScore(skor, kkm)
             ? '<span style="color:#16a34a;font-weight:bold">Tuntas</span>'
             : '<span style="color:#dc2626">Tidak Tuntas</span>';
       return `
@@ -929,7 +795,7 @@ export default function AdminCetak() {
             <div class="stat-value">${nilaiTerendah}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Ketuntasan (KKM ${KKM})</div>
+            <div class="stat-label">Ketuntasan (KKM ${kkm})</div>
             <div class="stat-value">${tuntas}<span style="font-size:13px;font-weight:normal;color:#94a3b8">/${totalPeserta}</span></div>
           </div>
         </div>
@@ -954,7 +820,7 @@ export default function AdminCetak() {
                 Rata-rata: ${rataRata.toFixed(2)}
               </td>
               <td colspan="3" style="text-align:right">
-                KKM: ${KKM}
+                KKM: ${kkm}
               </td>
             </tr>
           </tbody>
@@ -1706,10 +1572,10 @@ export default function AdminCetak() {
                 <div className="font-black text-3xl text-slate-900 mt-3">{nilaiTerendah.toFixed(0)}</div>
               </div>
 
-              {/* Card 4 — KETUNTASAN (KKM 75) */}
+              {/* Card 4 — KETUNTASAN */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex justify-between items-start">
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 font-extrabold">Ketuntasan (KKM 75)</span>
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 font-extrabold">Ketuntasan (KKM {kkm})</span>
                   <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center">
                     <span className="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
                   </div>
@@ -1782,7 +1648,7 @@ export default function AdminCetak() {
                       <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-28 text-center">Kelas</th>
                       <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-28 text-center">Skor</th>
                       <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-40 text-center">Status Ujian</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-36 text-center">Ket (KKM 75)</th>
+                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-36 text-center">Ket (KKM {kkm})</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1798,7 +1664,7 @@ export default function AdminCetak() {
                         let ketClass = "bg-slate-100 text-slate-500 border border-slate-200";
 
                         if (student.status_ujian === "SELESAI") {
-                          const tuntasVal = (student.skor_akhir ?? 0) >= 75;
+                          const tuntasVal = isPassingScore(student.skor_akhir ?? 0, kkm);
                           ket = tuntasVal ? "Tuntas" : "Tidak Tuntas";
                           ketClass = tuntasVal
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200/50"
@@ -1875,13 +1741,9 @@ export default function AdminCetak() {
             </section>
 
             <AIAnalysisPanel
+              key={hasilClass}
               users={sortedUsers}
               kelas={hasilClass === "All Classes" ? "" : hasilClass}
-              mapelNama={hasilMapel ? (mapelList.find(m => m.id_mapel === hasilMapel)?.nama_mapel ?? 'Ujian') : (settings?.guru_mapel_mapel || config?.exam_name || 'Ujian')}
-              kkm={75}
-              rataRata={rataRata}
-              tuntas={tuntas}
-              totalPeserta={totalPeserta}
             />
           </div>
         )}
