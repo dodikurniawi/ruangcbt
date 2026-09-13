@@ -27,47 +27,63 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg relative overflow-hidden">
-      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary-fixed rounded-full blur-[120px] opacity-10"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-secondary-fixed rounded-full blur-[100px] opacity-10"></div>
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 font-body-admin text-slate-900 bg-slate-50 pattern-bg relative overflow-hidden">
+      {/* Decorative Accents & Glow Orbs */}
+      <div className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 shadow-sm z-50"></div>
+      <div className="fixed -top-24 -right-24 w-96 h-96 bg-blue-500/15 rounded-full blur-3xl pointer-events-none animate-glow"></div>
+      <div className="fixed -bottom-24 -left-24 w-[30rem] h-[30rem] bg-indigo-500/15 rounded-full blur-3xl pointer-events-none animate-glow"></div>
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-96 bg-gradient-to-tr from-blue-400/5 to-indigo-400/5 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="max-w-md w-full relative z-10">
-        <div className="text-center mb-xl">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-md shadow-lg">
-            <span className="material-symbols-outlined text-on-primary text-[32px]">admin_panel_settings</span>
+      <div className="max-w-md w-full relative z-10 my-auto py-6 flex flex-col items-center">
+        {/* Logo & Header */}
+        <div className="text-center mb-6 flex flex-col items-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-500/25 ring-4 ring-blue-100/60 animate-float mb-3">
+            <span className="material-symbols-outlined text-white text-[36px]">admin_panel_settings</span>
           </div>
-          <h1 className="font-display-exam text-display-exam text-on-surface">Admin Login</h1>
-          <p className="font-body-admin text-on-surface-variant mt-xs">CBT Sekolah — Panel Administrasi</p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/60 mb-2">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+            <span className="text-[11px] font-semibold tracking-wide uppercase text-blue-700">Administrator Access</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            <span className="text-gradient-blue">Admin Login</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">CBT Sekolah — Panel Administrasi</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-outline-variant p-xl">
+        {/* Glassmorphic Card */}
+        <div className="w-full glass-card rounded-3xl p-6 sm:p-8 shadow-2xl shadow-blue-950/10 border border-slate-200/80 relative backdrop-blur-xl">
           {error && (
-            <div className="mb-lg flex items-center gap-md bg-error-container text-on-error-container px-md py-sm rounded-lg border border-error/20">
-              <span className="material-symbols-outlined text-error text-[20px]">error</span>
-              <span className="font-label-bold">{error}</span>
+            <div className="mb-5 flex items-center gap-3 bg-red-50 text-red-700 px-4 py-3 rounded-xl border border-red-200/80 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <span className="material-symbols-outlined text-red-500 text-[20px] shrink-0">error</span>
+              <span className="text-xs font-semibold leading-snug">{error}</span>
             </div>
           )}
 
           <form
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-            className="space-y-lg"
+            className="flex flex-col gap-4"
           >
-            <div>
-              <label className="font-label-bold text-on-surface block mb-sm">Password Administrator</label>
-              <div className="relative">
+            <div className="flex flex-col gap-1.5">
+              <label className="block font-semibold text-xs tracking-wider uppercase text-slate-600 px-1">
+                Password Administrator
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">lock</span>
+                </div>
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Masukkan password admin"
-                  className="w-full h-12 border border-outline-variant rounded-lg px-md pr-12 font-body-admin bg-surface focus:border-primary focus:ring-2 focus:ring-primary-container outline-none transition-all"
+                  className="w-full h-12 sm:h-13 pl-11 pr-11 bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-blue-500/15 focus:border-blue-600 transition-all text-slate-900 placeholder:text-slate-400 font-medium text-sm outline-none"
                   autoFocus
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[20px]">
                     {showPassword ? "visibility_off" : "visibility"}
@@ -79,26 +95,28 @@ export default function AdminLogin() {
             <button
               type="submit"
               disabled={isLoading || !password.trim()}
-              className="w-full h-12 bg-primary text-on-primary font-label-bold rounded-lg shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-sm"
+              className="w-full h-12 sm:h-13 mt-2 bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm sm:text-base rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/35 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <>
                   <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
-                  Memverifikasi...
+                  <span>Memverifikasi...</span>
                 </>
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[20px]">login</span>
-                  Masuk ke Panel Admin
+                  <span>Masuk ke Panel Admin</span>
                 </>
               )}
             </button>
           </form>
         </div>
 
-        <p className="text-center font-caption text-on-surface-variant mt-lg">
-          Hanya untuk administrator sekolah yang berwenang.
-        </p>
+        {/* Security Info Pill */}
+        <div className="mt-6 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 border border-slate-200/80 shadow-sm backdrop-blur-md text-slate-500 text-xs font-medium">
+          <span className="material-symbols-outlined text-amber-500 text-[16px]">security</span>
+          <span>Hanya untuk administrator sekolah yang berwenang.</span>
+        </div>
       </div>
     </div>
   );
