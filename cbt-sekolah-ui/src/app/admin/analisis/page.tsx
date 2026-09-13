@@ -314,7 +314,6 @@ export default function AnalisisButirSoalPage() {
   const currentResults = questions.map(getAnalysisResult).filter((result): result is AnalysisResult => Boolean(result));
   const analyzed     = currentResults.length;
   const ratingBaik   = currentResults.filter(r => r.rating === "Baik").length;
-  const ratingCukup  = currentResults.filter(r => r.rating === "Cukup").length;
   const ratingRevisi = currentResults.filter(r => r.rating === "Perlu Revisi").length;
 
   return (
