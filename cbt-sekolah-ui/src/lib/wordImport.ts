@@ -6,11 +6,20 @@
 //
 // Parser murni: masukannya DocxBlock (lihat docx.ts), keluarannya data soal.
 // Tidak menyentuh jaringan, GAS, maupun Sheets, sehingga bisa dites apa adanya.
+//
+// Kunci jawaban dikenali dari tiga sumber, urut kepercayaannya:
+// 1. Bagian "KUNCI JAWABAN" di akhir dokumen (eksplisit, paling bisa dipercaya).
+// 2. Satu-satunya opsi yang dicetak tebal ("B. Jakarta" → B).
+// 3. Konflik antar indikator → PERLU DICEK, tidak pernah memilih sendiri.
 
-import type { DocxBlock } from "./docx.ts";
+import type { DocxBlock, DocxImage } from "./docx.ts";
 
 export const OPTION_KEYS = ["A", "B", "C", "D", "E"] as const;
 export type OptionKey = (typeof OPTION_KEYS)[number];
+const OPTION_SET = new Set<string>(OPTION_KEYS);
+
+/** Gambar yang terbaca dari dokumen, siap ditampilkan dan diunggah saat import. */
+export type { DocxImage } from "./docx.ts";
 
 export interface ParsedQuestion {
   /** Nomor seperti tertulis di dokumen; dipakai mencocokkan kunci jawaban. */
@@ -22,8 +31,16 @@ export interface ParsedQuestion {
   opsi_d: string;
   opsi_e: string;
   kunci_jawaban: string;
+  /** Bobot soal; Word selalu 1, Excel dapat diisi guru di kolom Bobot. */
+  bobot: number;
   /** Alasan soal perlu diperiksa guru. Kosong = struktur soal sudah utuh. */
   issues: string[];
+  /** Gambar yang berhasil diambil dari dokumen; null bila tidak ada. */
+  image: DocxImage | null;
+  /** Gambar terdeteksi tetapi tidak terbaca → wajib ditandai, jangan dibuang. */
+  imageBroken: boolean;
+  /** Identitas gambar di dalam .docx; dipakai mengambil byte-nya. */
+  imageRelId: string | null;
 }
 
 export interface ParseResult {
@@ -57,6 +74,8 @@ interface NormalizedBlock {
   text: string;
   hasImage: boolean;
   isTable: boolean;
+  bold: boolean;
+  imageRelId: string | null;
 }
 
 /**
@@ -66,30 +85,29 @@ interface NormalizedBlock {
 function normalize(block: DocxBlock): NormalizedBlock {
   const text = block.text.trim();
   if (block.isTable) {
-    return { kind: "plain", marker: "", listId: MANUAL_LIST, text, hasImage: block.hasImage, isTable: true };
+    return { kind: "plain", marker: "", listId: MANUAL_LIST, text, hasImage: block.hasImage, isTable: true, bold: false, imageRelId: null };
   }
+  const base = {
+    listId: block.marker?.listId ?? MANUAL_LIST,
+    text,
+    hasImage: block.hasImage,
+    isTable: false,
+    bold: block.bold,
+    imageRelId: block.imageRelId,
+  };
   if (block.marker) {
-    return {
-      kind: block.marker.kind, marker: block.marker.value, listId: block.marker.listId, text,
-      hasImage: block.hasImage, isTable: false,
-    };
+    return { kind: block.marker.kind, marker: block.marker.value, ...base };
   }
 
   const option = text.match(MANUAL_OPTION);
   if (option) {
-    return {
-      kind: "letter", marker: option[1].toUpperCase(), listId: MANUAL_LIST, text: option[2].trim(),
-      hasImage: block.hasImage, isTable: false,
-    };
+    return { kind: "letter", marker: option[1].toUpperCase(), ...base, text: option[2].trim() };
   }
   const numbered = text.match(MANUAL_NUMBER);
   if (numbered) {
-    return {
-      kind: "number", marker: numbered[1], listId: MANUAL_LIST, text: numbered[2].trim(),
-      hasImage: block.hasImage, isTable: false,
-    };
+    return { kind: "number", marker: numbered[1], ...base, text: numbered[2].trim() };
   }
-  return { kind: "plain", marker: "", listId: MANUAL_LIST, text, hasImage: block.hasImage, isTable: false };
+  return { kind: "plain", marker: "", ...base };
 }
 
 /** Kunci jawaban dari bagian khusus di akhir dokumen: "1. B", "1) B", "1 B". */
@@ -113,9 +131,10 @@ interface Candidate {
   /** Berapa paragraf bernomor sudah masuk; membedakan satu pengantar dari satu daftar. */
   numberedCount: number;
   stem: string[];
-  options: { letter: string; text: string }[];
+  options: { letter: string; text: string; bold: boolean }[];
   hasImage: boolean;
   hasTable: boolean;
+  imageRelId: string | null;
 }
 
 function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQuestion | null {
@@ -128,7 +147,9 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
   if (!pertanyaan) issues.push("Pertanyaan tidak terbaca");
 
   if (candidate.hasTable) issues.push("Soal memuat tabel yang belum bisa diimport");
-  if (candidate.hasImage) issues.push("Soal memuat gambar yang belum bisa diimport");
+
+  const imageBroken = candidate.hasImage && !candidate.imageRelId;
+  if (imageBroken) issues.push("Gambar pada soal ini perlu diperiksa");
 
   if (candidate.options.length > OPTION_KEYS.length) {
     issues.push(`Ditemukan ${candidate.options.length} opsi, kemungkinan dua soal tergabung`);
@@ -148,9 +169,29 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
   const missing = OPTION_KEYS.filter((key) => !values[key] || values[key].trim() === "");
   if (missing.length > 0) issues.push(`Opsi ${missing.join(", ")} tidak ditemukan`);
 
-  const key = answerKeys.get(candidate.nomor);
-  const kunci_jawaban = key && (OPTION_KEYS as readonly string[]).includes(key) ? key : "";
-  if (key && !kunci_jawaban) issues.push(`Kunci jawaban "${key}" tidak valid`);
+  // ── Kunci jawaban ──────────────────────────────────────────────────────────
+  // Bagian "KUNCI JAWABAN" eksplisit adalah sumber paling bisa dipercaya. Cetak
+  // tebal baru dipakai bila tidak ada konflik; konflik antar indikator tidak
+  // pernah diselesaikan dengan menebak.
+  const sectionKey = answerKeys.get(candidate.nomor);
+  const validSectionKey = sectionKey && OPTION_SET.has(sectionKey) ? sectionKey : "";
+  if (sectionKey && !validSectionKey) issues.push(`Kunci jawaban "${sectionKey}" tidak valid`);
+
+  const boldOptions = candidate.options.slice(0, OPTION_KEYS.length).filter((option) => option.bold);
+  const conflictBold = boldOptions.length === 1 && boldOptions[0].letter !== validSectionKey;
+  let kunci_jawaban = "";
+  if (validSectionKey && conflictBold) {
+    issues.push(
+      `Kunci jawaban di bagian kunci (${validSectionKey}) berbeda dengan pilihan yang dicetak tebal (${boldOptions[0].letter})`,
+    );
+    kunci_jawaban = conflictBold ? "" : validSectionKey;
+  } else if (validSectionKey) {
+    kunci_jawaban = validSectionKey;
+  } else if (boldOptions.length === 1) {
+    kunci_jawaban = boldOptions[0].letter;
+  } else if (boldOptions.length > 1) {
+    issues.push("Kunci jawaban belum ditemukan — beberapa pilihan dicetak tebal");
+  }
 
   return {
     nomor_urut: candidate.nomor,
@@ -161,20 +202,24 @@ function finish(candidate: Candidate, answerKeys: Map<number, string>): ParsedQu
     opsi_d: values.D ?? "",
     opsi_e: values.E ?? "",
     kunci_jawaban,
+    bobot: 1,
     issues,
+    image: null,
+    imageBroken,
+    imageRelId: candidate.imageRelId,
   };
 }
 
 /** Soal siap diimport: struktur utuh dan kunci jawaban sudah terisi. */
 export function isReady(question: ParsedQuestion): boolean {
-  return question.issues.length === 0 && (OPTION_KEYS as readonly string[]).includes(question.kunci_jawaban);
+  return question.issues.length === 0 && OPTION_SET.has(question.kunci_jawaban);
 }
 
 /** Alasan yang ditampilkan guru pada soal yang belum siap. */
 export function statusReasons(question: ParsedQuestion): string[] {
   const reasons = [...question.issues];
-  if (!(OPTION_KEYS as readonly string[]).includes(question.kunci_jawaban)) {
-    reasons.push("Kunci jawaban belum diisi");
+  if (!OPTION_SET.has(question.kunci_jawaban)) {
+    reasons.push("Kunci jawaban belum ditemukan");
   }
   return reasons;
 }
@@ -240,6 +285,10 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
   let questionListId = "";
   let lastNumber = 0;
 
+  const noteImage = (block: NormalizedBlock) => {
+    if (block.imageRelId) candidate!.imageRelId ||= block.imageRelId;
+  };
+
   const close = () => {
     if (!candidate) return;
     const question = finish(candidate, answerKeys);
@@ -273,6 +322,7 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
           options: [],
           hasImage: block.hasImage || Boolean(orphan?.hasImage),
           hasTable: block.isTable || Boolean(orphan?.hasTable),
+          imageRelId: block.imageRelId ?? orphan?.imageRelId ?? null,
         };
       } else {
         candidate!.numberedCount++;
@@ -281,6 +331,7 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
         candidate!.stem.push(block.text ? `${block.marker}) ${block.text}` : `${block.marker})`);
         if (block.hasImage) candidate!.hasImage = true;
         if (block.isTable) candidate!.hasTable = true;
+        noteImage(block);
       }
       continue;
     }
@@ -288,9 +339,10 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
     if (!candidate) continue; // Judul, petunjuk, dan kop surat sebelum soal pertama.
 
     if (block.kind === "letter") {
-      candidate.options.push({ letter: block.marker, text: block.text });
+      candidate.options.push({ letter: block.marker, text: block.text, bold: block.bold });
       if (block.hasImage) candidate.hasImage = true;
       if (block.isTable) candidate.hasTable = true;
+      noteImage(block);
       continue;
     }
 
@@ -299,6 +351,7 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
     if (candidate.options.length === 0) {
       if (block.isTable) candidate.hasTable = true;
       if (block.hasImage) candidate.hasImage = true;
+      noteImage(block);
       if (block.text) candidate.stem.push(block.text);
     } else {
       close();
@@ -312,4 +365,88 @@ export function parseQuestions(blocks: DocxBlock[]): ParseResult {
     detectedMapel,
     hasAnswerKeySection: keyHeading !== -1 && answerKeys.size > 0,
   };
+}
+
+/**
+ * Pasang data gambar pada soal yang sudah di-parse. rId yang tertulis di
+ * dokumen tetapi tidak berhasil diambil byte-nya menjadi imageBroken — gambar
+ * tidak pernah dihilangkan tanpa kabar.
+ */
+export function resolveImages(questions: ParsedQuestion[], images: Map<string, DocxImage>): void {
+  for (const question of questions) {
+    if (!question.imageRelId) continue;
+    const image = images.get(question.imageRelId);
+    if (image) {
+      question.image = image;
+    } else if (!question.imageBroken) {
+      question.imageBroken = true;
+      question.issues.push("Gambar pada soal ini perlu diperiksa");
+    }
+  }
+}
+
+export interface ImportPayloadRow {
+  nomor_urut: number;
+  tipe: "SINGLE";
+  pertanyaan: string;
+  gambar_url: string;
+  opsi_a: string;
+  opsi_b: string;
+  opsi_c: string;
+  opsi_d: string;
+  opsi_e: string;
+  kunci_jawaban: string;
+  bobot: number;
+  kategori: string;
+  id_mapel: string;
+}
+
+/**
+ * Bungkus soal yang siap menjadi payload import. Gambar soal diunggah lewat
+ * callback yang sama dengan upload gambar manual (Google Drive), lalu URL-nya
+ * diisi. Unggahan yang gagal membuat soal dilewati dan dihitung — soal tidak
+ * pernah masuk tanpa gambarnya.
+ */
+export async function buildImportPayload(
+  questions: ParsedQuestion[],
+  startNomor: number,
+  idMapel: string,
+  uploadImage: (
+    base64Data: string,
+    mimeType: string,
+    fileName: string,
+  ) => Promise<{ success: boolean; data?: { url?: string }; message?: string }>,
+): Promise<{ payload: ImportPayloadRow[]; blockedByImages: number }> {
+  const payload: ImportPayloadRow[] = [];
+  let blockedByImages = 0;
+  let nomor = startNomor;
+  for (const row of questions) {
+    if (!isReady(row)) continue;
+    let gambar_url = "";
+    if (row.image) {
+      const base64Data = row.image.dataUrl.split(",")[1] ?? "";
+      const res = await uploadImage(base64Data, row.image.mimeType, row.image.fileName);
+      if (!res.success || !res.data?.url) {
+        blockedByImages++;
+        continue;
+      }
+      gambar_url = res.data.url;
+    }
+    payload.push({
+      nomor_urut: ++nomor,
+      tipe: "SINGLE",
+      pertanyaan: row.pertanyaan.trim(),
+      gambar_url,
+      opsi_a: row.opsi_a.trim(),
+      opsi_b: row.opsi_b.trim(),
+      opsi_c: row.opsi_c.trim(),
+      opsi_d: row.opsi_d.trim(),
+      opsi_e: row.opsi_e.trim(),
+      kunci_jawaban: row.kunci_jawaban,
+      bobot: row.bobot || 1,
+      kategori: "",
+      id_mapel: idMapel,
+    });
+  }
+  return { payload, blockedByImages };
 }

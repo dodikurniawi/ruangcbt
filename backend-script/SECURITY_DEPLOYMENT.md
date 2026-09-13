@@ -43,6 +43,38 @@ SESSION_SIGNING_SECRET=secret-session-minimal-32-karakter
 
 `NEXT_PUBLIC_API_URL` masih diterima untuk kompatibilitas URL GAS lama, tetapi jangan menaruh secret pada variable `NEXT_PUBLIC_*`.
 
+## Import Google Form
+
+Fitur ini memakai OAuth web-server di Next.js. Aktifkan **Google Forms API** dan
+**Google Drive API** pada satu Google Cloud project, buat OAuth Client bertipe
+Web application, lalu daftarkan redirect URI production secara persis:
+
+```text
+https://DOMAIN-RUANGCBT/api/google-forms/oauth/callback
+```
+
+Tambahkan variable server-only berikut. Jangan memakai prefix `NEXT_PUBLIC_`:
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=oauth-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=oauth-client-secret
+GOOGLE_OAUTH_REDIRECT_URI=https://DOMAIN-RUANGCBT/api/google-forms/oauth/callback
+```
+
+Scope yang diminta hanya:
+
+- `forms.body.readonly` untuk membaca isi Form, struktur quiz, dan kunci yang tersedia.
+- `drive.metadata.readonly` untuk menampilkan daftar Form tanpa meminta URL atau file ID dari guru.
+
+Tidak ada refresh token. Access token disegel dalam cookie `HttpOnly`, terikat ke
+session admin dan tenant, lalu kedaluwarsa maksimal satu jam. Menekan **Lepas akun**
+mencoba revoke token Google dan selalu menghapus cookie lokal.
+
+`drive.metadata.readonly` adalah restricted scope. Sebelum membuka fitur ke user
+production umum, selesaikan OAuth app verification dan persyaratan security
+assessment Google yang berlaku. Akun test pada consent screen hanya cocok untuk
+staging, bukan bukti siap production.
+
 ## Verifikasi aman
 
 Gunakan tenant test untuk operasi destruktif. Pada tenant produksi, batasi verifikasi ke request non-destruktif.
@@ -55,6 +87,9 @@ Gunakan tenant test untuk operasi destruktif. Pada tenant produksi, batasi verif
 6. Kirim `submitExam` atau `syncAnswers` dengan `id_siswa` berbeda; proxy harus menolak dengan HTTP `403`. Jangan submit ujian tenant produksi untuk pengujian ini.
 7. Coba cookie tenant A pada route tenant B; proxy harus menolak dengan HTTP `403`.
 8. Pastikan `/monitoring` tetap bekerja dan hanya memuat nama, kelas, skor, status, serta waktu selesai.
+9. Login admin tenant A, hubungkan Google, lalu pastikan status Google tenant B tetap tidak terhubung.
+10. Tolak callback OAuth dengan `state` salah dan pastikan tidak ada cookie token yang dibuat.
+11. Pastikan respons status/list/detail tidak memuat access token dan gambar Form masuk melalui folder `CBT Soal Images` existing.
 
 ## Batas yang masih ada
 

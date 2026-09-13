@@ -11,6 +11,7 @@ import {
   type ProxyMethod,
 } from "./security.ts";
 import { sanitizeQuestionPayload } from "./questionSanitize.ts";
+import { GOOGLE_FORMS_TOKEN_COOKIE, GOOGLE_OAUTH_STATE_COOKIE } from "./googleOAuth.ts";
 
 export interface ProxyTarget {
   gasUrl: string;
@@ -215,6 +216,20 @@ function clearSessionCookie(response: NextResponse) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set(GOOGLE_FORMS_TOKEN_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/google-forms",
+    maxAge: 0,
+  });
+  response.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/google-forms/oauth/callback",
     maxAge: 0,
   });
 }

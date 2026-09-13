@@ -6,17 +6,17 @@
 // Jalankan: node --experimental-strip-types src/lib/wordImport.test.ts
 import assert from "node:assert/strict";
 import type { DocxBlock } from "./docx.ts";
-import { isReady, parseQuestions, statusReasons } from "./wordImport.ts";
+import { buildImportPayload, isReady, parseQuestions, resolveImages, statusReasons } from "./wordImport.ts";
 
 const QUESTION_LIST = "28:0";
 const INSTRUCTION_LIST = "1:0";
 let optionListCounter = 0;
 
 function plain(text: string, extra: Partial<DocxBlock> = {}): DocxBlock {
-  return { text, marker: null, hasImage: false, isTable: false, ...extra };
+  return { text, marker: null, hasImage: false, isTable: false, bold: false, imageRelId: null, ...extra };
 }
 function numbered(value: number, text: string, listId = QUESTION_LIST, extra: Partial<DocxBlock> = {}): DocxBlock {
-  return { text, marker: { kind: "number", value: String(value), listId }, hasImage: false, isTable: false, ...extra };
+  return { text, marker: { kind: "number", value: String(value), listId }, hasImage: false, isTable: false, bold: false, imageRelId: null, ...extra };
 }
 /** Lima opsi A–E dengan daftar Word sendiri, persis seperti dokumen aslinya. */
 function options(texts: string[], extra: Partial<DocxBlock> = {}): DocxBlock[] {
@@ -26,6 +26,8 @@ function options(texts: string[], extra: Partial<DocxBlock> = {}): DocxBlock[] {
     marker: { kind: "letter" as const, value: "ABCDE"[index], listId },
     hasImage: false,
     isTable: false,
+    bold: false,
+    imageRelId: null,
     ...extra,
   }));
 }
@@ -53,7 +55,7 @@ const HEADER: DocxBlock[] = [
   assert.equal(q.issues.length, 0, q.issues.join("|"));
   assert.equal(q.kunci_jawaban, "", "tanpa bagian kunci, jawaban tidak boleh ditebak");
   assert.equal(isReady(q), false, "soal tanpa kunci belum siap diimport");
-  assert.deepEqual(statusReasons(q), ["Kunci jawaban belum diisi"]);
+  assert.deepEqual(statusReasons(q), ["Kunci jawaban belum ditemukan"]);
 }
 
 // ── B. Banyak soal + petunjuk tidak ikut terbaca sebagai soal ───────────────
@@ -216,7 +218,7 @@ const HEADER: DocxBlock[] = [
     numbered(1, "Soal dengan opsi meloncat"),
     ...[["B", "Dua"], ["C", "Tiga"], ["D", "Empat"], ["E", "Lima"]].map(([letter, text]) => ({
       text, marker: { kind: "letter" as const, value: letter, listId: "skew:0" },
-      hasImage: false, isTable: false,
+      hasImage: false, isTable: false, bold: false, imageRelId: null,
     })),
   ]);
   assert.ok(skewed.questions[0].issues.some((i) => /tidak berurutan/.test(i)));
@@ -241,7 +243,7 @@ const HEADER: DocxBlock[] = [
     numbered(1, "Perhatikan gambar berikut.", QUESTION_LIST, { hasImage: true }),
     ...options(FIVE),
   ]);
-  assert.ok(withImage.questions[0].issues.some((i) => /gambar/.test(i)), "gambar wajib ditandai");
+  assert.ok(withImage.questions[0].issues.some((i) => /gambar/i.test(i)), "gambar wajib ditandai");
 }
 
 // ── T. Hanya soal siap yang boleh ikut diimport ─────────────────────────────
@@ -278,4 +280,92 @@ const HEADER: DocxBlock[] = [
   assert.equal(lower.questions[0].opsi_b, "Dua");
 }
 
-console.log("wordImport: struktur soal, nomor/opsi ambigu, kunci jawaban, tabel/gambar PASS");
+// ── U. Kunci dari tanda tebal: satu opsi tebal = kunci ----------------------
+{
+  const single = parseQuestions([
+    numbered(1, "Ibu kota Indonesia?"),
+    ...options(FIVE).map((o, i) => (i === 1 ? { ...o, bold: true } : o)),
+  ]);
+  assert.equal(single.questions[0].kunci_jawaban, "B", "satu opsi tebal terbaca sebagai kunci");
+  assert.equal(isReady(single.questions[0]), true, "struktur utuh + kunci tebal = siap");
+
+  // Beberapa opsi tebal (mis. seluruh dokumen tercetak tebal) bukan indikator.
+  const multi = parseQuestions([
+    numbered(1, "Semua opsi tebal — gaya dokumen"),
+    ...options(FIVE).map((o) => ({ ...o, bold: true })),
+  ]);
+  assert.equal(multi.questions[0].kunci_jawaban, "", "beberapa opsi tebal tidak boleh jadi kunci");
+  assert.ok(multi.questions[0].issues.some((i) => /beberapa pilihan dicetak tebal/.test(i)));
+  assert.equal(isReady(multi.questions[0]), false);
+}
+
+// ── V. Bold konsisten dengan bagian kunci → bagian kunci tetap menang ───────
+{
+  const r = parseQuestions([
+    numbered(1, "Soal satu"), ...options(FIVE).map((o, i) => (i === 0 ? { ...o, bold: true } : o)),
+    plain("KUNCI JAWABAN"),
+    plain("1. A"),
+  ]);
+  assert.equal(r.questions[0].kunci_jawaban, "A", "bagian kunci eksplisit menang bila tidak konflik");
+  assert.equal(isReady(r.questions[0]), true);
+}
+
+// ── W. Konflik indikator kunci: tidak pernah dipilih otomatis ──────────────
+{
+  const r = parseQuestions([
+    numbered(1, "Soal konflik"), ...options(FIVE).map((o, i) => (i === 1 ? { ...o, bold: true } : o)),
+    plain("KUNCI JAWABAN"),
+    plain("1. D"),
+  ]);
+  const q = r.questions[0];
+  assert.equal(q.kunci_jawaban, "", "konflik antar indikator kunci harus ditandai, bukan ditebak");
+  assert.ok(q.issues.some((i) => /berbeda dengan/.test(i)));
+  assert.equal(isReady(q), false);
+}
+
+// ── X. Gambar: terbaca → ikut preview & import; gagal → ditandai ───────────
+{
+  const r = parseQuestions([
+    numbered(1, "Soal bergambar", QUESTION_LIST, { hasImage: true, imageRelId: "rId5" }),
+    ...options(FIVE),
+    numbered(2, "Soal biasa"), ...options(FIVE),
+    plain("KUNCI JAWABAN"),
+    plain("1. B 2. C"),
+  ]);
+  resolveImages(r.questions, new Map([["rId5", {
+    dataUrl: "data:image/png;base64,AA==", fileName: "gambar.png", mimeType: "image/png",
+  }]]));
+  const bergambar = r.questions[0];
+  assert.equal(bergambar.image?.fileName, "gambar.png", "gambar hasil parsing muncul di preview");
+  assert.equal(bergambar.imageBroken, false);
+  assert.equal(bergambar.issues.length, 0);
+
+  // rId tertulis tetapi byte-nya tidak ada → ditandai, bukan dibuang diam-diam.
+  const rBroken = parseQuestions([
+    numbered(1, "Gambar putus", QUESTION_LIST, { hasImage: true, imageRelId: "rId9" }),
+    ...options(FIVE),
+  ]);
+  resolveImages(rBroken.questions, new Map());
+  const bq = rBroken.questions[0];
+  assert.equal(bq.imageBroken, true);
+  assert.ok(bq.issues.some((i) => /Gambar pada soal ini perlu diperiksa/.test(i)));
+  assert.equal(isReady(bq), false);
+
+  const { payload, blockedByImages } = await buildImportPayload(r.questions, 10, "MAPEL_A",
+    async (_base64, _mime, name) => ({ success: true, data: { url: `https://drive/${name}` } }));
+  assert.equal(blockedByImages, 0);
+  assert.equal(payload.length, 2);
+  assert.equal(payload[0].gambar_url, "https://drive/gambar.png", "gambar ikut terimport ke Bank Soal");
+  assert.equal(payload[1].gambar_url, "", "soal tanpa gambar tetap kosong");
+  assert.equal(payload[0].nomor_urut, 11, "penomoran lanjut dari mapel tujuan");
+
+  // Unggahan gambar gagal → soal dilewati dan dihitung, bukan diimport polos.
+  const { payload: failPayload, blockedByImages: blocked } = await buildImportPayload(
+    r.questions, 0, "MAPEL_A", async () => ({ success: false, message: "gagal" }),
+  );
+  assert.equal(blocked, 1);
+  assert.equal(failPayload.length, 1, "soal bergambar yang gagal diunggah tidak ikut terimport");
+  assert.equal(failPayload[0].nomor_urut, 1);
+}
+
+console.log("wordImport: struktur soal, nomor/opsi ambigu, kunci (bagian/bold/konflik), gambar/tabel + mutations PASS");

@@ -1,9 +1,12 @@
-// Pembaca .docx seperlunya: ambil teks per paragraf beserta penanda daftarnya.
+// Pembaca .docx seperlunya: ambil teks per paragraf beserta penanda daftarnya,
+// apakah paragraf itu dicetak tebal (penanda kunci jawaban guru), dan gambar
+// yang dikandungnya.
 //
-// .docx adalah arsip ZIP berisi XML. Yang dibutuhkan import soal hanya dua berkas
-// di dalamnya, jadi di sini ada pembaca ZIP kecil ketimbang menambah dependensi
-// baru: DecompressionStream sudah tersedia di browser maupun Node, sehingga kode
-// yang sama dipakai layar admin dan test.
+// .docx adalah arsip ZIP berisi XML. Yang dibutuhkan import soal hanya beberapa
+// berkas di dalamnya (document.xml, numbering.xml, rels, media), jadi di sini ada
+// pembaca ZIP kecil ketimbang menambah dependensi baru: DecompressionStream
+// sudah tersedia di browser maupun Node, sehingga kode yang sama dipakai layar
+// admin dan test.
 //
 // ponytail: hanya entri ZIP biasa (deflate/stored) yang didukung; berkas Zip64
 // ditolak dengan pesan yang bisa dibaca guru, bukan dipaksa dibaca setengah jadi.
@@ -19,6 +22,17 @@ export interface DocxBlock {
   marker: { kind: "number" | "letter"; value: string; listId: string } | null;
   hasImage: boolean;
   isTable: boolean;
+  /** Dipakai guru untuk menandai kunci jawaban: "**B. Jakarta**" → B. */
+  bold: boolean;
+  /** Identitas baris gambar (r:embed / r:id) pertama di paragraf; null bila tidak ada. */
+  imageRelId: string | null;
+}
+
+/** Gambar yang berhasil diambil dari dokumen Word, siap tampil di preview. */
+export interface DocxImage {
+  dataUrl: string;
+  fileName: string;
+  mimeType: string;
 }
 
 const EOCD_SIGNATURE = 0x06054b50;
@@ -40,8 +54,8 @@ async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** Baca satu berkas di dalam .docx. null bila berkas itu memang tidak ada. */
-async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<string | null> {
+/** Cari satu entri ZIP berdasarkan nama persisnya. null bila tidak ada. */
+async function readZipEntryBytes(buffer: ArrayBuffer, wanted: string): Promise<Uint8Array | null> {
   const view = new DataView(buffer);
   const bytes = new Uint8Array(buffer);
   const eocd = findEndOfCentralDirectory(view);
@@ -67,13 +81,19 @@ async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<string
       const localExtraLength = view.getUint16(localOffset + 28, true);
       const dataStart = localOffset + 30 + localNameLength + localExtraLength;
       const data = bytes.subarray(dataStart, dataStart + compressedSize);
-      if (method === 0) return decoder.decode(data);
-      if (method === 8) return decoder.decode(await inflateRaw(data));
+      if (method === 0) return data;
+      if (method === 8) return inflateRaw(data);
       throw new DocxError("unsupported-compression");
     }
     offset += 46 + nameLength + extraLength + commentLength;
   }
   return null;
+}
+
+/** Baca satu berkas teks di dalam .docx. null bila berkas itu memang tidak ada. */
+async function readZipEntry(buffer: ArrayBuffer, wanted: string): Promise<string | null> {
+  const bytes = await readZipEntryBytes(buffer, wanted);
+  return bytes ? new TextDecoder("utf-8").decode(bytes) : null;
 }
 
 function decodeXmlText(value: string): string {
@@ -97,6 +117,27 @@ function paragraphText(xml: string): string {
     text += match[1] === undefined ? " " : decodeXmlText(match[1]);
   }
   return text.replace(/\s+/g, " ").trim();
+}
+
+// Penebalan bertingkat: <w:b/>, <w:b w:val="1"/>, dan <w:bCs/> untuk aksara
+// runcing. Nilai "0"/"false"/"off" artinya tidak tebal.
+const BOLD_RUN = /<w:b(?:\s[^>]*)?\/>|<w:bCs(?:\s[^>]*)?\/>/g;
+
+function isBold(xml: string): boolean {
+  for (const match of xml.matchAll(BOLD_RUN)) {
+    if (!/val="(?:0|false|off)"/.test(match[0])) return true;
+  }
+  return false;
+}
+
+// Gambar modern (DrawingML) menyimpan r:embed di <a:blip>; gambar lama (VML
+// <w:pict>) memakai r:id di <v:imagedata>. Ponytail: hanya rId pertama yang
+// diambil per paragraf — dokumen sekolah praktisnya satu gambar per soal.
+function firstImageRelId(xml: string): string | null {
+  const blip = xml.match(/r:embed="(rId\d+)"/);
+  if (blip) return blip[1];
+  const pict = xml.match(/r:id="(rId\d+)"/);
+  return pict ? pict[1] : null;
 }
 
 /** numId → format penomoran per level, dibaca dari word/numbering.xml. */
@@ -144,6 +185,8 @@ export async function extractDocxBlocks(buffer: ArrayBuffer): Promise<DocxBlock[
     const isTable = xml.startsWith("<w:tbl");
     const hasImage = xml.includes("<w:drawing") || xml.includes("<w:pict");
     const text = paragraphText(xml);
+    const bold = isBold(xml);
+    const imageRelId = hasImage ? firstImageRelId(xml) : null;
 
     let marker: DocxBlock["marker"] = null;
     if (!isTable) {
@@ -163,10 +206,65 @@ export async function extractDocxBlocks(buffer: ArrayBuffer): Promise<DocxBlock[
     }
 
     if (text === "" && !hasImage && !isTable) continue;
-    blocks.push({ text, marker, hasImage, isTable });
+    blocks.push({ text, marker, hasImage, isTable, bold, imageRelId });
   }
 
   return blocks;
+}
+
+// rId → jalur media ("media/image1.png") dari word/_rels/document.xml.rels.
+// Ponytail: menuntut Id muncul sebelum Target, persis urutan yang ditulis Word.
+async function readRelationshipTargets(buffer: ArrayBuffer): Promise<Map<string, string>> {
+  const rels = await readZipEntry(buffer, "word/_rels/document.xml.rels");
+  const map = new Map<string, string>();
+  if (!rels) return map;
+  for (const match of rels.matchAll(/<Relationship[^>]*\sId="(rId\d+)"[^>]*\sTarget="([^"]+)"/g)) {
+    map.set(match[1], match[2]);
+  }
+  return map;
+}
+
+const EXT_MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  gif: "image/gif", bmp: "image/bmp", webp: "image/webp",
+};
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+/**
+ * Ambil byte gambar yang dirujuk paragraf dokumen sebagai data URL.
+ * rId yang tidak ditemukan / format tak dikenal tidak masuk hasil — pemanggil
+ * menandainya sebagai gambar yang perlu diperiksa guru, bukan dihilangkan diam-diam.
+ */
+export async function extractDocxImages(
+  buffer: ArrayBuffer,
+  relIds: Iterable<string>,
+): Promise<Map<string, DocxImage>> {
+  const wanted = new Set(relIds);
+  if (wanted.size === 0) return new Map();
+
+  const targets = await readRelationshipTargets(buffer);
+  const result = new Map<string, DocxImage>();
+  for (const [rid, target] of targets) {
+    if (!wanted.has(rid)) continue;
+    const name = target.replace(/\\/g, "/").replace(/^\.\.\//, "").replace(/^\//, "");
+    if (!name.startsWith("media/")) continue;
+    const bytes = await readZipEntryBytes(buffer, `word/${name}`);
+    if (!bytes) continue;
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    const mimeType = EXT_MIME[ext];
+    if (!mimeType) continue;
+    result.set(rid, {
+      dataUrl: `data:${mimeType};base64,${bytesToBase64(bytes)}`,
+      fileName: name.split("/").pop() ?? name,
+      mimeType,
+    });
+  }
+  return result;
 }
 
 /** Pesan siap tampil untuk guru; detail teknis tidak pernah sampai ke layar. */
