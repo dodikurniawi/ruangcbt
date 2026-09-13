@@ -14,12 +14,15 @@ import {
 const secret = "test-session-secret-32-characters-minimum";
 const now = 2_000_000_000;
 const adminToken = createSessionToken("tenant-a", "admin", "admin", secret, now);
+const concurrentAdminToken = createSessionToken("tenant-a", "admin", "admin", secret, now);
 const studentToken = createSessionToken("tenant-a", "S001", "student", secret, now);
 const admin = verifySessionToken(adminToken, secret, now);
 const student = verifySessionToken(studentToken, secret, now);
 
 assert.ok(admin);
 assert.ok(student);
+assert.ok(admin.session_id);
+assert.notEqual(adminToken, concurrentAdminToken, "login admin bersamaan wajib punya identitas sesi berbeda");
 assert.equal(verifySessionToken(`${studentToken}tampered`, secret, now), null);
 assert.equal(verifySessionToken(studentToken, secret, now + SESSION_TTL_SECONDS), null);
 

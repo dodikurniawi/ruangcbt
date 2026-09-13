@@ -1,4 +1,5 @@
 import { OPTION_KEYS, validateSingleOptions } from "./wordImport.ts";
+import { GOOGLE_MESSAGES, fetchGoogleWithTimeout } from "./googleRequest.ts";
 
 export type GoogleSupportedQuestionType = "SINGLE" | "TRUE_FALSE" | "FILL_IN";
 
@@ -111,7 +112,7 @@ export async function listGoogleForms(
   if (pageToken) url.searchParams.set("pageToken", pageToken);
 
   const response = await googleFetch(url, accessToken, fetcher);
-  const data = await response.json() as {
+  const data = await readGoogleJson(response) as {
     files?: { id?: unknown; name?: unknown; modifiedTime?: unknown }[];
     nextPageToken?: unknown;
   };
@@ -136,7 +137,7 @@ export async function getGoogleForm(
     accessToken,
     fetcher,
   );
-  return mapGoogleForm(await response.json() as GoogleFormResource, imageUrlFor);
+  return mapGoogleForm(await readGoogleJson(response) as GoogleFormResource, imageUrlFor);
 }
 
 export function mapGoogleForm(
@@ -223,32 +224,32 @@ export async function fetchGoogleImage(
 ): Promise<{ bytes: Uint8Array; mimeType: string }> {
   let url = new URL(sourceUrl);
   for (let redirects = 0; redirects <= 2; redirects++) {
-    if (!isGoogleImageHost(url)) throw new Error("Gambar tidak berhasil diambil.");
-    const response = await fetcher(url, {
+    if (!isGoogleImageHost(url)) throw new Error(GOOGLE_MESSAGES.image);
+    const response = await fetchGoogleWithTimeout(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
       redirect: "manual",
       cache: "no-store",
-    });
+    }, fetcher);
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location || redirects === 2) throw new Error("Gambar tidak berhasil diambil.");
+      if (!location || redirects === 2) throw new Error(GOOGLE_MESSAGES.image);
       url = new URL(location, url);
       continue;
     }
-    if (!response.ok) throw new Error("Gambar tidak berhasil diambil.");
+    if (!response.ok) throw new Error(GOOGLE_MESSAGES.image);
     const mimeType = (response.headers.get("content-type") ?? "").split(";", 1)[0].toLowerCase();
     if (!new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]).has(mimeType)) {
-      throw new Error("Gambar tidak berhasil diambil.");
+      throw new Error(GOOGLE_MESSAGES.image);
     }
     const statedSize = Number(response.headers.get("content-length") ?? 0);
-    if (statedSize > 2 * 1024 * 1024) throw new Error("Gambar tidak berhasil diambil.");
+    if (statedSize > 2 * 1024 * 1024) throw new Error(GOOGLE_MESSAGES.image);
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength === 0 || bytes.byteLength > 2 * 1024 * 1024) {
-      throw new Error("Gambar tidak berhasil diambil.");
+      throw new Error(GOOGLE_MESSAGES.image);
     }
     return { bytes, mimeType };
   }
-  throw new Error("Gambar tidak berhasil diambil.");
+  throw new Error(GOOGLE_MESSAGES.image);
 }
 
 function mapSingleQuestionItem(
@@ -423,14 +424,25 @@ function text(value: unknown): string {
 }
 
 async function googleFetch(url: URL, accessToken: string, fetcher: typeof fetch): Promise<Response> {
-  const response = await fetcher(url, {
+  const response = await fetchGoogleWithTimeout(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
-  });
-  if (response.status === 401) throw new Error("Sesi Google Anda sudah berakhir. Hubungkan kembali akun Google.");
-  if (response.status === 403) throw new Error("Google belum memberikan izin untuk membaca Form.");
-  if (!response.ok) throw new Error("Form ini tidak dapat dibaca oleh RuangCBT.");
+  }, fetcher);
+  if (response.status === 401) throw new Error(GOOGLE_MESSAGES.expired);
+  if (response.status === 403) throw new Error(GOOGLE_MESSAGES.denied);
+  if (response.status === 429 || response.status >= 500) throw new Error(GOOGLE_MESSAGES.busy);
+  if (!response.ok) throw new Error(GOOGLE_MESSAGES.unreadable);
   return response;
+}
+
+async function readGoogleJson(response: Response): Promise<Record<string, unknown>> {
+  try {
+    const data: unknown = await response.json();
+    if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error();
+    return data as Record<string, unknown>;
+  } catch {
+    throw new Error(GOOGLE_MESSAGES.unreadable);
+  }
 }
 
 function isGoogleImageHost(url: URL): boolean {

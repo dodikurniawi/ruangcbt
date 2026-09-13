@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE = "ruangcbt_session";
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
@@ -8,6 +8,7 @@ export type ProxyMethod = "GET" | "POST";
 
 export interface SessionClaims {
   version: 1;
+  session_id?: string;
   school_id: string;
   subject: string;
   role: SessionRole;
@@ -121,6 +122,7 @@ export function createSessionToken(
   if (!isStrongSecret(secret)) throw new Error("Session signing secret must be at least 32 characters");
   const claims: SessionClaims = {
     version: 1,
+    session_id: randomBytes(16).toString("base64url"),
     school_id: schoolId,
     subject,
     role,

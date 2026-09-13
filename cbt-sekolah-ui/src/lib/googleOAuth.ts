@@ -5,6 +5,9 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
+import { GOOGLE_MESSAGES, fetchGoogleWithTimeout } from "./googleRequest.ts";
+
+export { GOOGLE_MESSAGES, fetchGoogleWithTimeout, teacherMessage } from "./googleRequest.ts";
 
 export const GOOGLE_OAUTH_STATE_COOKIE = "ruangcbt_google_oauth_state";
 export const GOOGLE_FORMS_TOKEN_COOKIE = "ruangcbt_google_forms_token";
@@ -43,6 +46,16 @@ interface TokenResponse {
   access_token?: unknown;
   expires_in?: unknown;
   token_type?: unknown;
+  scope?: unknown;
+}
+
+/**
+ * Google granular consent membiarkan guru mencentang sebagian izin saja. Token
+ * seperti itu tetap valid tetapi gagal di tengah import, jadi ditolak lebih awal.
+ */
+export function grantedAllScopes(scope: unknown): boolean {
+  const granted = new Set(typeof scope === "string" ? scope.split(" ").filter(Boolean) : []);
+  return GOOGLE_FORMS_SCOPES.every((required) => granted.has(required));
 }
 
 export function getGoogleOAuthConfig(
@@ -144,10 +157,21 @@ export function validGoogleToken(
   nowSeconds = Math.floor(Date.now() / 1000),
 ): token is GoogleTokenSession {
   return Boolean(
+    googleTokenBelongsToSession(token, schoolId, subject, binding) &&
+    token.expiresAt > nowSeconds + 15
+  );
+}
+
+export function googleTokenBelongsToSession(
+  token: GoogleTokenSession | null,
+  schoolId: string,
+  subject: string,
+  binding: string,
+): token is GoogleTokenSession {
+  return Boolean(
     token &&
     token.version === 1 &&
-    token.accessToken &&
-    token.expiresAt > nowSeconds + 15 &&
+    typeof token.accessToken === "string" && token.accessToken &&
     token.schoolId === schoolId &&
     token.subject === subject &&
     sameSecretValue(token.sessionBinding, binding),
@@ -164,7 +188,7 @@ export async function exchangeGoogleCode(
   code: string,
   fetcher: typeof fetch = fetch,
 ): Promise<{ accessToken: string; expiresIn: number }> {
-  const response = await fetcher("https://oauth2.googleapis.com/token", {
+  const response = await fetchGoogleWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -175,25 +199,31 @@ export async function exchangeGoogleCode(
       grant_type: "authorization_code",
     }),
     cache: "no-store",
-  });
-  if (!response.ok) throw new Error("Google belum memberikan izin untuk membaca Form.");
+  }, fetcher);
+  if (!response.ok) throw new Error(GOOGLE_MESSAGES.denied);
 
-  const data = await response.json() as TokenResponse;
+  let data: TokenResponse;
+  try {
+    data = await response.json() as TokenResponse;
+  } catch {
+    throw new Error(GOOGLE_MESSAGES.denied);
+  }
   const accessToken = typeof data.access_token === "string" ? data.access_token : "";
   const expiresIn = typeof data.expires_in === "number" ? Math.floor(data.expires_in) : 0;
   if (!accessToken || String(data.token_type ?? "").toLowerCase() !== "bearer" || expiresIn < 60) {
-    throw new Error("Google belum memberikan izin untuk membaca Form.");
+    throw new Error(GOOGLE_MESSAGES.denied);
   }
+  if (!grantedAllScopes(data.scope)) throw new Error(GOOGLE_MESSAGES.partialScope);
   return { accessToken, expiresIn: Math.min(expiresIn, 60 * 60) };
 }
 
 export async function revokeGoogleToken(accessToken: string, fetcher: typeof fetch = fetch): Promise<void> {
-  await fetcher("https://oauth2.googleapis.com/revoke", {
+  await fetchGoogleWithTimeout("https://oauth2.googleapis.com/revoke", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ token: accessToken }),
     cache: "no-store",
-  });
+  }, fetcher);
 }
 
 function deriveKey(secret: string, purpose: string): Buffer {

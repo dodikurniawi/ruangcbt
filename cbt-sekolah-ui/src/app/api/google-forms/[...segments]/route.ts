@@ -14,10 +14,12 @@ import {
   createGoogleAuthorizationUrl,
   exchangeGoogleCode,
   getGoogleOAuthConfig,
+  googleTokenBelongsToSession,
   googleConnectionStatus,
   openGoogleCookie,
   revokeGoogleToken,
   sealGoogleCookie,
+  teacherMessage,
   validGoogleState,
   validGoogleToken,
   type GoogleOAuthState,
@@ -65,7 +67,9 @@ async function handle(request: NextRequest, method: "GET" | "POST", segments: st
   const admin = getAdminContext(request);
   if (admin instanceof NextResponse) {
     if (path === "oauth/callback") {
-      return popupResponse(false, "Sesi RuangCBT Anda sudah berakhir. Login kembali sebagai admin.", config.redirectUri);
+      const stale = popupResponse(false, "Sesi RuangCBT Anda sudah berakhir. Login kembali sebagai admin.", config.redirectUri);
+      clearStateCookie(stale);
+      return stale;
     }
     return admin;
   }
@@ -96,10 +100,28 @@ async function handle(request: NextRequest, method: "GET" | "POST", segments: st
       return oauthCallback(request, admin, config);
     }
 
-    const token = getTokenSession(request, admin);
+    const storedToken = getOwnedTokenSession(request, admin);
+    const token = validGoogleToken(
+      storedToken,
+      admin.session.school_id,
+      admin.session.subject,
+      admin.binding,
+    ) ? storedToken : null;
     if (path === "status" && method === "GET") {
       return NextResponse.json({ success: true, data: googleConnectionStatus(true, token) });
     }
+
+    if (path === "disconnect" && method === "POST") {
+      try {
+        if (storedToken) await revokeGoogleToken(storedToken.accessToken);
+      } catch {
+        // Token lokal tetap dihapus. Revoke jaringan gagal tidak boleh membuat guru terjebak terhubung.
+      }
+      const response = NextResponse.json({ success: true, message: "Akun Google sudah dilepas dari sesi ini." });
+      clearTokenCookie(response);
+      return response;
+    }
+
     if (!token) return teacherError("Sesi Google Anda sudah berakhir. Hubungkan kembali akun Google.", 401);
 
     if (path === "forms" && method === "GET") {
@@ -145,20 +167,11 @@ async function handle(request: NextRequest, method: "GET" | "POST", segments: st
       });
     }
 
-    if (path === "disconnect" && method === "POST") {
-      try {
-        await revokeGoogleToken(token.accessToken);
-      } catch {
-        // Token lokal tetap dihapus. Revoke jaringan gagal tidak boleh membuat guru terjebak terhubung.
-      }
-      const response = NextResponse.json({ success: true, message: "Akun Google sudah dilepas dari sesi ini." });
-      clearTokenCookie(response);
-      return response;
-    }
-
     return teacherError("Permintaan Google Form tidak dikenal.", 404);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Google Form tidak dapat diproses.";
+    // Hanya pesan dari daftar aman yang diteruskan; error tak terduga tidak pernah
+    // membocorkan detail internal ke browser guru.
+    const message = teacherMessage(error);
     return teacherError(message, /Sesi Google/.test(message) ? 401 : 502);
   }
 }
@@ -220,8 +233,8 @@ async function oauthCallback(
     });
     clearStateCookie(response);
     return response;
-  } catch {
-    const response = popupResponse(false, "Google belum memberikan izin untuk membaca Form.", config.redirectUri);
+  } catch (error) {
+    const response = popupResponse(false, teacherMessage(error), config.redirectUri);
     clearStateCookie(response);
     return response;
   }
@@ -234,16 +247,17 @@ function getAdminContext(request: NextRequest): AdminContext | NextResponse {
   const session = verifySessionToken(sessionToken, secret);
   if (!session) return teacherError("Sesi RuangCBT Anda sudah berakhir. Login kembali sebagai admin.", 401);
   if (session.role !== "admin") return teacherError("Akses hanya tersedia untuk admin.", 403);
+  if (!session.session_id) return teacherError("Sesi RuangCBT perlu diperbarui. Login kembali sebagai admin.", 401);
   return { secret, sessionToken, session, binding: bindGoogleSession(sessionToken, secret) };
 }
 
-function getTokenSession(request: NextRequest, admin: AdminContext): GoogleTokenSession | null {
+function getOwnedTokenSession(request: NextRequest, admin: AdminContext): GoogleTokenSession | null {
   const token = openGoogleCookie<GoogleTokenSession>(
     request.cookies.get(GOOGLE_FORMS_TOKEN_COOKIE)?.value,
     admin.secret,
     "token",
   );
-  return validGoogleToken(
+  return googleTokenBelongsToSession(
     token,
     admin.session.school_id,
     admin.session.subject,

@@ -280,7 +280,11 @@ try {
 
   const logout = await handleProxyRequest(request("POST", "logout", adminCookie), "POST", "tenant-a", resolveTarget);
   assert.equal(logout.status, 200);
-  assert.match(logout.headers.get("set-cookie") || "", /Max-Age=0/);
+  const clearedCookies = logout.headers.get("set-cookie") || "";
+  assert.match(clearedCookies, /ruangcbt_session=/);
+  assert.match(clearedCookies, /ruangcbt_google_forms_token=/);
+  assert.match(clearedCookies, /ruangcbt_google_oauth_state=/);
+  assert.match(clearedCookies, /Max-Age=0/);
 
   const directGas = await fetch(target.gasUrl + "?action=getUsers");
   assert.equal(directGas.status, 401);

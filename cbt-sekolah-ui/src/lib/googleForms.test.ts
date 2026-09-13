@@ -218,6 +218,18 @@ const FORM = {
 
   const empty = await listGoogleForms("server-access-token", "", async () => Response.json({ files: [] }));
   assert.deepEqual(empty.forms, []);
+  await assert.rejects(
+    listGoogleForms("server-access-token", "", async () => new Response("not-json")),
+    /Form ini tidak dapat dibaca/,
+  );
+  await assert.rejects(
+    listGoogleForms("expired-token", "", async () => new Response(null, { status: 401 })),
+    /Sesi Google Anda sudah berakhir/,
+  );
+  await assert.rejects(
+    listGoogleForms("forbidden-token", "", async () => new Response(null, { status: 403 })),
+    /Google belum memberikan izin/,
+  );
 }
 
 {
@@ -250,10 +262,33 @@ const FORM = {
     /Gambar tidak berhasil diambil/,
   );
   await assert.rejects(
+    fetchGoogleImage("token", "https://example.com/private", async () => new Response(bytes)),
+    /Gambar tidak berhasil diambil/,
+  );
+  await assert.rejects(
     fetchGoogleImage("token", "https://lh3.googleusercontent.com/huge.png", async () =>
       new Response(bytes, { headers: { "content-type": "image/png", "content-length": String(3 * 1024 * 1024) } })),
     /Gambar tidak berhasil diambil/,
   );
 }
 
-console.log("googleForms: list, parsing, mapping, key, unsupported, image, preview, import filter PASS");
+{
+  // Rate limit dan Google 500 bukan "form tidak terbaca"; guru harus tahu ini sementara.
+  for (const status of [429, 500, 503]) {
+    await assert.rejects(
+      listGoogleForms("token", "", async () => new Response("{}", { status })),
+      /Google sedang sibuk/,
+      `status ${status} harus dipetakan sebagai Google sibuk`,
+    );
+  }
+  await assert.rejects(
+    getGoogleForm("token", "form-1234567890", () => "", async () => new Response("{}", { status: 401 })),
+    /Sesi Google Anda sudah berakhir/,
+  );
+  await assert.rejects(
+    getGoogleForm("token", "form-1234567890", () => "", async () => new Response("{}", { status: 404 })),
+    /Form ini tidak dapat dibaca/,
+  );
+}
+
+console.log("googleForms: list, parsing, mapping, key, unsupported, image, preview, import filter, Google error mapping PASS");
