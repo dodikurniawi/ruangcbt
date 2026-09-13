@@ -10,7 +10,8 @@ const REGISTRY_LOOKUP_SECRET = process.env.REGISTRY_LOOKUP_SECRET || '';
 
 export async function getTenantRecord(schoolId: string): Promise<TenantRecord | null> {
   if (!REGISTRY_URL || REGISTRY_LOOKUP_SECRET.length < 32) return null;
-  try {
+  
+  const fetchTenant = async () => {
     const url = new URL(REGISTRY_URL);
     url.searchParams.set('school_id', schoolId);
     url.searchParams.set('registry_secret', REGISTRY_LOOKUP_SECRET);
@@ -24,7 +25,19 @@ export async function getTenantRecord(schoolId: string): Promise<TenantRecord | 
       gas_url: String(data.gas_url),
       shared_secret: String(data.shared_secret || ''),
     };
+  };
+
+  try {
+    const result = await fetchTenant();
+    if (result) return result;
   } catch {
-    return null;
+    // ponytail: retry once on network/cold-start error before failing lookup
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      return await fetchTenant();
+    } catch {
+      return null;
+    }
   }
+  return null;
 }

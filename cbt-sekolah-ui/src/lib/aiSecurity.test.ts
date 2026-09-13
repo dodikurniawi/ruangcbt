@@ -20,10 +20,11 @@ assert.doesNotMatch(endpoint, /apiKey|x-goog-api-key|Authorization|generateAI/);
 assert.doesNotMatch(provider, /console\.(log|error)|NEXT_PUBLIC_|searchParams/);
 assert.doesNotMatch(settings, /cookie|sessionStorage|fetch\(/);
 
-// Key selalu header-only; tidak dirangkai ke URL, body, response, atau pesan error.
-assert.match(provider, /"x-goog-api-key": apiKey/);
-assert.match(provider, /`Bearer \$\{apiKey\}`/);
-assert.doesNotMatch(provider, /\?key=|message:.*apiKey|body:.*apiKey/);
+// Key dikirim lewat query param (?key=...) untuk menghindari blokir CORS preflight header;
+// tidak pernah muncul di body request, respons, atau pesan error.
+assert.match(provider, /generateContent\?key=/);
+assert.doesNotMatch(provider, /x-goog-api-key/);
+assert.doesNotMatch(provider, /message:.*apiKey|body:.*apiKey/);
 
 // Show/hide hanya mengganti tipe input; save/delete punya handler eksplisit terpisah.
 assert.match(settingsUi, /type=\{visible\[provider\.id\] \? "text" : "password"\}/);

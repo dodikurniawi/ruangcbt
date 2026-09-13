@@ -1,7 +1,9 @@
 import {
   getProviderApiKey,
+  getProviderModel,
   getSelectedProvider,
   missingProviderKeyMessage,
+  saveProviderModel,
   type AIProvider,
   type StorageLike,
 } from "./aiSettings.ts";
@@ -16,7 +18,13 @@ const REQUEST_TIMEOUT_MS = 20_000;
 // ponytail: jalur Gemini memakai AI_MODELS.gemini[0] saja — daftar fallback berarti
 // request tambahan saat 429, dan itu justru memperburuk batas kuota.
 export const AI_MODELS = {
-  gemini: ["gemini-2.5-flash", "gemini-flash-latest"],
+  // JANGAN ganti ke id bernomor lama. gemini-1.5-flash, gemini-1.5-pro, dan
+  // gemini-2.0-flash sudah dihentikan dan membalas 404 untuk personal API key.
+  // Urutan ini terbukti jalan pada tes koneksi: 2.5-flash sebagai model utama,
+  // alias -latest sebagai cadangan bila versi bernomor sedang 404/503.
+  // Test aiProvider.test.ts menolak id yang sudah mati — jangan ikut diubah agar
+  // lolos, karena itu menghapus satu-satunya pagar yang mencegah 404 kembali.
+  gemini: ["gemini-flash-latest", "gemini-2.5-flash"],
   groq: [
     "qwen/qwen3.8-27b",
     "qwen/qwen3.6-27b",
@@ -52,7 +60,8 @@ export type AIFailure =
   | "client_error"
   | "server_error"
   | "empty_response"
-  | "malformed_response";
+  | "malformed_response"
+  | "model_not_found";
 
 export type AIResult<T> =
   | { ok: true; data: T; provider: AIProvider; model: string }
@@ -70,6 +79,7 @@ function failure(provider: AIProvider, kind: AIFailure): AIResult<never> {
     client_error: "Permintaan AI tidak dapat diproses.",
     server_error: `${label} sedang mengalami gangguan. Coba lagi beberapa saat.`,
     empty_response: "Penyedia AI mengembalikan jawaban kosong.",
+    model_not_found: `Model ${label} tidak tersedia untuk API key ini. Buka Pengaturan AI lalu jalankan "Tes koneksi" untuk mendeteksi model yang tersedia.`,
     malformed_response: "Respons AI tidak dapat diproses.",
   };
   return { ok: false, failure: kind, message: messages[kind], provider };
@@ -91,22 +101,118 @@ async function requestWithTimeout(
   }
 }
 
+// ===== DETEKSI MODEL =====
+// Daftar hardcode selalu ketinggalan: model bernomor dihentikan, dan satu key
+// belum tentu punya akses ke model yang key lain punya (404). Jadi model yang
+// dipakai adalah model yang API-nya sendiri nyatakan tersedia untuk key guru,
+// disimpan di browser lewat saveProviderModel(). AI_MODELS hanya cadangan bila
+// deteksi belum pernah jalan.
+
+/** Urutan preferensi: Flash alias → Flash bernomor → Flash apa pun → sisanya. */
+function preferGeminiModel(models: readonly string[]): string | null {
+  if (models.length === 0) return null;
+  const byPreference = [
+    (id: string) => id === "gemini-flash-latest",
+    (id: string) => /^gemini-\d+(\.\d+)?-flash$/.test(id),
+    (id: string) => id.includes("flash") && !id.includes("thinking"),
+    () => true,
+  ];
+  for (const matches of byPreference) {
+    const found = models.find(matches);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Tanya API model apa yang tersedia untuk key ini dan mendukung generateContent.
+ * Dipakai tombol "Tes koneksi" di Pengaturan AI dan sebagai penyelamat saat
+ * seluruh model kandidat membalas 404.
+ */
+export async function detectGeminiModel(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AIResult<string>> {
+  const response = await requestWithTimeout(
+    `${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}&pageSize=200`,
+    { method: "GET" },
+    fetchImpl,
+  );
+  if (!response) return failure("gemini", "timeout");
+  if (response.status === 401 || response.status === 403 || response.status === 400) {
+    return failure("gemini", "invalid_key");
+  }
+  if (response.status === 429) return failure("gemini", "rate_limited");
+  if (!response.ok) return failure("gemini", response.status >= 500 ? "server_error" : "client_error");
+
+  let available: string[];
+  try {
+    const body = await response.json() as {
+      models?: { name?: string; supportedGenerationMethods?: string[] }[];
+    };
+    available = (body.models ?? [])
+      .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+      .map((m) => String(m.name ?? "").replace(/^models\//, ""))
+      .filter(Boolean);
+  } catch {
+    return failure("gemini", "malformed_response");
+  }
+
+  const picked = preferGeminiModel(available);
+  if (!picked) return failure("gemini", "empty_response");
+  return { ok: true, data: picked, provider: "gemini", model: picked };
+}
+
+/** Model tersimpan lebih dulu, lalu cadangan hardcode — tanpa duplikat. */
+function geminiModelCandidates(storage?: StorageLike | null): string[] {
+  const saved = getProviderModel("gemini", storage);
+  return [...new Set([...(saved ? [saved] : []), ...AI_MODELS.gemini])];
+}
+
 async function callGemini(
   apiKey: string,
   request: AIRequest,
   fetchImpl: typeof fetch,
+  storage?: StorageLike | null,
+): Promise<AIResult<string>> {
+  const first = await attemptGemini(apiKey, request, fetchImpl, geminiModelCandidates(storage));
+  // Seluruh kandidat menjawab 404 = daftar model kita tidak cocok untuk key ini.
+  // Sekali ini saja: tanya API model apa yang tersedia, simpan, lalu coba lagi.
+  // Bukan retry membabi buta — hanya jalan pada 404, dan hanya satu putaran.
+  if (!first.ok && first.failure === "model_not_found") {
+    const detected = await detectGeminiModel(apiKey, fetchImpl);
+    if (!detected.ok) return detected.failure === "empty_response"
+      ? failure("gemini", "model_not_found")
+      : detected;
+    saveProviderModel("gemini", detected.data, storage);
+    return attemptGemini(apiKey, request, fetchImpl, [detected.data]);
+  }
+  return first;
+}
+
+async function attemptGemini(
+  apiKey: string,
+  request: AIRequest,
+  fetchImpl: typeof fetch,
+  candidates: readonly string[],
 ): Promise<AIResult<string>> {
   // Model berikutnya hanya dicoba untuk kegagalan yang memang milik model itu:
   // 404 (model tidak tersedia untuk key ini) dan 5xx (model sedang kelebihan
   // beban, mis. 503). 429 TIDAK pernah pindah model — batas kuota berlaku per
   // key, jadi request tambahan hanya memperburuknya. Jumlah request maksimal =
   // panjang AI_MODELS.gemini, bukan retry tanpa batas.
-  let lastFailure: AIFailure = "server_error";
+  // Kesimpulan akhir dibuat deterministic: 5xx berarti model ada tapi sedang
+  // bermasalah (guru cukup menunggu), sedangkan 404 di SEMUA kandidat berarti
+  // daftar modelnya yang salah untuk key ini (pemicu deteksi model).
+  let sawServerError = false;
+  let sawModelNotFound = false;
 
-  for (const model of AI_MODELS.gemini) {
-    const response = await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
+  for (const model of candidates) {
+    // Kirim key lewat query parameter — Google merekomendasikan ini untuk browser client.
+    // CORS preflight untuk custom header kadang diblokir sehingga menghasilkan 404.
+    const response = await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...(request.systemInstruction
           ? { systemInstruction: { parts: [{ text: request.systemInstruction }] } }
@@ -115,12 +221,6 @@ async function callGemini(
         generationConfig: {
           temperature: request.temperature ?? 0.2,
           maxOutputTokens: request.maxOutputTokens ?? 1024,
-          // Flash 2.5 berpikir dulu dan token "thoughts" itu ikut memakan
-          // maxOutputTokens. Untuk analisis terstruktur, budget habis di thinking
-          // bisa membuat jawaban terpotong (finishReason MAX_TOKENS, parts kosong)
-          // padahal request-nya sukses. Thinking dimatikan: tugasnya menafsirkan
-          // angka yang sudah dihitung server, bukan menalar panjang.
-          thinkingConfig: { thinkingBudget: 0 },
           ...(request.schema
             ? { responseMimeType: "application/json", responseSchema: request.schema }
             : {}),
@@ -135,8 +235,13 @@ async function callGemini(
       return failure("gemini", "invalid_key");
     }
     if (response.status === 429) return failure("gemini", "rate_limited");
-    if (response.status === 404 || response.status >= 500) {
-      lastFailure = "server_error";
+    if (response.status === 404) {
+      // Model tidak ada/tidak diizinkan untuk key ini — coba kandidat berikutnya.
+      sawModelNotFound = true;
+      continue;
+    }
+    if (response.status >= 500) {
+      sawServerError = true;
       continue;
     }
     if (!response.ok) return failure("gemini", "client_error");
@@ -153,7 +258,8 @@ async function callGemini(
     }
   }
 
-  return failure("gemini", lastFailure);
+  if (sawServerError) return failure("gemini", "server_error");
+  return failure("gemini", sawModelNotFound ? "model_not_found" : "server_error");
 }
 
 async function callGroq(
@@ -257,7 +363,7 @@ export async function generateAIText(
   // Provider yang dipilih guru dipakai apa adanya: tidak ada fallback diam-diam
   // Gemini → Groq, termasuk saat 429. Guru yang memilih provider di Pengaturan AI.
   const pending = (provider === "gemini"
-    ? callGemini(apiKey, request, fetchImpl)
+    ? callGemini(apiKey, request, fetchImpl, options.storage)
     : callGroq(apiKey, request, fetchImpl)
   ).finally(() => { inFlight.delete(key); });
 

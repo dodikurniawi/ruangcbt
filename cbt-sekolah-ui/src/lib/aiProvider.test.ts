@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { AI_MODELS, generateAIJson, generateAIText, inFlightCount } from "./aiProvider.ts";
+import { AI_MODELS, detectGeminiModel, generateAIJson, generateAIText, inFlightCount } from "./aiProvider.ts";
 import { AI_STORAGE_KEYS, type StorageLike } from "./aiSettings.ts";
 import { canRequestAiAnalysis } from "./learningAnalysis.ts";
 
@@ -30,8 +30,9 @@ const gemini = await generateAIJson<{ ok: boolean }>({ prompt: "data", schema: {
   },
 });
 assert.equal(gemini.ok, true);
-assert.equal(seenUrl.includes(geminiKey), false);
-assert.equal(seenHeaders["x-goog-api-key"], geminiKey);
+// Gemini: key ada di URL query param, BUKAN di header (menghindari blokir CORS preflight).
+assert.ok(seenUrl.includes(`key=${geminiKey}`), "key Gemini harus masuk query param");
+assert.equal(seenHeaders["x-goog-api-key"], undefined);
 assert.equal(seenHeaders.Authorization, undefined);
 assert.equal(seenBody.includes(geminiKey), false);
 assert.equal(JSON.stringify(gemini).includes(geminiKey), false);
@@ -72,15 +73,19 @@ const odd = new MemoryStorage({
   [AI_STORAGE_KEYS.gemini]: "format-baru-tanpa-prefix-AIza",
   [AI_STORAGE_KEYS.provider]: "gemini",
 });
+const oddKey = "format-baru-tanpa-prefix-AIza";
 let oddHeaders: Record<string, string> = {};
+let oddUrl = "";
 const rejectedByProvider = await generateAIText({ prompt: "x" }, {
   storage: odd,
-  fetchImpl: async (_input, init) => {
+  fetchImpl: async (input, init) => {
+    oddUrl = String(input);
     oddHeaders = init?.headers as Record<string, string>;
     return new Response(JSON.stringify({ error: { message: "API key not valid" } }), { status: 401 });
   },
 });
-assert.equal(oddHeaders["x-goog-api-key"], "format-baru-tanpa-prefix-AIza", "key non-AIza wajib tetap dicoba");
+assert.ok(oddUrl.includes(`key=${oddKey}`), "key non-AIza wajib tetap dicoba");
+assert.equal(oddHeaders["x-goog-api-key"], undefined, "key Gemini hanya lewat query param");
 assert.equal(rejectedByProvider.ok, false);
 if (!rejectedByProvider.ok) {
   assert.equal(rejectedByProvider.failure, "invalid_key");
@@ -281,9 +286,23 @@ if (!missing.ok) assert.equal(missing.failure, "missing_key");
 
 // ── Model: alias Gemini + tidak ada model Groq yang sudah dimatikan ─────────
 {
-  assert.deepEqual([...AI_MODELS.gemini], ["gemini-2.5-flash", "gemini-flash-latest"]);
-  for (const retired of ["gemini-1.5-flash", "gemini-2.0-flash"]) {
-    assert.ok(!AI_MODELS.gemini.includes(retired as never), `${retired} membalas 404, jangan dipakai`);
+  // Allowlist, bukan cermin isi file: id di luar daftar ini (mis. versi bernomor
+  // lama yang sudah dihentikan) wajib membuat test gagal, bukan ikut lolos.
+  const GEMINI_ALLOWED = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-pro-latest"];
+  const GEMINI_RETIRED = [
+    "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro",
+    "gemini-2.0-flash", "gemini-pro",
+  ];
+  assert.ok(AI_MODELS.gemini.length > 0, "daftar model Gemini tidak boleh kosong");
+  assert.equal(AI_MODELS.gemini[0], "gemini-flash-latest", "model utama = alias stabil yang terbukti jalan di tes koneksi");
+  for (const model of AI_MODELS.gemini) {
+    assert.ok(GEMINI_ALLOWED.includes(model), `${model} di luar allowlist model Gemini yang terverifikasi`);
+  }
+  for (const model of GEMINI_RETIRED) {
+    assert.ok(
+      !AI_MODELS.gemini.includes(model as never),
+      `${model} sudah dihentikan dan membalas 404 — jangan dipakai`,
+    );
   }
   for (const retired of ["mixtral-8x7b-32768", "gemma2-9b-it"]) {
     assert.ok(!AI_MODELS.groq.includes(retired as never), `${retired} sudah decommissioned di Groq`);
@@ -299,7 +318,7 @@ if (!missing.ok) assert.equal(missing.failure, "missing_key");
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }), { status: 200 });
     }) as unknown as typeof fetch,
   });
-  assert.ok(geminiUrl.endsWith(`/${AI_MODELS.gemini[0]}:generateContent`), geminiUrl);
+  assert.ok(geminiUrl.includes(`/${AI_MODELS.gemini[0]}:generateContent`), geminiUrl);
 }
 
 // ── Groq + response_format json_object wajib menyebut "json" di pesan ───────
@@ -390,7 +409,7 @@ if (!missing.ok) assert.equal(missing.failure, "missing_key");
   assert.equal(authCalls, 1);
 }
 
-// ── Thinking dimatikan: token thoughts tidak boleh menghabiskan output budget ──
+// ── Config Gemini: maxOutputTokens & JSON mimeType ─────────────────────────
 {
   let body = "";
   const res = await generateAIJson<{ ok: boolean }>({
@@ -406,9 +425,9 @@ if (!missing.ok) assert.equal(missing.failure, "missing_key");
   });
   assert.equal(res.ok, true);
   const parsed = JSON.parse(body) as {
-    generationConfig: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
+    generationConfig: { responseMimeType?: string; maxOutputTokens?: number };
   };
-  assert.equal(parsed.generationConfig.thinkingConfig?.thinkingBudget, 0);
+  assert.equal(parsed.generationConfig.responseMimeType, "application/json");
   assert.equal(parsed.generationConfig.maxOutputTokens, 1024);
 
   // Jawaban terpotong (parts kosong) tetap jadi pesan guru, bukan hasil palsu.
@@ -422,6 +441,105 @@ if (!missing.ok) assert.equal(missing.failure, "missing_key");
   });
   assert.equal(truncated.ok, false);
   if (!truncated.ok) assert.equal(truncated.failure, "empty_response");
+}
+
+// ── Deteksi model: API yang menentukan model, bukan daftar hardcode ─────────
+{
+  const listBody = {
+    models: [
+      { name: "models/embedding-001", supportedGenerationMethods: ["embedContent"] },
+      { name: "models/gemini-2.5-pro", supportedGenerationMethods: ["generateContent"] },
+      { name: "models/gemini-flash-latest", supportedGenerationMethods: ["generateContent"] },
+    ],
+  };
+
+  // Model yang hanya mendukung embedContent tidak boleh terpilih; Flash didahulukan.
+  const detected = await detectGeminiModel("key-apa-pun", (async () =>
+    new Response(JSON.stringify(listBody), { status: 200 })) as unknown as typeof fetch);
+  assert.equal(detected.ok, true);
+  if (detected.ok) assert.equal(detected.data, "gemini-flash-latest");
+
+  // Tidak ada model generateContent sama sekali → pesan, bukan crash.
+  const none = await detectGeminiModel("key", (async () =>
+    new Response(JSON.stringify({ models: [] }), { status: 200 })) as unknown as typeof fetch);
+  assert.equal(none.ok, false);
+  if (!none.ok) assert.equal(none.failure, "empty_response");
+
+  // 401 saat list = key salah, bukan masalah model.
+  const badKey = await detectGeminiModel("key", (async () =>
+    new Response("{}", { status: 401 })) as unknown as typeof fetch);
+  assert.equal(badKey.ok, false);
+  if (!badKey.ok) assert.equal(badKey.failure, "invalid_key");
+}
+
+// ── 404 di semua kandidat → deteksi sekali, simpan, pakai model itu ─────────
+{
+  const storage404 = new MemoryStorage({
+    [AI_STORAGE_KEYS.gemini]: geminiKey,
+    [AI_STORAGE_KEYS.provider]: "gemini",
+  });
+  // Model di luar daftar hardcode: hanya deteksi yang bisa menemukannya.
+  const DETECTED_MODEL = "gemini-flash-lite-latest";
+  assert.ok(!AI_MODELS.gemini.includes(DETECTED_MODEL as never));
+  const seen: string[] = [];
+  const res = await generateAIText({ prompt: "deteksi" }, {
+    storage: storage404,
+    fetchImpl: (async (input: string | URL | Request) => {
+      const url = String(input);
+      seen.push(url);
+      if (url.includes(":generateContent")) {
+        // Hanya model hasil deteksi yang dilayani; seluruh kandidat hardcode 404.
+        return url.includes(DETECTED_MODEL)
+          ? new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "hasil" }] } }] }), { status: 200 })
+          : new Response(JSON.stringify({ error: { message: "is not found" } }), { status: 404 });
+      }
+      return new Response(JSON.stringify({
+        models: [{ name: `models/${DETECTED_MODEL}`, supportedGenerationMethods: ["generateContent"] }],
+      }), { status: 200 });
+    }) as unknown as typeof fetch,
+  });
+
+  assert.equal(res.ok, true, "404 di daftar hardcode wajib diselamatkan oleh deteksi model");
+  if (res.ok) assert.equal(res.model, DETECTED_MODEL);
+  assert.equal(storage404.getItem(AI_STORAGE_KEYS.geminiModel), DETECTED_MODEL, "model hasil deteksi wajib tersimpan");
+  assert.equal(seen.filter((u) => !u.includes(":generateContent")).length, 1, "deteksi model hanya sekali");
+
+  // Permintaan berikutnya langsung memakai model tersimpan, tanpa list lagi.
+  const after: string[] = [];
+  await generateAIText({ prompt: "pakai-model-tersimpan" }, {
+    storage: storage404,
+    fetchImpl: (async (input: string | URL | Request) => {
+      after.push(String(input));
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }), { status: 200 });
+    }) as unknown as typeof fetch,
+  });
+  assert.equal(after.length, 1);
+  assert.ok(after[0].includes(DETECTED_MODEL));
+}
+
+// ── 404 + 503 bercampur = gangguan model, bukan salah daftar model ──────────
+{
+  const mixed = new MemoryStorage({
+    [AI_STORAGE_KEYS.gemini]: geminiKey,
+    [AI_STORAGE_KEYS.provider]: "gemini",
+  });
+  let listCalls = 0;
+  let index = 0;
+  const res = await generateAIText({ prompt: "404-lalu-503" }, {
+    storage: mixed,
+    fetchImpl: (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (!url.includes(":generateContent")) { listCalls++; return new Response(JSON.stringify({ models: [] }), { status: 200 }); }
+      index++;
+      return new Response("{}", { status: index === 1 ? 404 : 503 });
+    }) as unknown as typeof fetch,
+  });
+  assert.equal(res.ok, false);
+  if (!res.ok) {
+    assert.equal(res.failure, "server_error", "503 berarti model ada tapi sedang bermasalah");
+    assert.equal(res.message, "Gemini sedang mengalami gangguan. Coba lagi beberapa saat.");
+  }
+  assert.equal(listCalls, 0, "deteksi model tidak dipanggil bila ada model yang jelas masih hidup");
 }
 
 console.log("aiProvider: key isolation, header-only credentials, errors, timeout, JSON parsing, single-flight, 429 stop PASS");

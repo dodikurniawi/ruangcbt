@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { detectGeminiModel } from "@/lib/aiProvider";
 import {
   deleteProviderApiKey,
   getProviderApiKey,
+  getProviderModel,
+  saveProviderModel,
   getSelectedProvider,
   isNonEmptyApiKey,
   maskApiKey,
@@ -30,6 +33,8 @@ export default function AISettingsPanel() {
   const [inputs, setInputs] = useState<Record<AIProvider, string>>({ gemini: "", groq: "" });
   const [visible, setVisible] = useState<Record<AIProvider, boolean>>({ gemini: false, groq: false });
   const [messages, setMessages] = useState<Record<AIProvider, string>>({ gemini: "", groq: "" });
+  const [models, setModels] = useState<Record<AIProvider, string>>({ gemini: "", groq: "" });
+  const [testing, setTesting] = useState<AIProvider | null>(null);
 
   const refresh = () => {
     migrateLegacyGroqKey();
@@ -37,6 +42,7 @@ export default function AISettingsPanel() {
     const groq = getProviderApiKey("groq");
     setConfigured({ gemini: Boolean(gemini), groq: Boolean(groq) });
     setMasked({ gemini: maskApiKey(gemini), groq: maskApiKey(groq) });
+    setModels({ gemini: getProviderModel("gemini"), groq: getProviderModel("groq") });
     setSelected(getSelectedProvider());
   };
 
@@ -67,6 +73,34 @@ export default function AISettingsPanel() {
     deleteProviderApiKey(provider);
     setInputs((p) => ({ ...p, [provider]: "" }));
     setMessages((p) => ({ ...p, [provider]: "API key dihapus dari browser ini." }));
+    refresh();
+  };
+
+  // Tes koneksi menanyakan ke API model apa yang tersedia untuk key ini, lalu
+  // menyimpan pilihannya. Ini yang menghentikan 404 "model tidak ditemukan":
+  // model tidak lagi ditebak dari daftar hardcode.
+  const testConnection = async (provider: AIProvider) => {
+    if (provider !== "gemini") {
+      setMessages((p) => ({ ...p, [provider]: "Tes koneksi baru tersedia untuk Gemini." }));
+      return;
+    }
+    const key = getProviderApiKey(provider);
+    if (!key) {
+      setMessages((p) => ({ ...p, [provider]: "Simpan API key terlebih dahulu." }));
+      return;
+    }
+    setTesting(provider);
+    setMessages((p) => ({ ...p, [provider]: "Menguji koneksi..." }));
+
+    const result = await detectGeminiModel(key);
+    if (!result.ok) {
+      setMessages((p) => ({ ...p, [provider]: result.message }));
+      setTesting(null);
+      return;
+    }
+    saveProviderModel(provider, result.data);
+    setMessages((p) => ({ ...p, [provider]: "Koneksi berhasil. Model dipakai: " + result.data }));
+    setTesting(null);
     refresh();
   };
 
@@ -105,7 +139,9 @@ export default function AISettingsPanel() {
                   <div>
                     <h4 className="font-black text-sm text-slate-800">{provider.label}</h4>
                     <p className={`text-[11px] font-bold mt-0.5 ${saved ? "text-emerald-600" : "text-slate-400"}`}>
-                      {saved ? `✓ Siap digunakan • ${masked[provider.id]}` : "Belum dikonfigurasi"}
+                      {saved
+                        ? `✓ Siap digunakan • ${masked[provider.id]}${models[provider.id] ? ` • model ${models[provider.id]}` : ""}`
+                        : "Belum dikonfigurasi"}
                     </p>
                   </div>
                   <a href={provider.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-[#2563EB] hover:underline">
@@ -148,6 +184,9 @@ export default function AISettingsPanel() {
                 <div className="flex gap-2 mt-3">
                   <button type="button" onClick={() => save(provider.id)} disabled={!inputs[provider.id].trim()} className="h-9 px-4 bg-purple-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
                     Simpan
+                  </button>
+                  <button type="button" onClick={() => testConnection(provider.id)} disabled={!saved || testing !== null} className="h-9 px-4 border border-purple-200 text-purple-700 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
+                    {testing === provider.id ? "Menguji..." : "Tes koneksi"}
                   </button>
                   <button type="button" onClick={() => remove(provider.id)} disabled={!saved} className="h-9 px-4 border border-red-200 text-red-600 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
                     Hapus

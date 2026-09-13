@@ -4,6 +4,10 @@ export const AI_STORAGE_KEYS = {
   gemini: "ruangcbt_ai_gemini_api_key",
   groq: "ruangcbt_ai_groq_api_key",
   provider: "ruangcbt_ai_provider",
+  // Model hasil deteksi per provider: id yang API-nya sendiri bilang tersedia
+  // untuk key guru. Menghilangkan tebak-tebakan daftar model yang berakhir 404.
+  geminiModel: "ruangcbt_ai_gemini_model",
+  groqModel: "ruangcbt_ai_groq_model",
 } as const;
 
 export const LEGACY_GROQ_API_KEY = "groq_api_key";
@@ -49,7 +53,21 @@ export function getProviderApiKey(
   if (!storage) return "";
   try {
     if (provider === "groq") migrateLegacyGroqKey(storage);
-    return storage.getItem(AI_STORAGE_KEYS[provider])?.trim() ?? "";
+    const raw = storage.getItem(AI_STORAGE_KEYS[provider]);
+    if (raw) {
+      const firstLine = raw.split(/\r?\n/).map((l) => l.trim()).find((l) => l !== "");
+      if (firstLine) return firstLine;
+    }
+    if (provider === "gemini") {
+      for (const legacyKey of ["smartguru_gemini_keys", "edugen_gemini_api_key", "geminiApiKey", "geminiApiKeys"]) {
+        const legacyVal = storage.getItem(legacyKey);
+        if (legacyVal) {
+          const firstLine = legacyVal.split(/\r?\n/).map((l) => l.trim()).find((l) => l !== "");
+          if (firstLine) return firstLine;
+        }
+      }
+    }
+    return "";
   } catch {
     return "";
   }
@@ -122,6 +140,41 @@ export function maskApiKey(apiKey: string): string {
  */
 export function isNonEmptyApiKey(apiKey: string): boolean {
   return apiKey.trim() !== "";
+}
+
+const MODEL_STORAGE_KEY: Record<AIProvider, string> = {
+  gemini: AI_STORAGE_KEYS.geminiModel,
+  groq: AI_STORAGE_KEYS.groqModel,
+};
+
+/** Model tersimpan hasil deteksi. "" berarti belum pernah dideteksi. */
+export function getProviderModel(
+  provider: AIProvider,
+  storage: StorageLike | null = browserStorage(),
+): string {
+  if (!storage) return "";
+  try {
+    return storage.getItem(MODEL_STORAGE_KEY[provider])?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveProviderModel(
+  provider: AIProvider,
+  model: string,
+  storage: StorageLike | null = browserStorage(),
+): boolean {
+  const value = model.trim();
+  if (!storage || !value) return false;
+  try {
+    storage.setItem(MODEL_STORAGE_KEY[provider], value);
+    const saved = storage.getItem(MODEL_STORAGE_KEY[provider]) === value;
+    if (saved) emitChanged();
+    return saved;
+  } catch {
+    return false;
+  }
 }
 
 export function missingProviderKeyMessage(provider: AIProvider): string {

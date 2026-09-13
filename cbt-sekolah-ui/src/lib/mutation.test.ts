@@ -347,8 +347,8 @@ async function main() {
 
   // 13. Retry otomatis pada 429 → request tambahan ke endpoint yang membatasi.
   await expectKilled("ai-no-retry-on-429", providerSrc,
-    '  if (response.status === 429) return failure("gemini", "rate_limited");',
-    '  if (response.status === 429) { await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent`, { method: "POST" }, fetchImpl); return failure("gemini", "rate_limited"); }',
+    '    if (response.status === 429) return failure("gemini", "rate_limited");',
+    '    if (response.status === 429) { await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent`, { method: "POST" }, fetchImpl); return failure("gemini", "rate_limited"); }',
     async (m) => {
       let calls = 0;
       const limited = (async () => { calls++; return new Response("{}", { status: 429 }); }) as unknown as typeof fetch;
@@ -358,8 +358,8 @@ async function main() {
 
   // 14. Fallback diam-diam Gemini → Groq saat 429.
   await expectKilled("ai-no-silent-fallback", providerSrc,
-    '  if (response.status === 429) return failure("gemini", "rate_limited");',
-    '  if (response.status === 429) return callGroq(apiKey, request, fetchImpl);',
+    '    if (response.status === 429) return failure("gemini", "rate_limited");',
+    '    if (response.status === 429) return callGroq(apiKey, request, fetchImpl);',
     async (m) => {
       const urls: string[] = [];
       const limited = (async (input: string | URL | Request) => {

@@ -71,6 +71,15 @@ const existing = new MemoryStorage();
 existing.setItem(AI_STORAGE_KEYS.gemini, "AIzaSy-key-lama-guru");
 assert.equal(getProviderApiKey("gemini", existing), "AIzaSy-key-lama-guru");
 
+// Multi-line key paste (mis. dari SmartGuru / Edugen) & fallback key legacy
+const multiStorage = new MemoryStorage();
+multiStorage.setItem(AI_STORAGE_KEYS.gemini, "  AIzaSyFirstKey  \n  AIzaSySecondKey  ");
+assert.equal(getProviderApiKey("gemini", multiStorage), "AIzaSyFirstKey");
+
+const legacyStorage = new MemoryStorage();
+legacyStorage.setItem("smartguru_gemini_keys", "AIzaSySmartGuruKey\nAIzaSy2");
+assert.equal(getProviderApiKey("gemini", legacyStorage), "AIzaSySmartGuruKey");
+
 // H — masking dipakai untuk tampilan, bukan validasi: key pendek pun tidak ditolak,
 // hanya disembunyikan seluruhnya.
 assert.equal(maskApiKey("x"), "••••••••");
