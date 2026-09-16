@@ -39,8 +39,16 @@ export default function MataPelajaranPage() {
   }, [router]);
 
   // SWR for data mapel
-  const { data: apiData, mutate, isLoading } = useSWR("getMataPelajaran", getMataPelajaran);
   const [mapel, setMapel] = useState<MataPelajaran[]>([]);
+  const { mutate, isLoading } = useSWR("getMataPelajaran", getMataPelajaran, {
+    // ponytail: sync in onSuccess, not an effect — avoids cascading render warning
+    onSuccess: (res) => {
+      if (res?.success && res?.data) {
+        setMapel(res.data);
+        localStorage.setItem("data_mapel", JSON.stringify(res.data));
+      }
+    },
+  });
 
   // Load initial data from LocalStorage or use defaults on mount
   useEffect(() => {
@@ -58,14 +66,6 @@ export default function MataPelajaranPage() {
       Promise.resolve().then(() => setMapel(initial));
     }
   }, []);
-
-  // Synchronize local state when SWR returns successful remote data
-  useEffect(() => {
-    if (apiData?.success && apiData?.data) {
-      setMapel(apiData.data);
-      localStorage.setItem("data_mapel", JSON.stringify(apiData.data));
-    }
-  }, [apiData]);
 
   const showToast = (msg: string) => {
     setToast(msg);
