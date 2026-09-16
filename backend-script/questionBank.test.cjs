@@ -684,7 +684,7 @@ const unchangedQ1 = {
   assert.deepEqual(admin.data_soal, DATA_SOAL_SAMPLE);
 }
 
-// ── 33. C. questionRowValues() menghasilkan 17 kolom, posisi 1-16 tetap ────
+// ── 33. C. questionRowValues() menghasilkan 18 kolom, posisi 1-16 tetap ────
 {
   const gas = loadGas(baseState());
   const legacyRow = gas.questionRowValues("Q9", validSingle, "AKTIF", "Q0");
@@ -692,7 +692,7 @@ const unchangedQ1 = {
     "Q9", Object.assign({}, validSingle, { data_soal: DATA_SOAL_SAMPLE }), "AKTIF", "Q0"
   );
 
-  assert.equal(legacyRow.length, 17, "questionRowValues wajib 17 kolom");
+  assert.equal(legacyRow.length, 18, "questionRowValues wajib 18 kolom");
   assert.deepEqual(legacyRow.slice(0, 16), withData.slice(0, 16), "kolom 1-16 tidak boleh berubah");
   assert.deepEqual(Array.from(legacyRow).slice(0, 16), [
     "Q9", 2, "SINGLE", "<p>Berapa 2+2?</p>", "", "3", "4", "5", "6", "",
@@ -788,8 +788,8 @@ const unchangedQ1 = {
 
   const rows = gas.__sheets.Questions.rows;
   assert.equal(rows[1].length, 14, "baris lama tidak boleh dimigrasi");
-  assert.equal(rows[2].length, 17);
-  assert.equal(rows[3].length, 17);
+  assert.equal(rows[2].length, 18);
+  assert.equal(rows[3].length, 18);
   assert.equal(rows[3][16], "", "SINGLE/COMPLEX tidak menulis data_soal");
   assert.equal(rows[3][10], "A,C", "kunci COMPLEX tetap di kolom 11");
 
@@ -852,14 +852,14 @@ const unchangedQ1 = {
   }
 }
 
-// ── 40. Sheet yang kolomnya dipangkas diperlebar sebelum menulis 17 kolom ──
+// ── 40. Sheet yang kolomnya dipangkas diperlebar sebelum menulis 18 kolom ──
 {
   const gas = loadGas(baseState());
   const sheet = gas.__sheets.Questions;
   sheet.insertColumnsAfter(0, 16);                      // pangkas grid tiruan ke 16 kolom
   assert.equal(sheet.getMaxColumns(), 16);
   gas.ensureQuestionColumns(sheet);
-  assert.equal(sheet.getMaxColumns(), 17, "grid wajib diperlebar sebelum menulis kolom 17");
+  assert.equal(sheet.getMaxColumns(), 18, "grid wajib diperlebar sebelum menulis kolom 18");
 }
 
 // ── 41. MUTATION TEST: questionContentEquals() wajib melihat kolom 17 ───────
@@ -1445,7 +1445,7 @@ function historicalFillInState() {
   });
   assert.equal(created.success, true, created.message);
   const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
-  assert.equal(row.length, 17);
+  assert.equal(row.length, 18);
   assert.deepEqual(JSON.parse(row[16]), fillInPayload().data_soal);                                // 14
   assert.deepEqual(JSON.parse(row[10]), fillInPayload().kunci_jawaban);                            // 15
 
@@ -1780,7 +1780,7 @@ function historicalMatchingState() {
   assert.equal(created.success, true, created.message);
 
   const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
-  assert.equal(row.length, 17, "kolom 1-16 tidak bergeser");
+  assert.equal(row.length, 18, "kolom 1-16 tidak bergeser");
   assert.deepEqual(JSON.parse(row[16]), matchingData());                                           // 12
   assert.deepEqual(JSON.parse(row[10]), { "1": "B", "2": "A" });                                   // 13
 
@@ -2104,7 +2104,7 @@ const TYPE_ANSWERS = {
     assert.equal(created.success, true, tipe + " gagal dibuat: " + created.message);
 
     const row = gas.__sheets.Questions.rows.find((candidate) => candidate[0] === created.id_soal);
-    assert.equal(row.length, 17, tipe + ": baris wajib 17 kolom");
+    assert.equal(row.length, 18, tipe + ": baris wajib 18 kolom");
     assert.equal(row[2], tipe, tipe + ": kolom tipe bergeser");
     assert.equal(String(row[14]), "AKTIF", tipe + ": status_soal bukan AKTIF");
 
@@ -2300,12 +2300,12 @@ const TYPE_ANSWERS = {
     for (const forbidden of contract.admin_only_fields) assert.equal(forbidden in q, false);
   }
 
-  // Edit baris 14 kolom tetap aman dan melebarkan baris ke 17 kolom.
+  // Edit baris 14 kolom tetap aman dan melebarkan baris ke 18 kolom.
   const edited = post(gas, "updateQuestion", {
     id_soal: "L14", data: Object.assign({}, validSingle, { nomor_urut: 1 }),
   });
   assert.equal(edited.success, true, edited.message);
-  assert.equal(gas.__sheets.Questions.rows[1].length, 17);
+  assert.equal(gas.__sheets.Questions.rows[1].length, 18);
   assert.equal(gas.__sheets.Questions.rows[2][10], "A,C", "baris tetangga ikut tertimpa");
 }
 

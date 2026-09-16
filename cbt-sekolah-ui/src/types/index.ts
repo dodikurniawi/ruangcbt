@@ -15,6 +15,7 @@ export interface ExamConfig {
     exam_status?: 'OPEN' | 'CLOSED';
     admin_wa?: string;  // nomor WA admin sekolah, misal "628123456789"
     exam_mapel?: string; // id_mapel yang diujikan, kosong = semua mapel
+    exam_kumpulan?: string; // daftar id kumpulan dipisah koma, kosong = semua yang aktif
     kkm?: number; // handleGetConfig resolve Config.kkm; fallback 70
 }
 
@@ -26,6 +27,9 @@ export interface ExamSummary {
     exam_status: 'OPEN' | 'CLOSED';
     question_count: number;
     question_counts?: Record<string, number>;
+    /** Kumpulan yang dipilih guru. Kosong = semua kumpulan aktif pada mapel itu. */
+    exam_kumpulan?: string[];
+    collections?: QuestionCollection[];
 }
 
 /** Payload satu aksi simpan konfigurasi ujian; server memvalidasi ulang semuanya. */
@@ -34,6 +38,7 @@ export interface SaveExamConfigInput {
     exam_mapel: string;
     exam_duration: number;
     exam_status: 'OPEN' | 'CLOSED';
+    exam_kumpulan?: string[];
 }
 
 // User types
@@ -79,7 +84,7 @@ export const QUESTION_TYPES_IMPLEMENTED = ['SINGLE', 'COMPLEX', 'TRUE_FALSE', 'M
 export const QUESTION_WRITE_FIELDS = [
     'id_soal', 'nomor_urut', 'tipe', 'pertanyaan', 'gambar_url',
     'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e',
-    'kunci_jawaban', 'bobot', 'kategori', 'id_mapel', 'data_soal',
+    'kunci_jawaban', 'bobot', 'kategori', 'id_mapel', 'data_soal', 'id_kumpulan',
 ] as const;
 
 export const STUDENT_QUESTION_FIELDS = [
@@ -88,7 +93,7 @@ export const STUDENT_QUESTION_FIELDS = [
     'bobot', 'kategori', 'id_mapel', 'nama_mapel', 'data_soal',
 ] as const;
 
-export const ADMIN_ONLY_QUESTION_FIELDS = ['kunci_jawaban', 'status_soal', 'versi_dari'] as const;
+export const ADMIN_ONLY_QUESTION_FIELDS = ['kunci_jawaban', 'status_soal', 'versi_dari', 'id_kumpulan'] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type ImplementedQuestionType = (typeof QUESTION_TYPES_IMPLEMENTED)[number];
@@ -178,7 +183,28 @@ export interface QuestionAdminFields {
     kunci_jawaban: SerializedQuestionAnswerKey;
     status_soal: 'AKTIF' | 'ARSIP';
     versi_dari: string | null;
+    /**
+     * Kumpulan soal tempat soal ini berada (Questions kolom 18). Kosong pada
+     * payload tulis berarti "biarkan seperti sekarang"; pada proyeksi admin,
+     * soal yang belum dikelompokkan dilaporkan sebagai KUMPULAN_BAWAAN_ID.
+     */
+    id_kumpulan?: string | null;
 }
+
+/** Wadah bernama milik guru di Bank Soal. Nonaktif tidak pernah berarti terhapus. */
+export interface QuestionCollection {
+    id_kumpulan: string;
+    nama_kumpulan: string;
+    id_mapel: string;
+    status: 'AKTIF' | 'NONAKTIF';
+    jumlah_soal: number;
+    terakhir_dipakai?: string;
+    /** true = bucket bawaan berisi soal yang belum pernah dikelompokkan. */
+    bawaan?: boolean;
+}
+
+/** Id bucket bawaan; sama dengan KUMPULAN_LEGACY_ID di backend. */
+export const KUMPULAN_BAWAAN_ID = 'K_LAMA';
 
 export type AdminQuestion<T extends StudentQuestion = StudentQuestion> =
     T extends StudentQuestion ? T & QuestionAdminFields : never;

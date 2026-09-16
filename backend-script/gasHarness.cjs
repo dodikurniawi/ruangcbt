@@ -84,7 +84,12 @@ function loadGas(sheetRows, mutateSource) {
       getActiveSpreadsheet: () => ({
         getId: () => "SPREADSHEET_ID",
         getSheetByName: (name) => sheets[name] || null,
-        insertSheet: () => null,
+        // Sheets sungguhan membuat tab baru di sini; mengembalikan null membuat
+        // jalur "tenant belum punya sheet ini" tidak pernah teruji dengan jujur.
+        insertSheet: (name) => {
+          sheets[name] = makeSheet([]);
+          return sheets[name];
+        },
       }),
     },
     Utilities: {
@@ -101,7 +106,10 @@ function loadGas(sheetRows, mutateSource) {
     console,
   };
   vm.createContext(context);
-  let source = fs.readFileSync(path.join(__dirname, "code.gs"), "utf8");
+  // Akhir baris dinormalkan ke LF: checkout dengan autocrlf menghasilkan CRLF,
+  // sedangkan pola mutation test ditulis dengan LF dan jadi tidak pernah cocok.
+  let source = fs.readFileSync(path.join(__dirname, "code.gs"), "utf8")
+    .replace(/\r\n/g, "\n");
   // mutateSource dipakai mutation test: implementasi sengaja dirusak untuk
   // memastikan test benar-benar mendeteksi regresi, bukan lolos karena kebetulan.
   if (mutateSource) source = mutateSource(source);

@@ -245,7 +245,7 @@ function mutate(find, replaceWith, label) {
 
   // Soal import ditulis sebagai versi dari soal lain / langsung arsip.
   const wrongStatus = mutate(
-    "      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, \"\"));",
+    "      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, \"\", target.id_kumpulan));",
     "      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ARCHIVED, \"Q1\"));",
     "F",
   );

@@ -4,7 +4,7 @@
   "types_canonical": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
   "types_implemented": ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"],
 
-  "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini. data_soal disimpan pada Questions kolom 17 sebagai JSON string.",
+  "_comment_write_fields": "Field yang boleh dikirim admin pada payload createQuestion/updateQuestion. GAS menolak field di luar daftar ini. data_soal disimpan pada Questions kolom 17 sebagai JSON string, id_kumpulan pada kolom 18.",
   "write_fields": [
     "id_soal",
     "nomor_urut",
@@ -20,7 +20,8 @@
     "bobot",
     "kategori",
     "id_mapel",
-    "data_soal"
+    "data_soal",
+    "id_kumpulan"
   ],
 
   "_comment_student_fields": "Allowlist canonical field yang boleh diterima siswa. data_soal diproyeksikan dari Questions kolom 17 bila terisi.",
@@ -43,7 +44,7 @@
   ],
 
   "_comment_admin_only": "Tidak boleh pernah muncul pada proyeksi siswa.",
-  "admin_only_fields": ["kunci_jawaban", "status_soal", "versi_dari"],
+  "admin_only_fields": ["kunci_jawaban", "status_soal", "versi_dari", "id_kumpulan"],
 
   "_comment_rich_text": "Field yang wajib melewati sanitizer. Jalur data_soal ditulis relatif terhadap objek data_soal.",
   "rich_text": {

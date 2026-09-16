@@ -11,7 +11,8 @@ import type {
     Kelas,
     MataPelajaran,
     ExamSummary,
-    SaveExamConfigInput
+    SaveExamConfigInput,
+    QuestionCollection
 } from '@/types';
 
 // Resolve proxy URL: tenant-aware when inside /s/[schoolId]/, fallback to single-tenant
@@ -164,10 +165,26 @@ export interface ImportQuestionsResult {
  * dan validator GAS yang sama dengan entri manual — tidak ada jalur pintas.
  */
 export async function importQuestions(
-    questions: (Partial<QuestionWritePayload> & { kunci_jawaban: string })[]
+    questions: (Partial<QuestionWritePayload> & { kunci_jawaban: string })[],
+    /** Kumpulan soal tujuan; kosong = soal masuk Bank Soal tanpa kumpulan. */
+    id_kumpulan?: string
 ): Promise<ApiResponse<ImportQuestionsResult>> {
-    return fetchApi<ImportQuestionsResult>('importQuestions', 'POST', { questions });
+    return fetchApi<ImportQuestionsResult>('importQuestions', 'POST', { questions, id_kumpulan });
 }
+
+// ===== KUMPULAN SOAL =====
+// Tidak ada aksi hapus: status "Tidak aktif" sudah menjawab "kumpulan ini sedang
+// tidak dipakai" tanpa pernah kehilangan satu soal pun.
+
+export const getQuestionCollections = () => fetchApi<QuestionCollection[]>('getQuestionCollections');
+
+export const createQuestionCollection = (data: { nama_kumpulan: string; id_mapel?: string }) =>
+    fetchApi<{ id_kumpulan: string }>('createQuestionCollection', 'POST', { ...data });
+
+export const updateQuestionCollection = (
+    id_kumpulan: string,
+    data: { nama_kumpulan?: string; status?: 'AKTIF' | 'NONAKTIF' }
+) => fetchApi<{ id_kumpulan: string; jumlah_soal: number }>('updateQuestionCollection', 'POST', { id_kumpulan, ...data });
 
 export async function updateConfig(key: string, value: string | number | boolean): Promise<ApiResponse> {
     return fetchApi('updateConfig', 'POST', { key, value });

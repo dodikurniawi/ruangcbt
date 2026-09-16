@@ -96,7 +96,7 @@ function isAnswerFilled(answer) {
 // ===== BANK SOAL — INTEGRITAS HISTORIS =====
 // Questions kolom 15 = status_soal. Kosong dibaca sebagai AKTIF sehingga sheet
 // lama (14 kolom) tetap terbaca tanpa migrasi.
-const QUESTION_COLUMNS = 17;
+const QUESTION_COLUMNS = 18;
 const QUESTION_STATUS_COL = 15;
 const QUESTION_ORIGIN_COL = 16;
 // Kolom 17 = data_soal (JSON string). Baris lama 14/16 kolom tetap sah: sel yang
@@ -104,6 +104,11 @@ const QUESTION_ORIGIN_COL = 16;
 const QUESTION_DATA_COL = 17;
 const QUESTION_STATUS_ACTIVE = "AKTIF";
 const QUESTION_STATUS_ARCHIVED = "ARSIP";
+// Kolom 18 = id_kumpulan. Sel kosong berarti soal belum dikelompokkan dan ikut
+// bucket legacy (KUMPULAN_LEGACY_ID) — tidak ada migrasi, tidak ada tulisan ke
+// baris lama, dan tenant yang belum pernah membuat kumpulan berperilaku persis
+// seperti sebelum fitur ini ada.
+const QUESTION_COLLECTION_COL = 18;
 // Seluruh tipe yang dikenal model canonical (lihat question-contract.json).
 const CANONICAL_QUESTION_TYPES = ["SINGLE", "COMPLEX", "TRUE_FALSE", "MATCHING", "FILL_IN"];
 // Tipe yang benar-benar didukung end-to-end. Sisanya ditolak sampai dikerjakan.
@@ -115,6 +120,7 @@ const QUESTION_ALLOWED_FIELDS = [
   "id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
   "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
   "kunci_jawaban", "bobot", "kategori", "id_mapel", "data_soal",
+  "id_kumpulan",
 ];
 // Allowlist proyeksi siswa canonical. data_soal student-visible dan bukan tempat
 // kunci jawaban — lihat FORBIDDEN_DATA_SOAL_KEYS.
@@ -123,7 +129,7 @@ const STUDENT_QUESTION_FIELDS = [
   "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
   "bobot", "kategori", "id_mapel", "nama_mapel", "data_soal",
 ];
-const ADMIN_ONLY_QUESTION_FIELDS = ["kunci_jawaban", "status_soal", "versi_dari"];
+const ADMIN_ONLY_QUESTION_FIELDS = ["kunci_jawaban", "status_soal", "versi_dari", "id_kumpulan"];
 // kunci_jawaban adalah satu-satunya pembawa kunci. data_soal ikut ke siswa, jadi
 // nama field yang menyerupai kunci ditolak di boundary (lihat question-contract.json).
 const FORBIDDEN_DATA_SOAL_KEYS = ["kunci", "kunci_jawaban", "jawaban", "benar", "answer", "key"];
@@ -169,6 +175,115 @@ function isQuestionAnsweredInHistory(id_soal) {
     if (raw && String(raw).indexOf(needle) !== -1) return true;
   }
   return false;
+}
+
+// ===== KUMPULAN SOAL =====
+// Bank Soal → Kumpulan Soal → Soal. Kumpulan adalah wadah yang dinamai guru
+// ("UH Bab 1"), punya status Aktif/Tidak aktif, dan menentukan soal mana yang
+// ditawarkan saat membuat ujian. Tidak aktif TIDAK menghapus, mengarsipkan, atau
+// menyembunyikan soal dari Bank Soal — hanya soalnya tidak ikut ujian baru.
+//
+// Status hidup pada sheet KumpulanSoal, bukan pada tiap baris soal: menonaktifkan
+// 50 soal adalah satu tulisan sel, bukan lima puluh.
+const COLLECTION_SHEET = "KumpulanSoal";
+const COLLECTION_HEADERS = ["id_kumpulan", "nama_kumpulan", "id_mapel", "status", "dibuat", "terakhir_dipakai"];
+const COLLECTION_STATUS_ACTIVE = "AKTIF";
+const COLLECTION_STATUS_INACTIVE = "NONAKTIF";
+// Soal lama yang belum punya kumpulan tetap dapat dilihat, dipakai, dan diatur
+// statusnya lewat satu bucket implisit. Barisnya baru ditulis ke sheet saat guru
+// benar-benar mengubah statusnya, jadi tenant lama tidak tersentuh sama sekali.
+const KUMPULAN_LEGACY_ID = "K_LAMA";
+const KUMPULAN_LEGACY_NAME = "Soal Lama";
+const COLLECTION_NAME_MAX_LENGTH = 80;
+
+// Sheet KumpulanSoal tidak dibuat saat membaca: tenant yang belum pernah membuat
+// kumpulan harus tetap berjalan seperti sebelum fitur ini ada.
+function getCollectionSheet(create) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(COLLECTION_SHEET);
+  if (!sheet && create) {
+    sheet = ss.insertSheet(COLLECTION_SHEET);
+    if (sheet) sheet.appendRow(COLLECTION_HEADERS);
+  }
+  return sheet || null;
+}
+
+// Sel kosong = belum dikelompokkan = bucket legacy.
+function questionCollectionId(row) {
+  const value = String(row[QUESTION_COLLECTION_COL - 1] || "").trim();
+  return value === "" ? KUMPULAN_LEGACY_ID : value;
+}
+
+function normalizeCollectionStatus(value) {
+  return String(value || "").toUpperCase() === COLLECTION_STATUS_INACTIVE
+    ? COLLECTION_STATUS_INACTIVE
+    : COLLECTION_STATUS_ACTIVE;
+}
+
+function readCollections() {
+  const sheet = getCollectionSheet(false);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    list.push({
+      row_number: i + 1,
+      id_kumpulan: String(data[i][0]),
+      nama_kumpulan: String(data[i][1] == null ? "" : data[i][1]),
+      id_mapel: String(data[i][2] == null ? "" : data[i][2]),
+      status: normalizeCollectionStatus(data[i][3]),
+      dibuat: data[i][4] ? String(data[i][4]) : "",
+      terakhir_dipakai: data[i][5] ? String(data[i][5]) : "",
+    });
+  }
+  return list;
+}
+
+// id_kumpulan → status. Id yang tidak tercatat (termasuk bucket legacy yang belum
+// pernah disentuh) dibaca AKTIF supaya soal lama tidak hilang dari ujian.
+function collectionStatusMap() {
+  const map = {};
+  const list = readCollections();
+  for (let i = 0; i < list.length; i++) map[list[i].id_kumpulan] = list[i].status;
+  return map;
+}
+
+function isCollectionActive(statusMap, id_kumpulan) {
+  return (statusMap[id_kumpulan] || COLLECTION_STATUS_ACTIVE) === COLLECTION_STATUS_ACTIVE;
+}
+
+// Config.exam_kumpulan disimpan sebagai daftar dipisah koma. Kosong berarti
+// "semua kumpulan aktif pada mapel ini" — perilaku default dan jalur tenant lama.
+function parseCollectionSelection(raw) {
+  const parts = String(raw == null ? "" : raw).split(",");
+  const ids = [];
+  for (let i = 0; i < parts.length; i++) {
+    const id = parts[i].trim();
+    if (id !== "" && ids.indexOf(id) === -1) ids.push(id);
+  }
+  return ids;
+}
+
+// Jumlah soal aktif per kumpulan dari satu kali baca Questions.
+function collectionQuestionCounts() {
+  const sheet = getSheet("Questions");
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const counts = {};
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row[0] || isQuestionArchived(row)) continue;
+    const id = questionCollectionId(row);
+    counts[id] = (counts[id] || 0) + 1;
+  }
+  return counts;
+}
+
+function findCollection(list, id_kumpulan) {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].id_kumpulan === id_kumpulan) return list[i];
+  }
+  return null;
 }
 
 // ===== ACTIVE EXAM — SNAPSHOT & ATTEMPT BINDING =====
@@ -219,15 +334,28 @@ function questionFingerprint(row) {
 // urutan deterministic (nomor_urut, lalu id_soal). Satu-satunya tempat aturan
 // "soal apa yang masuk ujian" hidup — dipakai snapshot attempt maupun jumlah soal
 // yang ditampilkan ke guru, jadi angka yang dilihat guru = soal yang diterima siswa.
-function collectExamQuestionRows(exam_mapel) {
+function collectExamQuestionRows(exam_mapel, collectionIds) {
   const mapel = String(exam_mapel || "");
   const sheet = getSheet("Questions");
   const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const statusMap = collectionStatusMap();
+  // Daftar pilihan kosong = seluruh kumpulan aktif pada mapel ini.
+  const wanted = {};
+  const ids = collectionIds || [];
+  for (let c = 0; c < ids.length; c++) wanted[String(ids[c])] = true;
+  const hasSelection = ids.length > 0;
+
   const selected = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row[0] || isQuestionArchived(row)) continue;
     if (mapel && String(row[13] || "") !== mapel) continue;
+    // Kumpulan yang dinonaktifkan guru tidak ikut ujian baru. Soalnya tetap utuh
+    // di Bank Soal dan attempt yang sudah berjalan tidak terpengaruh: soal mereka
+    // dibaca dari snapshot, bukan dari sini.
+    const collection = questionCollectionId(row);
+    if (!isCollectionActive(statusMap, collection)) continue;
+    if (hasSelection && !wanted[collection]) continue;
     selected.push(row);
   }
 
@@ -245,7 +373,7 @@ function collectExamQuestionRows(exam_mapel) {
 function buildExamSnapshot() {
   const config = getConfig();
   const exam_mapel = String(config.exam_mapel || "");
-  const selected = collectExamQuestionRows(exam_mapel);
+  const selected = collectExamQuestionRows(exam_mapel, parseCollectionSelection(config.exam_kumpulan));
 
   const question_ids = [];
   const fingerprints = [];
@@ -662,7 +790,7 @@ function ensureQuestionColumns(sheet) {
   if (current < QUESTION_COLUMNS) sheet.insertColumnsAfter(current, QUESTION_COLUMNS - current);
 }
 
-function questionRowValues(id_soal, data, statusValue, originId) {
+function questionRowValues(id_soal, data, statusValue, originId, collectionId) {
   const tipe = String(data.tipe).toUpperCase();
   const structuredKey = STRUCTURED_KEY_TYPES.indexOf(tipe) !== -1
     ? parseScoringObject(data.kunci_jawaban)
@@ -685,7 +813,30 @@ function questionRowValues(id_soal, data, statusValue, originId) {
     statusValue || QUESTION_STATUS_ACTIVE,
     originId || "",
     serializeDataSoal(data.data_soal),
+    collectionId || "",
   ];
+}
+
+// id_kumpulan yang akan ditulis pada baris soal. Kosong berarti soal tetap pada
+// bucket legacy — sah, dan itulah keadaan seluruh soal sebelum fitur ini ada.
+// Kumpulan nonaktif tetap boleh menerima soal baru: guru sering menyiapkan
+// kumpulan untuk dipakai minggu depan.
+function resolveQuestionCollection(data, fallback) {
+  const raw = data && data.id_kumpulan;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return { id_kumpulan: String(fallback || "") };
+  }
+  const id = String(raw).trim();
+  if (id === KUMPULAN_LEGACY_ID) return { id_kumpulan: "" };
+
+  const found = findCollection(readCollections(), id);
+  if (!found) return { error: "Kumpulan soal tidak ditemukan. Pilih ulang kumpulan soal." };
+
+  const mapel = String((data && data.id_mapel) || "").trim();
+  if (found.id_mapel && mapel && found.id_mapel !== mapel) {
+    return { error: 'Kumpulan soal "' + found.nama_kumpulan + '" bukan milik mata pelajaran soal ini.' };
+  }
+  return { id_kumpulan: id };
 }
 
 // Bandingkan isi soal yang menentukan makna jawaban historis: tipe, redaksi,
@@ -766,6 +917,9 @@ function doGet(e) {
         break;
       case "getMataPelajaran":
         result = handleGetMataPelajaran();
+        break;
+      case "getQuestionCollections":
+        result = handleGetQuestionCollections();
         break;
       case "getKelas":
         result = handleGetKelas();
@@ -862,6 +1016,12 @@ function doPost(e) {
         result = handleUploadImage(params);
         break;
       // ── Mata Pelajaran ───────────────────────────
+      case "createQuestionCollection":
+        result = handleCreateQuestionCollection(params);
+        break;
+      case "updateQuestionCollection":
+        result = handleUpdateQuestionCollection(params);
+        break;
       case "createMataPelajaran":
         result = handleCreateMataPelajaran(params);
         break;
@@ -956,11 +1116,15 @@ function handleGetQuestions(skipMapelFilter, id_siswa) {
   }
 
   const sheet = getSheet("Questions");
-  // Tanpa binding: seluruh baris sheet (header dibuang) lalu difilter seperti dulu.
-  // Dengan binding: hanya soal beku milik attempt, sudah dalam urutan snapshot.
-  const data = binding
-    ? resolveBoundQuestionRows(binding)
-    : sheet.getDataRange().getValues().slice(1);
+  // Admin melihat seluruh Bank Soal. Siswa dengan binding mendapat soal beku milik
+  // attempt-nya, dalam urutan snapshot. Siswa tanpa binding (attempt lama) memakai
+  // aturan pemilihan yang sama dengan snapshot — satu sumber kebenaran, jadi
+  // kumpulan yang dinonaktifkan guru tidak bocor lewat jalur ini.
+  const data = skipMapelFilter
+    ? sheet.getDataRange().getValues().slice(1)
+    : (binding
+      ? resolveBoundQuestionRows(binding)
+      : collectExamQuestionRows(exam_mapel, parseCollectionSelection(config.exam_kumpulan)));
   const questions = [];
 
   for (let i = 0; i < data.length; i++) {
@@ -1012,6 +1176,8 @@ function handleGetQuestions(skipMapelFilter, id_siswa) {
       entry.kunci_jawaban = row[10] || "";
       entry.status_soal = archived ? QUESTION_STATUS_ARCHIVED : QUESTION_STATUS_ACTIVE;
       entry.versi_dari = row[QUESTION_ORIGIN_COL - 1] || null;
+      // Pengelompokan adalah alat kerja guru; siswa tidak pernah menerimanya.
+      entry.id_kumpulan = questionCollectionId(row);
     }
     questions.push(entry);
   }
@@ -1747,7 +1913,10 @@ function createQuestionVersion(sheet, oldRowNumber, currentRow, data, originId) 
     const newId = generateQuestionId(taken);
 
     ensureQuestionColumns(sheet);
-    sheet.appendRow(questionRowValues(newId, data, QUESTION_STATUS_ACTIVE, originId));
+    // Versi baru tetap tinggal di kumpulan yang sama, kecuali guru memindahkannya.
+    const collection = resolveQuestionCollection(data, currentRow[QUESTION_COLLECTION_COL - 1] || "");
+    if (collection.error) return { success: false, message: collection.error };
+    sheet.appendRow(questionRowValues(newId, data, QUESTION_STATUS_ACTIVE, originId, collection.id_kumpulan));
     sheet.getRange(oldRowNumber, QUESTION_STATUS_COL).setValue(QUESTION_STATUS_ARCHIVED);
     if (!currentRow[QUESTION_ORIGIN_COL - 1]) {
       sheet.getRange(oldRowNumber, QUESTION_ORIGIN_COL).setValue(originId);
@@ -1790,8 +1959,11 @@ function handleCreateQuestion(params) {
       id_soal = generateQuestionId(takenIds);
     }
 
+    const collection = resolveQuestionCollection(data, "");
+    if (collection.error) return { success: false, message: collection.error };
+
     ensureQuestionColumns(sheet);
-    sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, ""));
+    sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", collection.id_kumpulan));
     cache.remove("questions"); cache.remove("questions_all");
     return { success: true, message: "Question created", id_soal: id_soal };
   } finally {
@@ -1831,9 +2003,17 @@ function handleUpdateQuestion(params) {
       // diarsipkan apa adanya.
       if (isQuestionAnsweredInHistory(id_soal)) {
         if (questionContentEquals(current, data)) {
-          // Hanya urutan yang berubah: metadata tampilan, bukan isi historis.
+          // Hanya urutan/kumpulan yang berubah: metadata penyajian dan
+          // pengelompokan, bukan isi yang menentukan makna jawaban historis.
           if (String(current[1]) !== String(data.nomor_urut)) {
             sheet.getRange(i + 1, 2).setValue(data.nomor_urut);
+            cache.remove("questions"); cache.remove("questions_all");
+          }
+          const moved = resolveQuestionCollection(data, current[QUESTION_COLLECTION_COL - 1] || "");
+          if (moved.error) return { success: false, message: moved.error };
+          if (String(current[QUESTION_COLLECTION_COL - 1] || "") !== moved.id_kumpulan) {
+            ensureQuestionColumns(sheet);
+            sheet.getRange(i + 1, QUESTION_COLLECTION_COL).setValue(moved.id_kumpulan);
             cache.remove("questions"); cache.remove("questions_all");
           }
           return { success: true, message: "Question updated", versioned: false };
@@ -1841,9 +2021,12 @@ function handleUpdateQuestion(params) {
         return createQuestionVersion(sheet, i + 1, current, data, origin || id_soal);
       }
 
+      const collection = resolveQuestionCollection(data, current[QUESTION_COLLECTION_COL - 1] || "");
+      if (collection.error) return { success: false, message: collection.error };
+
       ensureQuestionColumns(sheet);
       sheet.getRange(i + 1, 1, 1, QUESTION_COLUMNS)
-        .setValues([questionRowValues(id_soal, data, status, origin)]);
+        .setValues([questionRowValues(id_soal, data, status, origin, collection.id_kumpulan)]);
 
       cache.remove("questions"); cache.remove("questions_all");
       return { success: true, message: "Question updated", versioned: false };
@@ -1884,6 +2067,14 @@ function handleImportQuestions(params) {
     const takenIds = collectQuestionIds(sheet.getDataRange().getValues());
     ensureQuestionColumns(sheet);
 
+    // Satu kumpulan tujuan untuk seluruh batch: guru memilihnya sekali di layar
+    // import, dan sheet KumpulanSoal cukup dibaca sekali, bukan per soal.
+    const target = resolveQuestionCollection(
+      { id_kumpulan: params.id_kumpulan, id_mapel: items[0] && items[0].id_mapel },
+      ""
+    );
+    if (target.error) return { success: false, message: target.error };
+
     const added = [];
     const rejected = [];
     for (let i = 0; i < items.length; i++) {
@@ -1895,7 +2086,7 @@ function handleImportQuestions(params) {
       }
       const id_soal = generateQuestionId(takenIds);
       takenIds[id_soal] = true;
-      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, ""));
+      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", target.id_kumpulan));
       added.push(id_soal);
     }
 
@@ -2149,6 +2340,130 @@ function handleDeleteAllMataPelajaran() {
   return { success: true, message: "Semua mata pelajaran dihapus" };
 }
 
+// ===== KUMPULAN SOAL HANDLERS =====
+// Semua admin-only (lihat ACTION_RULES di proxy). Tidak ada aksi hapus: status
+// Tidak aktif sudah menjawab "kumpulan ini tidak dipakai sekarang" tanpa pernah
+// kehilangan satu soal pun.
+
+function handleGetQuestionCollections() {
+  return { success: true, data: collectionListPayload(null) };
+}
+
+function collectionNameError(nama) {
+  if (!nama) return "Nama kumpulan soal wajib diisi.";
+  if (nama.length > COLLECTION_NAME_MAX_LENGTH) {
+    return "Nama kumpulan soal terlalu panjang, maksimal " + COLLECTION_NAME_MAX_LENGTH + " karakter.";
+  }
+  return null;
+}
+
+function handleCreateQuestionCollection(params) {
+  const nama_kumpulan = String((params && params.nama_kumpulan) || "").trim();
+  const id_mapel = String((params && params.id_mapel) || "").trim();
+  const invalid = collectionNameError(nama_kumpulan);
+  if (invalid) return { success: false, message: invalid };
+
+  if (id_mapel) {
+    const validMapel = getValidMapelIds();
+    if (!validMapel || validMapel.indexOf(id_mapel) === -1) {
+      return { success: false, message: "Mata pelajaran tidak ditemukan. Pilih ulang mata pelajaran." };
+    }
+  }
+
+  // Lock dari baca id sampai append supaya dua pembuatan bersamaan tidak
+  // menghasilkan id yang sama.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+  try {
+    const sheet = getCollectionSheet(true);
+    if (!sheet) return { success: false, message: "Kumpulan soal belum dapat disimpan. Coba lagi." };
+
+    const existing = readCollections();
+    let id_kumpulan = "K" + Date.now().toString(36).toUpperCase();
+    while (findCollection(existing, id_kumpulan)) {
+      id_kumpulan = "K" + Date.now().toString(36).toUpperCase() +
+        Math.floor(Math.random() * 36 * 36).toString(36).toUpperCase();
+    }
+
+    sheet.appendRow([
+      id_kumpulan, nama_kumpulan, id_mapel, COLLECTION_STATUS_ACTIVE, new Date().toISOString(), "",
+    ]);
+    return {
+      success: true,
+      message: 'Kumpulan soal "' + nama_kumpulan + '" dibuat.',
+      data: { id_kumpulan: id_kumpulan, nama_kumpulan: nama_kumpulan, id_mapel: id_mapel },
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Satu handler untuk ganti nama dan ubah status: keduanya menulis baris yang sama
+// dan guru sering melakukannya dari layar yang sama.
+function handleUpdateQuestionCollection(params) {
+  const id_kumpulan = String((params && params.id_kumpulan) || "").trim();
+  if (!id_kumpulan) return { success: false, message: "Kumpulan soal tidak ditemukan." };
+
+  const hasName = params.nama_kumpulan !== undefined && params.nama_kumpulan !== null;
+  const hasStatus = params.status !== undefined && params.status !== null && String(params.status) !== "";
+  if (!hasName && !hasStatus) return { success: false, message: "Tidak ada perubahan yang dikirim." };
+
+  const nama_kumpulan = hasName ? String(params.nama_kumpulan).trim() : "";
+  if (hasName) {
+    const invalid = collectionNameError(nama_kumpulan);
+    if (invalid) return { success: false, message: invalid };
+  }
+  let status = "";
+  if (hasStatus) {
+    status = String(params.status).toUpperCase();
+    if (status !== COLLECTION_STATUS_ACTIVE && status !== COLLECTION_STATUS_INACTIVE) {
+      return { success: false, message: "Status kumpulan soal tidak valid." };
+    }
+  }
+
+  const sheet = getCollectionSheet(true);
+  if (!sheet) return { success: false, message: "Kumpulan soal belum dapat disimpan. Coba lagi." };
+  const list = readCollections();
+  const found = findCollection(list, id_kumpulan);
+
+  // Bucket legacy belum punya baris sampai guru pertama kali mengaturnya. Barisnya
+  // ditulis di sini, bukan lewat migrasi: tidak ada soal yang tersentuh.
+  if (!found) {
+    if (id_kumpulan !== KUMPULAN_LEGACY_ID) {
+      return { success: false, message: "Kumpulan soal tidak ditemukan." };
+    }
+    sheet.appendRow([
+      KUMPULAN_LEGACY_ID,
+      hasName && nama_kumpulan ? nama_kumpulan : KUMPULAN_LEGACY_NAME,
+      "",
+      hasStatus ? status : COLLECTION_STATUS_ACTIVE,
+      new Date().toISOString(),
+      "",
+    ]);
+    cache.remove("questions"); cache.remove("questions_all");
+    return { success: true, message: "Kumpulan soal diperbarui." };
+  }
+
+  if (hasName) sheet.getRange(found.row_number, 2).setValue(nama_kumpulan);
+  if (hasStatus) sheet.getRange(found.row_number, 4).setValue(status);
+
+  // Status kumpulan ikut menentukan soal ujian berikutnya, jadi cache soal harus
+  // ikut kedaluwarsa. Attempt yang sedang berjalan tidak terpengaruh: soalnya
+  // dibaca dari snapshot attempt, bukan dari Bank Soal.
+  cache.remove("questions"); cache.remove("questions_all");
+
+  const count = collectionQuestionCounts()[id_kumpulan] || 0;
+  let message = "Kumpulan soal diperbarui.";
+  if (hasStatus && status === COLLECTION_STATUS_INACTIVE) {
+    message = count + " soal tetap tersimpan dan dapat diaktifkan kembali kapan saja.";
+  } else if (hasStatus) {
+    message = count + " soal kini tersedia untuk dipilih saat membuat ujian.";
+  }
+  return { success: true, message: message, data: { id_kumpulan: id_kumpulan, jumlah_soal: count } };
+}
+
 // ===== DATA KELAS HANDLERS =====
 // Kelas sheet columns: 1=id_kelas  2=nama_kelas  3=tingkat
 
@@ -2396,16 +2711,26 @@ function handleGetExamSummary() {
   const config = getConfig();
   const sheet = getSheet("Questions");
   const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const statusMap = collectionStatusMap();
   const counts = {};
+  // Jumlah soal per kumpulan, per mapel, dan gabungan mapel dihitung dari satu
+  // kali baca Questions — layar guru tidak perlu memuat seluruh Bank Soal.
+  const collection_counts = {};
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row[0] || isQuestionArchived(row)) continue;
+    const id = questionCollectionId(row);
+    collection_counts[id] = (collection_counts[id] || 0) + 1;
     const mapel = String(row[13] || "");
     if (!mapel) continue;
+    // Angka per mapel mengikuti aturan yang sama dengan ujian: kumpulan nonaktif
+    // tidak dihitung, supaya angka di layar = soal yang benar-benar diterima siswa.
+    if (!isCollectionActive(statusMap, id)) continue;
     counts[mapel] = (counts[mapel] || 0) + 1;
   }
 
   const exam_mapel = String(config.exam_mapel || "");
+  const exam_kumpulan = parseCollectionSelection(config.exam_kumpulan);
   return {
     success: true,
     data: {
@@ -2414,9 +2739,45 @@ function handleGetExamSummary() {
       exam_duration: parseInt(config.exam_duration, 10) || 90,
       exam_status: config.exam_status || "OPEN",
       question_counts: counts,
-      question_count: collectExamQuestionRows(exam_mapel).length,
+      question_count: collectExamQuestionRows(exam_mapel, exam_kumpulan).length,
+      exam_kumpulan: exam_kumpulan,
+      collections: collectionListPayload(collection_counts),
     },
   };
+}
+
+// Daftar kumpulan untuk layar guru. Bucket legacy hanya muncul bila memang ada
+// soal yang belum dikelompokkan.
+function collectionListPayload(counts) {
+  const questionCounts = counts || collectionQuestionCounts();
+  const list = readCollections();
+  const payload = [];
+  let legacyListed = false;
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (item.id_kumpulan === KUMPULAN_LEGACY_ID) legacyListed = true;
+    payload.push({
+      id_kumpulan: item.id_kumpulan,
+      nama_kumpulan: item.nama_kumpulan,
+      id_mapel: item.id_mapel,
+      status: item.status,
+      jumlah_soal: questionCounts[item.id_kumpulan] || 0,
+      terakhir_dipakai: item.terakhir_dipakai,
+      bawaan: item.id_kumpulan === KUMPULAN_LEGACY_ID,
+    });
+  }
+  if (!legacyListed && questionCounts[KUMPULAN_LEGACY_ID]) {
+    payload.push({
+      id_kumpulan: KUMPULAN_LEGACY_ID,
+      nama_kumpulan: KUMPULAN_LEGACY_NAME,
+      id_mapel: "",
+      status: COLLECTION_STATUS_ACTIVE,
+      jumlah_soal: questionCounts[KUMPULAN_LEGACY_ID],
+      terakhir_dipakai: "",
+      bawaan: true,
+    });
+  }
+  return payload;
 }
 
 function handleSaveExamConfig(params) {
@@ -2460,13 +2821,44 @@ function saveExamConfigLocked(params) {
     return { success: false, message: "Status ujian tidak valid." };
   }
 
+  // Kumpulan soal yang dipilih guru. Kosong = pakai semua kumpulan aktif pada
+  // mapel tersebut, sehingga tenant yang belum memakai kumpulan tidak berubah.
+  const exam_kumpulan = normalizeExamCollectionInput(params.exam_kumpulan);
+  if (exam_kumpulan.length > 0) {
+    const known = readCollections();
+    const counts = collectionQuestionCounts();
+    for (let i = 0; i < exam_kumpulan.length; i++) {
+      const id = exam_kumpulan[i];
+      const found = findCollection(known, id);
+      // Bucket legacy sah walau belum punya baris sheet: ia mewakili soal yang
+      // memang ada tetapi belum dikelompokkan.
+      if (!found && !(id === KUMPULAN_LEGACY_ID && counts[KUMPULAN_LEGACY_ID])) {
+        return { success: false, message: "Kumpulan soal tidak ditemukan. Pilih ulang kumpulan soal." };
+      }
+      if (found && found.status !== COLLECTION_STATUS_ACTIVE) {
+        return {
+          success: false,
+          message: 'Kumpulan soal "' + found.nama_kumpulan + '" sedang tidak aktif. Aktifkan dulu di Bank Soal.',
+        };
+      }
+      if (found && found.id_mapel && found.id_mapel !== exam_mapel) {
+        return {
+          success: false,
+          message: 'Kumpulan soal "' + found.nama_kumpulan + '" bukan milik mata pelajaran yang dipilih.',
+        };
+      }
+    }
+  }
+
   // Jumlah soal dihitung ulang di server di dalam lock; angka dari layar guru
   // tidak pernah dipercaya. Ujian kosong tidak boleh dibuka.
-  const questionCount = collectExamQuestionRows(exam_mapel).length;
+  const questionCount = collectExamQuestionRows(exam_mapel, exam_kumpulan).length;
   if (exam_status === "OPEN" && questionCount === 0) {
     return {
       success: false,
-      message: "Belum ada soal aktif untuk mata pelajaran ini. Tambahkan soal di Bank Soal terlebih dahulu.",
+      message: exam_kumpulan.length > 0
+        ? "Kumpulan soal yang dipilih belum berisi soal. Pilih kumpulan lain atau tambahkan soal dulu."
+        : "Belum ada soal aktif untuk mata pelajaran ini. Tambahkan soal di Bank Soal terlebih dahulu.",
     };
   }
 
@@ -2475,8 +2867,11 @@ function saveExamConfigLocked(params) {
     exam_mapel: exam_mapel,
     exam_duration: exam_duration,
     exam_status: exam_status,
+    exam_kumpulan: exam_kumpulan.join(","),
   });
   if (!written) return { success: false, message: "Gagal menyimpan pengaturan ujian. Silakan coba lagi." };
+
+  if (exam_status === "OPEN") markCollectionsUsed(exam_kumpulan);
 
   return {
     success: true,
@@ -2487,8 +2882,36 @@ function saveExamConfigLocked(params) {
       exam_duration: exam_duration,
       exam_status: exam_status,
       question_count: questionCount,
+      exam_kumpulan: exam_kumpulan,
     },
   };
+}
+
+// Daftar kumpulan dari request: menerima array maupun string berkoma.
+function normalizeExamCollectionInput(value) {
+  if (Array.isArray(value)) {
+    const ids = [];
+    for (let i = 0; i < value.length; i++) {
+      const id = String(value[i] == null ? "" : value[i]).trim();
+      if (id !== "" && ids.indexOf(id) === -1) ids.push(id);
+    }
+    return ids;
+  }
+  return parseCollectionSelection(value);
+}
+
+// Catat kapan sebuah kumpulan terakhir dipakai ujian. Informasi tampilan saja;
+// kegagalan menulisnya tidak boleh menggagalkan pembukaan ujian.
+function markCollectionsUsed(ids) {
+  if (!ids || ids.length === 0) return;
+  const sheet = getCollectionSheet(false);
+  if (!sheet) return;
+  const list = readCollections();
+  const stamp = new Date().toISOString();
+  for (let i = 0; i < ids.length; i++) {
+    const found = findCollection(list, ids[i]);
+    if (found) sheet.getRange(found.row_number, 6).setValue(stamp);
+  }
 }
 
 // ===== USER HANDLERS =====

@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
   // Draft "Adakan Ujian". null = belum disentuh guru, jadi ikut nilai tersimpan.
-  const [draft, setDraft] = useState<{ exam_name: string; exam_mapel: string; exam_duration: string } | null>(null);
+  const [draft, setDraft] = useState<{ exam_name: string; exam_mapel: string; exam_duration: string; exam_kumpulan: string[] } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [examError, setExamError] = useState("");
   const [notice, setNotice] = useState("");
@@ -76,17 +76,40 @@ export default function AdminDashboard() {
     exam_name: summary?.exam_name ?? "",
     exam_mapel: summary?.exam_mapel ?? "",
     exam_duration: String(summary?.exam_duration ?? 90),
+    exam_kumpulan: summary?.exam_kumpulan ?? [],
   };
   const mapelName = (id: string) => mapelList.find((m) => m.id_mapel === id)?.nama_mapel ?? id;
+  // Kumpulan soal aktif yang boleh dipakai pada mapel yang sedang dipilih.
+  const kumpulanPilihan = (summary?.collections ?? []).filter(
+    (c) => c.status === "AKTIF" && c.jumlah_soal > 0 && (!c.id_mapel || c.id_mapel === form.exam_mapel),
+  );
+  const kumpulanTerpilih = form.exam_kumpulan.filter(
+    (id) => kumpulanPilihan.some((c) => c.id_kumpulan === id),
+  );
   // Jumlah soal aktif untuk mapel yang sedang dipilih di form, bukan yang tersimpan.
-  const draftQuestionCount = form.exam_mapel
-    ? (summary?.question_counts?.[form.exam_mapel] ?? 0)
-    : 0;
+  // Tanpa kumpulan terpilih, ujian memakai seluruh kumpulan aktif pada mapel itu.
+  const draftQuestionCount = !form.exam_mapel
+    ? 0
+    : kumpulanTerpilih.length > 0
+      ? kumpulanPilihan
+          .filter((c) => kumpulanTerpilih.includes(c.id_kumpulan))
+          .reduce((total, c) => total + c.jumlah_soal, 0)
+      : (summary?.question_counts?.[form.exam_mapel] ?? 0);
+
+  const toggleKumpulan = (id: string) => {
+    setExamError("");
+    const next = form.exam_kumpulan.includes(id)
+      ? form.exam_kumpulan.filter((item) => item !== id)
+      : [...form.exam_kumpulan, id];
+    setDraft({ ...form, exam_kumpulan: next });
+  };
   const durationNumber = Number(form.exam_duration);
 
   const setField = (field: "exam_name" | "exam_mapel" | "exam_duration", value: string) => {
     setExamError("");
-    setDraft({ ...form, [field]: value });
+    // Ganti mapel = pilihan kumpulan lama tidak lagi relevan.
+    const resetKumpulan = field === "exam_mapel" ? { exam_kumpulan: [] } : {};
+    setDraft({ ...form, [field]: value, ...resetKumpulan });
   };
 
   // Penjaga yang sama juga berlaku di server; ini hanya supaya guru tahu lebih awal.
@@ -97,7 +120,9 @@ export default function AdminDashboard() {
       return "Durasi ujian harus berupa angka antara 1 dan 600 menit.";
     }
     if (draftQuestionCount === 0) {
-      return `Belum ada soal aktif untuk mata pelajaran ${mapelName(form.exam_mapel)}. Tambahkan soal di Bank Soal terlebih dahulu.`;
+      return kumpulanTerpilih.length > 0
+        ? "Kumpulan soal yang dipilih belum berisi soal. Pilih kumpulan lain atau tambahkan soal dulu."
+        : `Belum ada soal aktif untuk mata pelajaran ${mapelName(form.exam_mapel)}. Tambahkan soal di Bank Soal terlebih dahulu.`;
     }
     return "";
   };
@@ -117,6 +142,7 @@ export default function AdminDashboard() {
       exam_mapel: form.exam_mapel,
       exam_duration: durationNumber,
       exam_status: "OPEN",
+      exam_kumpulan: kumpulanTerpilih,
     });
     if (res.success) {
       setShowConfirm(false);
@@ -483,6 +509,38 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Pilih kumpulan soal. Tanpa pilihan, seluruh kumpulan aktif pada
+                    mapel itu dipakai — itulah perilaku sebelum ada kumpulan soal. */}
+                {form.exam_mapel && kumpulanPilihan.length > 0 && (
+                  <div className="border border-slate-200/80 rounded-2xl p-4">
+                    <p className="font-extrabold text-[10px] text-slate-500 uppercase tracking-widest mb-3">
+                      Pilih Kumpulan Soal
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {kumpulanPilihan.map((c) => (
+                        <label
+                          key={c.id_kumpulan}
+                          className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 hover:border-blue-400 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={kumpulanTerpilih.includes(c.id_kumpulan)}
+                            onChange={() => toggleKumpulan(c.id_kumpulan)}
+                            className="rounded text-blue-600 cursor-pointer focus:ring-blue-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block font-black text-xs text-slate-800 truncate">{c.nama_kumpulan}</span>
+                            <span className="block font-bold text-[11px] text-slate-500">{c.jumlah_soal} soal</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-2.5 text-[11px] font-medium text-slate-400">
+                      Tidak memilih apa pun berarti semua kumpulan aktif {mapelName(form.exam_mapel)} dipakai.
+                    </p>
+                  </div>
+                )}
+
                 <div className="bg-slate-50 border border-slate-200/80 rounded-2xl px-5 py-4 flex items-center gap-3">
                   <span className="material-symbols-outlined text-[#1D4ED8]">inventory_2</span>
                   <div>
@@ -490,9 +548,11 @@ export default function AdminDashboard() {
                       {form.exam_mapel ? `${draftQuestionCount} soal` : "Pilih mata pelajaran dulu"}
                     </p>
                     <p className="font-bold text-[11px] text-slate-500">
-                      {form.exam_mapel
-                        ? `Semua soal aktif ${mapelName(form.exam_mapel)} akan dipakai pada ujian ini.`
-                        : "Jumlah soal muncul setelah mata pelajaran dipilih."}
+                      {!form.exam_mapel
+                        ? "Jumlah soal muncul setelah mata pelajaran dipilih."
+                        : kumpulanTerpilih.length > 0
+                          ? `Soal dari ${kumpulanTerpilih.length} kumpulan yang dipilih akan dipakai pada ujian ini.`
+                          : `Semua soal aktif ${mapelName(form.exam_mapel)} akan dipakai pada ujian ini.`}
                     </p>
                   </div>
                 </div>
@@ -650,6 +710,15 @@ export default function AdminDashboard() {
               {[
                 { label: "Nama", value: form.exam_name.trim() },
                 { label: "Mapel", value: mapelName(form.exam_mapel) },
+                {
+                  label: "Kumpulan soal",
+                  value: kumpulanTerpilih.length > 0
+                    ? kumpulanPilihan
+                        .filter((c) => kumpulanTerpilih.includes(c.id_kumpulan))
+                        .map((c) => c.nama_kumpulan)
+                        .join(", ")
+                    : "Semua kumpulan aktif",
+                },
                 { label: "Durasi", value: `${durationNumber} menit` },
                 { label: "Jumlah soal", value: `${draftQuestionCount} soal` },
               ].map((item) => (

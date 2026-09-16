@@ -287,7 +287,7 @@ function mutate(find, replaceWith, label) {
 
   // B. Jumlah soal dipercaya dari layar guru, bukan dihitung ulang di server.
   const clientCountMutation = mutate(
-    "  const questionCount = collectExamQuestionRows(exam_mapel).length;",
+    "  const questionCount = collectExamQuestionRows(exam_mapel, exam_kumpulan).length;",
     "  const questionCount = Number(params.question_count) || 0;",
     "B",
   );

@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
-import useSWR from "swr";
-import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, uploadImage, logout } from "@/lib/api";
+import useSWR, { mutate as mutateKey } from "swr";
+import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, getQuestionCollections, uploadImage, logout } from "@/lib/api";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import ImportSoalModal from "@/components/admin/ImportSoalModal";
+import KumpulanSoalPanel from "@/components/admin/KumpulanSoalPanel";
 import {
   EMPTY_TRUE_FALSE_STATEMENT,
   nextTrueFalseStatement,
@@ -31,7 +32,7 @@ import {
   validateMatchingDraft,
   type MatchingDraft,
 } from "@/lib/matching";
-import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
+import type { ImplementedAdminQuestion, MataPelajaran, QuestionCollection } from "@/types";
 import { generateAIText } from "@/lib/aiProvider";
 import { getProviderApiKey, getSelectedProvider, missingProviderKeyMessage } from "@/lib/aiSettings";
 
@@ -49,6 +50,7 @@ interface QuestionForm {
   opsi_e: string;
   kunci_jawaban: string; // legacy A/A,C; TRUE_FALSE memakai JSON serialized
   id_mapel: string;
+  id_kumpulan: string;
   pernyataan: TrueFalseDraftStatement[];
   fillIn: FillInDraft;
   matching: MatchingDraft;
@@ -67,6 +69,7 @@ const EMPTY_FORM: QuestionForm = {
   opsi_e: "",
   kunci_jawaban: "",
   id_mapel: "",
+  id_kumpulan: "",
   pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
   fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
   matching: emptyMatchingDraft(),
@@ -201,6 +204,7 @@ export default function QuestionBankPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [filterMapel, setFilterMapel] = useState("");
+  const [filterKumpulan, setFilterKumpulan] = useState("");
   const [entriesCount, setEntriesCount] = useState(20);
 
   // ── AI Generate state ──────────────────────────────────────────────────────
@@ -223,6 +227,10 @@ export default function QuestionBankPage() {
   const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
   const mapelList: MataPelajaran[] = mapelRes?.data ?? [];
 
+  // Kunci SWR yang sama dengan KumpulanSoalPanel: satu request, dua pemakai.
+  const { data: collectionRes } = useSWR("getQuestionCollections", getQuestionCollections);
+  const collectionList: QuestionCollection[] = collectionRes?.data ?? [];
+
   // Search mencocokkan teks soal tanpa tag, kategori, serta kode/nama mapel —
   // sesuai yang dijanjikan placeholder. Kode mapel diambil dari daftar mapel.
   const term = search.trim().toLowerCase();
@@ -232,6 +240,9 @@ export default function QuestionBankPage() {
     // berisi soal yang aktif saja; arsipnya tetap dapat dibuka lewat toggle.
     if (!showArchived && q.status_soal === "ARSIP") return false;
     if (filterMapel !== "" && q.id_mapel !== filterMapel) return false;
+    // Soal yang belum dikelompokkan dilaporkan backend sebagai KUMPULAN_BAWAAN_ID,
+    // jadi filter di sini cukup membandingkan nilai apa adanya.
+    if (filterKumpulan !== "" && q.id_kumpulan !== filterKumpulan) return false;
     if (term === "") return true;
     const kodeMapel = mapelList.find((m) => m.id_mapel === q.id_mapel)?.kode_mapel ?? "";
     return [
@@ -305,6 +316,7 @@ export default function QuestionBankPage() {
         gambar_url: q.gambar_url ?? "",
         kunci_jawaban: q.kunci_jawaban,
         id_mapel: q.id_mapel ?? "",
+        id_kumpulan: q.id_kumpulan ?? "",
         matching: toMatchingDraft(q.data_soal, q.kunci_jawaban),
       });
       setSaveError("");
@@ -322,6 +334,7 @@ export default function QuestionBankPage() {
         gambar_url: q.gambar_url ?? "",
         kunci_jawaban: q.kunci_jawaban,
         id_mapel: q.id_mapel ?? "",
+        id_kumpulan: q.id_kumpulan ?? "",
         pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
         fillIn: toFillInDraft(q.data_soal, q.kunci_jawaban),
         matching: emptyMatchingDraft(),
@@ -345,6 +358,7 @@ export default function QuestionBankPage() {
         opsi_e: "",
         kunci_jawaban: q.kunci_jawaban,
         id_mapel: q.id_mapel ?? "",
+        id_kumpulan: q.id_kumpulan ?? "",
         pernyataan: toTrueFalseDraft(q.data_soal, q.kunci_jawaban),
         fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
         matching: emptyMatchingDraft(),
@@ -367,6 +381,7 @@ export default function QuestionBankPage() {
       opsi_e: q.opsi_e ?? "",
       kunci_jawaban: q.kunci_jawaban ?? "",
       id_mapel: q.id_mapel ?? "",
+      id_kumpulan: q.id_kumpulan ?? "",
       pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
       fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
       matching: emptyMatchingDraft(),
@@ -422,6 +437,7 @@ export default function QuestionBankPage() {
       pertanyaan: form.pertanyaan,
       gambar_url: form.gambar_url || null,
       id_mapel: form.id_mapel || null,
+      id_kumpulan: form.id_kumpulan || null,
       nomor_urut: editingId ? (questions.find((q) => q.id_soal === editingId)?.nomor_urut ?? questions.length + 1) : questions.length + 1,
     };
     const payload = form.tipe === "TRUE_FALSE" ? {
@@ -456,6 +472,7 @@ export default function QuestionBankPage() {
 
     if (res.success) {
       await mutate();
+      void mutateKey("getQuestionCollections");   // jumlah soal per kumpulan ikut berubah
       // GAS menyimpan perubahan soal yang sudah pernah dijawab sebagai versi baru.
       setNotice(res.versioned ? (res.message ?? "") : "");
       setShowModal(false);
@@ -782,6 +799,13 @@ export default function QuestionBankPage() {
           </div>
         )}
 
+        <KumpulanSoalPanel
+          mapelList={mapelList}
+          activeFilter={filterKumpulan}
+          onFilter={setFilterKumpulan}
+          onNotice={setNotice}
+        />
+
         {/* Filter & Search Bar Card */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-5 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
@@ -1064,6 +1088,29 @@ export default function QuestionBankPage() {
                     <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">unfold_more</span>
                   </div>
                 )}
+              </div>
+
+              {/* Kumpulan Soal — opsional; kosong berarti soal tidak masuk kumpulan mana pun */}
+              <div className="space-y-2">
+                <label htmlFor="form-kumpulan" className="flex items-center gap-2 font-black text-xs text-slate-800 uppercase tracking-wide">
+                  <span className="material-symbols-outlined text-blue-600 text-base">folder</span>
+                  Kumpulan Soal
+                </label>
+                <select
+                  id="form-kumpulan"
+                  value={form.id_kumpulan}
+                  onChange={(e) => setForm(p => ({ ...p, id_kumpulan: e.target.value }))}
+                  className="w-full h-12 border border-slate-300 rounded-xl px-4 text-sm font-semibold text-slate-800 bg-white focus:border-blue-600 outline-none cursor-pointer shadow-sm"
+                >
+                  <option value="">— Tanpa kumpulan —</option>
+                  {collectionList
+                    .filter((c) => !c.bawaan && (!c.id_mapel || !form.id_mapel || c.id_mapel === form.id_mapel))
+                    .map((c) => (
+                      <option key={c.id_kumpulan} value={c.id_kumpulan}>
+                        {c.nama_kumpulan}{c.status === "NONAKTIF" ? " (tidak aktif)" : ""}
+                      </option>
+                    ))}
+                </select>
               </div>
 
               {/* AI Generate Panel */}
@@ -1958,6 +2005,7 @@ export default function QuestionBankPage() {
             setShowImportSoal(false);
             setNotice(message);
             await mutate();
+            void mutateKey("getQuestionCollections");
           }}
         />
       )}

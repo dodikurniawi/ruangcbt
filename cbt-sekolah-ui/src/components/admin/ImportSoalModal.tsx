@@ -22,8 +22,9 @@ import {
   type GoogleFormPreview,
   type GooglePreviewQuestion,
 } from "@/lib/googleForms";
-import { importQuestions, uploadImage } from "@/lib/api";
-import type { MataPelajaran } from "@/types";
+import { importQuestions, uploadImage, getQuestionCollections, createQuestionCollection } from "@/lib/api";
+import type { MataPelajaran, QuestionCollection } from "@/types";
+import useSWR from "swr";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -149,6 +150,10 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
   const [guideOpen, setGuideOpen] = useState<Source | null>(null);
   const [fileName, setFileName] = useState("");
   const [mapelId, setMapelId] = useState("");
+  // Kumpulan tujuan: pilih yang sudah ada, atau ketik nama baru. Kosong = soal
+  // masuk Bank Soal tanpa kumpulan (perilaku sebelum fitur kumpulan ada).
+  const [kumpulanId, setKumpulanId] = useState("");
+  const [kumpulanBaru, setKumpulanBaru] = useState("");
   const [rows, setRows] = useState<ParsedQuestion[] | null>(null);
   const [detectedMapel, setDetectedMapel] = useState("");
   const [skipped, setSkipped] = useState(0);
@@ -163,6 +168,9 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
   const [googleSearch, setGoogleSearch] = useState("");
   const [selectedGoogleForm, setSelectedGoogleForm] = useState("");
   const [googlePreview, setGooglePreview] = useState<GoogleFormPreview | null>(null);
+
+  const { data: collectionRes, mutate: mutateCollections } = useSWR("getQuestionCollections", getQuestionCollections);
+  const collectionList: QuestionCollection[] = collectionRes?.data ?? [];
 
   const readyRows = useMemo(() => (rows ?? []).filter(isReady), [rows]);
   const pendingCount = (rows?.length ?? 0) - readyRows.length;
@@ -396,10 +404,36 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
     });
   };
 
+  /**
+   * Kumpulan tujuan untuk batch ini. Nama baru dibuat lebih dulu supaya guru tidak
+   * perlu keluar dari layar import hanya untuk membuat wadahnya.
+   * Mengembalikan undefined bila guru memang tidak memilih kumpulan.
+   */
+  const resolveTargetCollection = async (): Promise<string | undefined | null> => {
+    const nama = kumpulanBaru.trim();
+    if (kumpulanId !== "__baru__") return kumpulanId || undefined;
+    if (nama === "") {
+      setError("Tulis nama kumpulan soal baru, atau pilih kumpulan yang sudah ada.");
+      return null;
+    }
+    const created = await createQuestionCollection({ nama_kumpulan: nama, id_mapel: mapelId });
+    if (!created.success || !created.data?.id_kumpulan) {
+      setError(created.message || "Kumpulan soal baru belum dapat dibuat. Silakan coba lagi.");
+      return null;
+    }
+    await mutateCollections();
+    return created.data.id_kumpulan;
+  };
+
   const handleImport = async () => {
     if (!mapelId || readyRows.length === 0) return;
     setIsBusy(true);
     setError("");
+    const target = await resolveTargetCollection();
+    if (target === null) {
+      setIsBusy(false);
+      return;
+    }
     // Penomoran dilanjutkan dari soal yang sudah ada di mapel tujuan supaya tidak
     // bertabrakan dengan nomor soal yang sudah dipakai.
     const { payload, blockedByImages } = await buildImportPayload(
@@ -417,7 +451,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
       );
       return;
     }
-    const res = await importQuestions(payload);
+    const res = await importQuestions(payload, target);
     setIsBusy(false);
     if (!res.success) {
       setError(res.message || "Gagal mengimport soal. Silakan coba lagi.");
@@ -437,6 +471,11 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
     if (!mapelId || googleReadyRows.length === 0) return;
     setIsBusy(true);
     setError("");
+    const googleTarget = await resolveTargetCollection();
+    if (googleTarget === null) {
+      setIsBusy(false);
+      return;
+    }
     try {
       const { payload, blockedByImages } = await buildGoogleImportPayload(
         googleReadyRows,
@@ -473,7 +512,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
         );
         return;
       }
-      const result = await importQuestions(payload as Parameters<typeof importQuestions>[0]);
+      const result = await importQuestions(payload as Parameters<typeof importQuestions>[0], googleTarget);
       if (!result.success) {
         setError(result.message || "Gagal mengimport soal. Silakan coba lagi.");
         return;
@@ -576,6 +615,38 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
           Tertulis di dokumen: {detectedMapel}. Mapel tujuan tetap mengikuti pilihan di atas.
         </p>
       )}
+
+      <label htmlFor="import-kumpulan" className="font-extrabold text-[10px] text-slate-500 uppercase tracking-widest block mt-4 mb-2">
+        Masukkan ke Kumpulan Soal
+      </label>
+      <select
+        id="import-kumpulan"
+        value={kumpulanId}
+        onChange={(e) => setKumpulanId(e.target.value)}
+        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-700 bg-white"
+      >
+        <option value="">— Tanpa kumpulan —</option>
+        {collectionList
+          .filter((c) => !c.bawaan && (!c.id_mapel || !mapelId || c.id_mapel === mapelId))
+          .map((c) => (
+            <option key={c.id_kumpulan} value={c.id_kumpulan}>
+              {c.nama_kumpulan}{c.status === "NONAKTIF" ? " (tidak aktif)" : ""}
+            </option>
+          ))}
+        <option value="__baru__">+ Buat kumpulan baru</option>
+      </select>
+      {kumpulanId === "__baru__" && (
+        <input
+          value={kumpulanBaru}
+          onChange={(e) => setKumpulanBaru(e.target.value)}
+          maxLength={80}
+          placeholder="Nama kumpulan baru, misalnya: UH Bab 2"
+          className="mt-2 w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none font-bold text-xs text-slate-700"
+        />
+      )}
+      <p className="mt-1.5 text-[11px] font-medium text-slate-400">
+        Soal yang sudah ada di kumpulan lain tidak akan tertimpa.
+      </p>
     </div>
   );
 

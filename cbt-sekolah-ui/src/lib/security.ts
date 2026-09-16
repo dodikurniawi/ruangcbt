@@ -47,6 +47,7 @@ export const ACTION_RULES: Readonly<Record<string, ActionRule>> = Object.freeze(
   // menolaknya karena id_siswa tidak ada.
   getStudentAnalysis: { method: "GET", role: "admin" },
   getMataPelajaran: { method: "GET", role: "admin" },
+  getQuestionCollections: { method: "GET", role: "admin" },
   getKelas: { method: "GET", role: "admin" },
   getPrintSettings: { method: "GET", role: "admin" },
   getExamSummary: { method: "GET", role: "admin" },
@@ -55,6 +56,8 @@ export const ACTION_RULES: Readonly<Record<string, ActionRule>> = Object.freeze(
   updateQuestion: { method: "POST", role: "admin" },
   deleteQuestion: { method: "POST", role: "admin" },
   importQuestions: { method: "POST", role: "admin" },
+  createQuestionCollection: { method: "POST", role: "admin" },
+  updateQuestionCollection: { method: "POST", role: "admin" },
   updateConfig: { method: "POST", role: "admin" },
   setExamPin: { method: "POST", role: "admin" },
   setExamStatus: { method: "POST", role: "admin" },
