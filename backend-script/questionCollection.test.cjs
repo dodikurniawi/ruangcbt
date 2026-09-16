@@ -352,6 +352,120 @@ const validSingle = {
   assert.equal(gas.__sheets.Questions.rows.length, 5, "tidak ada soal yang hilang");
 }
 
+// ── Pindahkan soal antar kumpulan ──────────────────────────────────────────
+{
+  const gas = loadGas(bankState());
+  const before = gas.__sheets.Questions.rows.length;
+
+  const moved = post(gas, "moveQuestions", { id_soal: ["Q1", "Q2"], id_kumpulan: "K2" });
+  assert.equal(moved.success, true, moved.message);
+  assert.equal(moved.data.moved, 2);
+  assert.equal(gas.__sheets.Questions.rows.length, before, "memindahkan tidak boleh menghapus baris");
+
+  const list = collections(gas);
+  assert.equal(byId(list, "K1").jumlah_soal, 0, "kumpulan asal berkurang");
+  assert.equal(byId(list, "K2").jumlah_soal, 4, "kumpulan tujuan bertambah");
+  assert.deepEqual(examQuestionIds(gas), ["Q1", "Q2", "Q3", "Q4"], "seluruh soal tetap dipakai ujian");
+
+  // Isi soal tidak boleh ikut berubah saat dipindahkan.
+  assert.equal(gas.__sheets.Questions.rows[1][3], "Soal Q1");
+  assert.equal(gas.__sheets.Questions.rows[1][10], "A");
+  assert.equal(gas.__sheets.Questions.rows[1][14], "AKTIF");
+
+  // Kumpulan tujuan tidak dikenal ditolak; tidak ada soal yang bergerak.
+  const hantu = post(gas, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "K_HANTU" });
+  assert.equal(hantu.success, false);
+  assert.equal(gas.__sheets.Questions.rows[1][17], "K2", "soal tidak boleh pindah saat tujuan tidak sah");
+
+  // Soal yang tidak ada dilewati dan dilaporkan, sisanya tetap diproses.
+  const sebagian = post(gas, "moveQuestions", { id_soal: ["Q3", "Q_TIDAK_ADA"], id_kumpulan: "K1" });
+  assert.equal(sebagian.success, true, sebagian.message);
+  assert.equal(sebagian.data.moved, 1);
+  assert.equal(sebagian.data.skipped.length, 1);
+  assert.equal(gas.__sheets.Questions.rows[3][17], "K1");
+
+  assert.equal(post(gas, "moveQuestions", { id_soal: [], id_kumpulan: "K1" }).success, false);
+}
+
+// ── Keluarkan dari kumpulan ≠ hapus soal ───────────────────────────────────
+{
+  const gas = loadGas(bankState());
+  const before = gas.__sheets.Questions.rows.length;
+
+  const keluar = post(gas, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "" });
+  assert.equal(keluar.success, true, keluar.message);
+  assert.match(keluar.message, /tetap tersimpan di Bank Soal/);
+  assert.equal(gas.__sheets.Questions.rows.length, before, "soal tidak boleh hilang dari Bank Soal");
+  assert.equal(gas.__sheets.Questions.rows[1][17], "", "soal keluar dari kumpulannya");
+
+  // Soal tetap terlihat guru dan tetap dapat dipakai ujian.
+  assert.deepEqual(questionIds(getAs(gas, "getAdminQuestions")).sort(), ["Q1", "Q2", "Q3", "Q4"]);
+  assert.deepEqual(examQuestionIds(gas), ["Q1", "Q2", "Q3", "Q4"]);
+  assert.equal(byId(collections(gas), "K1").jumlah_soal, 1);
+  assert.equal(byId(collections(gas), "K_LAMA").jumlah_soal, 1, "soal tanpa kumpulan masuk bucket bawaan");
+
+  // Bucket bawaan sebagai tujuan = sama dengan mengeluarkan dari kumpulan.
+  post(gas, "moveQuestions", { id_soal: ["Q2"], id_kumpulan: "K_LAMA" });
+  assert.equal(gas.__sheets.Questions.rows[2][17], "");
+}
+
+// ── Kumpulan milik mapel lain tidak boleh menampung soal ───────────────────
+{
+  const gas = loadGas(bankState({
+    KumpulanSoal: [
+      COLLECTION_HEADER,
+      ["K1", "UH Bab 1", "MAPEL_A", "AKTIF", "2026-01-01", ""],
+      ["KB", "UH IPA", "MAPEL_B", "AKTIF", "2026-01-01", ""],
+    ],
+  }));
+  const res = post(gas, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "KB" });
+  assert.equal(res.success, false, "tidak ada soal yang boleh pindah lintas mapel");
+  assert.equal(gas.__sheets.Questions.rows[1][17], "K1");
+}
+
+// ── Soal historis: pindah kumpulan tidak mengubah histori, hapus tetap dijaga ─
+{
+  const gas = loadGas(bankState({
+    Responses: [
+      RESPONSE_HEADER,
+      ["2026-01-03", "S9", "Lama", "6A", JSON.stringify({ Q1: "A" }), 100, 10, "", ""],
+    ],
+  }));
+
+  const moved = post(gas, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "K2" });
+  assert.equal(moved.success, true, moved.message);
+  assert.equal(gas.__sheets.Questions.rows[1][14], "AKTIF", "pindah kumpulan bukan pengarsipan");
+  assert.equal(gas.__sheets.Questions.rows[1][3], "Soal Q1", "isi soal historis tidak berubah");
+
+  // Hapus soal yang sudah pernah dijawab tetap dijaga: barisnya bertahan.
+  const rows = gas.__sheets.Questions.rows.length;
+  const hapus = post(gas, "deleteQuestion", { id_soal: "Q1" });
+  assert.equal(hapus.success, true, hapus.message);
+  assert.equal(hapus.archived, true);
+  assert.equal(gas.__sheets.Questions.rows.length, rows, "soal historis tidak boleh terhapus");
+  assert.doesNotMatch(hapus.message, /arsip/i, "pesan untuk guru tidak memakai istilah arsip");
+
+  // Soal yang belum pernah dijawab tetap bisa dihapus sungguhan.
+  const bersih = post(gas, "deleteQuestion", { id_soal: "Q3" });
+  assert.equal(bersih.success, true, bersih.message);
+  assert.equal(bersih.archived, false);
+  assert.equal(gas.__sheets.Questions.rows.length, rows - 1);
+}
+
+// ── Pindah kumpulan tidak menyentuh attempt yang sedang berjalan ───────────
+{
+  const gas = loadGas(bankState());
+  post(gas, "login", { username: "siswa", password: "pw" });
+  post(gas, "moveQuestions", { id_soal: ["Q1", "Q2"], id_kumpulan: "K2" });
+  post(gas, "updateQuestionCollection", { id_kumpulan: "K2", status: "NONAKTIF" });
+
+  assert.deepEqual(
+    questionIds(getAs(gas, "getQuestions", { id_siswa: "S1" })),
+    ["Q1", "Q2", "Q3", "Q4"],
+    "soal attempt dibaca dari snapshot, bukan dari kumpulan terbaru",
+  );
+}
+
 // ── MUTATION GUARDS ────────────────────────────────────────────────────────
 // Tiap mutasi mematikan satu jaminan; test di atas wajib gagal karenanya.
 function mutate(find, replaceWith, label) {
@@ -424,6 +538,55 @@ function mutate(find, replaceWith, label) {
   post(gasE, "importQuestions", { id_kumpulan: "K2", questions: [validSingle] });
   assert.throws(() => assert.equal(byId(collections(gasE), "K2").jumlah_soal, 3),
     undefined, "mutation E tidak terdeteksi");
+
+  // G. "Keluarkan dari kumpulan" diam-diam menjadi hapus baris.
+  const removeBecomesDelete = mutate(
+    "    sheet.getRange(minRow, QUESTION_COLLECTION_COL, column.length, 1).setValues(column);",
+    "    for (let d = pending.length - 1; d >= 0; d--) sheet.deleteRow(pending[d]);",
+    "G",
+  );
+  const gasG = loadGas(bankState(), removeBecomesDelete);
+  post(gasG, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "" });
+  assert.throws(() => assert.equal(gasG.__sheets.Questions.rows.length, 5),
+    undefined, "mutation G tidak terdeteksi");
+
+  // H. Soal mendarat di kumpulan yang salah saat dipindahkan.
+  const wrongTarget = mutate(
+    "    for (let p = 0; p < pending.length; p++) column[pending[p] - minRow][0] = target;",
+    '    for (let p = 0; p < pending.length; p++) column[pending[p] - minRow][0] = "";',
+    "H",
+  );
+  const gasH = loadGas(bankState(), wrongTarget);
+  post(gasH, "moveQuestions", { id_soal: ["Q1"], id_kumpulan: "K2" });
+  assert.throws(() => assert.equal(gasH.__sheets.Questions.rows[1][17], "K2"),
+    undefined, "mutation H tidak terdeteksi");
+
+  // I. Soal baru mengabaikan kumpulan yang dipilih guru pada form.
+  const ignoreFormCollection = mutate(
+    '    const collection = resolveQuestionCollection(data, "");',
+    '    const collection = { id_kumpulan: "" };',
+    "I",
+  );
+  const gasI = loadGas(bankState(), ignoreFormCollection);
+  post(gasI, "createQuestion", { data: Object.assign({}, validSingle, { id_kumpulan: "K2" }) });
+  assert.throws(() => assert.equal(byId(collections(gasI), "K2").jumlah_soal, 3),
+    undefined, "mutation I tidak terdeteksi");
+
+  // J. Soal historis dihapus alih-alih dipertahankan.
+  const deleteHistorical = mutate(
+    "      if (isQuestionAnsweredInHistory(id_soal)) {\n        if (isQuestionArchived(data[i])) {",
+    "      if (false) {\n        if (isQuestionArchived(data[i])) {",
+    "J",
+  );
+  const gasJ = loadGas(bankState({
+    Responses: [
+      RESPONSE_HEADER,
+      ["2026-01-03", "S9", "Lama", "6A", JSON.stringify({ Q1: "A" }), 100, 10, "", ""],
+    ],
+  }), deleteHistorical);
+  post(gasJ, "deleteQuestion", { id_soal: "Q1" });
+  assert.throws(() => assert.equal(gasJ.__sheets.Questions.rows.length, 5),
+    undefined, "mutation J tidak terdeteksi");
 
   // F. Data khusus guru (kunci jawaban, pengelompokan) bocor ke payload siswa.
   const leakCollection = mutate(

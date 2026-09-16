@@ -34,6 +34,8 @@ interface Props {
   mapelList: MataPelajaran[];
   /** Nomor urut terakhir yang sudah dipakai pada mapel tujuan. */
   lastNomorFor: (id_mapel: string) => number;
+  /** Kumpulan yang sedang dibuka guru di Bank Soal; jadi tujuan awal import. */
+  defaultKumpulanId?: string;
   onClose: () => void;
   onImported: (message: string) => void;
 }
@@ -143,7 +145,7 @@ const EXCEL_GUIDE = (
   </>
 );
 
-export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onImported }: Props) {
+export default function ImportSoalModal({ mapelList, lastNomorFor, defaultKumpulanId, onClose, onImported }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<"hub" | Source>("hub");
   const [source, setSource] = useState<Source>("word");
@@ -152,7 +154,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
   const [mapelId, setMapelId] = useState("");
   // Kumpulan tujuan: pilih yang sudah ada, atau ketik nama baru. Kosong = soal
   // masuk Bank Soal tanpa kumpulan (perilaku sebelum fitur kumpulan ada).
-  const [kumpulanId, setKumpulanId] = useState("");
+  const [kumpulanId, setKumpulanId] = useState(defaultKumpulanId ?? "");
   const [kumpulanBaru, setKumpulanBaru] = useState("");
   const [rows, setRows] = useState<ParsedQuestion[] | null>(null);
   const [detectedMapel, setDetectedMapel] = useState("");
@@ -625,7 +627,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
         onChange={(e) => setKumpulanId(e.target.value)}
         className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-700 bg-white"
       >
-        <option value="">— Tanpa kumpulan —</option>
+        <option value="">— Pilih kumpulan (boleh dikosongkan) —</option>
         {collectionList
           .filter((c) => !c.bawaan && (!c.id_mapel || !mapelId || c.id_mapel === mapelId))
           .map((c) => (
@@ -633,7 +635,7 @@ export default function ImportSoalModal({ mapelList, lastNomorFor, onClose, onIm
               {c.nama_kumpulan}{c.status === "NONAKTIF" ? " (tidak aktif)" : ""}
             </option>
           ))}
-        <option value="__baru__">+ Buat kumpulan baru</option>
+        <option value="__baru__">+ Buat Kumpulan Baru</option>
       </select>
       {kumpulanId === "__baru__" && (
         <input

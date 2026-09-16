@@ -178,6 +178,15 @@ export async function importQuestions(
 
 export const getQuestionCollections = () => fetchApi<QuestionCollection[]>('getQuestionCollections');
 
+/**
+ * Pindahkan soal ke kumpulan lain, atau keluarkan dari kumpulannya dengan
+ * `id_kumpulan: ""`. Hanya mengubah pengelompokan — soal tetap di Bank Soal.
+ */
+export const moveQuestions = (id_soal: string[], id_kumpulan: string) =>
+    fetchApi<{ moved: number; skipped: { id_soal: string; message: string }[] }>(
+        'moveQuestions', 'POST', { id_soal, id_kumpulan }
+    );
+
 export const createQuestionCollection = (data: { nama_kumpulan: string; id_mapel?: string }) =>
     fetchApi<{ id_kumpulan: string }>('createQuestionCollection', 'POST', { ...data });
 

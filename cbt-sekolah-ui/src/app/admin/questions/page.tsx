@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR, { mutate as mutateKey } from "swr";
-import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, getQuestionCollections, uploadImage, logout } from "@/lib/api";
+import { getAdminQuestions, createQuestion, updateQuestion, deleteQuestion, getMataPelajaran, getQuestionCollections, createQuestionCollection, moveQuestions, uploadImage, logout } from "@/lib/api";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import ImportSoalModal from "@/components/admin/ImportSoalModal";
 import KumpulanSoalPanel from "@/components/admin/KumpulanSoalPanel";
@@ -33,6 +33,7 @@ import {
   type MatchingDraft,
 } from "@/lib/matching";
 import type { ImplementedAdminQuestion, MataPelajaran, QuestionCollection } from "@/types";
+import { KUMPULAN_BAWAAN_ID } from "@/types";
 import { generateAIText } from "@/lib/aiProvider";
 import { getProviderApiKey, getSelectedProvider, missingProviderKeyMessage } from "@/lib/aiSettings";
 
@@ -205,6 +206,14 @@ export default function QuestionBankPage() {
   const [search, setSearch] = useState("");
   const [filterMapel, setFilterMapel] = useState("");
   const [filterKumpulan, setFilterKumpulan] = useState("");
+  // Seleksi massal untuk memindahkan/mengeluarkan soal dari kumpulan.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [moveTarget, setMoveTarget] = useState<string | null>(null); // null = dialog tertutup
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveError, setMoveError] = useState("");
+  // Buat kumpulan baru tanpa meninggalkan form soal.
+  const [newCollectionName, setNewCollectionName] = useState<string | null>(null);
+  const [newCollectionBusy, setNewCollectionBusy] = useState(false);
   const [entriesCount, setEntriesCount] = useState(20);
 
   // ── AI Generate state ──────────────────────────────────────────────────────
@@ -293,8 +302,17 @@ export default function QuestionBankPage() {
 
   const openCreate = () => {
     setEditingId(null);
+    // Context-aware: guru yang sedang membuka satu kumpulan tidak perlu memilih
+    // kumpulan itu lagi. Bucket bawaan bukan kumpulan sungguhan, jadi tidak
+    // dijadikan tujuan otomatis — soal baru tanpa pilihan tetap tanpa kumpulan.
+    const konteks = filterKumpulan && filterKumpulan !== KUMPULAN_BAWAAN_ID ? filterKumpulan : "";
+    const kumpulanMapel = collectionList.find((c) => c.id_kumpulan === konteks)?.id_mapel ?? "";
     setForm({
       ...EMPTY_FORM,
+      id_kumpulan: konteks,
+      // Kumpulan terikat satu mapel; ikut terisi supaya guru tidak memilih mapel
+      // yang justru ditolak server karena tidak cocok dengan kumpulannya.
+      id_mapel: kumpulanMapel,
       pernyataan: [{ ...EMPTY_TRUE_FALSE_STATEMENT }],
       fillIn: { ...EMPTY_FILL_IN_DRAFT, acceptedAnswers: [""] },
       matching: emptyMatchingDraft(),
@@ -302,6 +320,50 @@ export default function QuestionBankPage() {
     setSaveError("");
     setFilterMapel("");
     setShowModal(true);
+  };
+
+  const collectionName = (id: string) =>
+    collectionList.find((c) => c.id_kumpulan === id)?.nama_kumpulan ?? "";
+
+  // Buat kumpulan dari dalam form soal: guru tidak kehilangan isian yang sedang
+  // ditulis, dan kumpulan baru langsung terpilih.
+  const handleCreateCollectionInline = async () => {
+    const nama = (newCollectionName ?? "").trim();
+    if (nama === "") return;
+    setNewCollectionBusy(true);
+    const res = await createQuestionCollection({ nama_kumpulan: nama, id_mapel: form.id_mapel || undefined });
+    setNewCollectionBusy(false);
+    if (!res.success || !res.data?.id_kumpulan) {
+      setSaveError(res.message || "Kumpulan soal baru belum dapat dibuat.");
+      return;
+    }
+    await mutateKey("getQuestionCollections");
+    setForm((p) => ({ ...p, id_kumpulan: res.data!.id_kumpulan }));
+    setNewCollectionName(null);
+  };
+
+  const toggleSelected = (id: string) => {
+    setMoveError("");
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  // Memindahkan/mengeluarkan hanya mengubah pengelompokan. Soal tidak pernah
+  // hilang dari Bank Soal — itu janji yang ditulis pada dialognya.
+  const handleMove = async (target: string) => {
+    setIsMoving(true);
+    setMoveError("");
+    const res = await moveQuestions(selectedIds, target);
+    setIsMoving(false);
+    if (!res.success) {
+      setMoveError(res.message || "Soal belum dapat dipindahkan. Silakan coba lagi.");
+      return;
+    }
+    await mutate();
+    void mutateKey("getQuestionCollections");
+    const skipped = res.data?.skipped?.length ?? 0;
+    setNotice((res.message || "") + (skipped > 0 ? ` ${skipped} soal dilewati.` : ""));
+    setSelectedIds([]);
+    setMoveTarget(null);
   };
 
   const openEdit = (q: ImplementedAdminQuestion) => {
@@ -763,7 +825,7 @@ export default function QuestionBankPage() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900 tracking-wide flex items-center gap-2">
-                Bank Paket Soal
+                Bank Soal
                 <span className="text-xs bg-blue-100 text-blue-800 font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
                   {questions.length} Soal
                 </span>
@@ -837,7 +899,7 @@ export default function QuestionBankPage() {
                   onChange={(e) => setShowArchived(e.target.checked)}
                   className="rounded text-blue-600 cursor-pointer focus:ring-blue-500"
                 />
-                <span>Tampilkan arsip ({archivedCount})</span>
+                <span>Tampilkan versi lama ({archivedCount})</span>
               </label>
             )}
 
@@ -874,12 +936,50 @@ export default function QuestionBankPage() {
           </div>
         </div>
 
+        {/* Aksi untuk soal yang dicentang. Keduanya hanya mengubah pengelompokan. */}
+        {selectedIds.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex flex-wrap items-center gap-3">
+            <span className="font-black text-xs text-blue-900">{selectedIds.length} soal dipilih</span>
+            <div className="flex flex-wrap gap-2 ml-auto">
+              <button
+                onClick={() => { setMoveError(""); setMoveTarget(""); }}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider cursor-pointer"
+              >
+                Pindahkan ke Kumpulan
+              </button>
+              <button
+                onClick={() => { setMoveError(""); setMoveTarget("__keluar__"); }}
+                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700 font-black text-[11px] uppercase tracking-wider cursor-pointer"
+              >
+                Keluarkan dari Kumpulan
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 font-black text-[11px] uppercase tracking-wider cursor-pointer"
+              >
+                Batal Pilih
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table Container Card */}
         <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm mb-8">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 text-slate-700 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
+                  <th className="px-4 py-3.5 text-center w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Pilih semua soal yang tampil"
+                      checked={visible.length > 0 && visible.every((q) => selectedIds.includes(q.id_soal))}
+                      onChange={(e) =>
+                        setSelectedIds(e.target.checked ? visible.map((q) => q.id_soal) : [])
+                      }
+                      className="rounded text-blue-600 cursor-pointer focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-4 py-3.5 text-center w-12">No</th>
                   <th className="px-4 py-3.5 text-left w-32">Mapel</th>
                   <th className="px-4 py-3.5 w-44">Kode Soal</th>
@@ -891,7 +991,7 @@ export default function QuestionBankPage() {
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-500 text-xs">
+                    <td colSpan={7} className="text-center py-16 text-slate-500 text-xs">
                       <div className="flex flex-col items-center gap-2">
                         <span className="material-symbols-outlined animate-spin text-blue-600 text-2xl">sync</span>
                         <span className="font-semibold text-slate-600">Memuat data soal...</span>
@@ -900,7 +1000,7 @@ export default function QuestionBankPage() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400 text-xs">
+                    <td colSpan={7} className="text-center py-16 text-slate-400 text-xs">
                       <div className="flex flex-col items-center gap-2">
                         <span className="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
                         <p className="font-bold text-slate-600 text-sm">Belum ada soal tersedia.</p>
@@ -917,6 +1017,15 @@ export default function QuestionBankPage() {
 
                     return (
                       <tr key={q.id_soal} className="hover:bg-blue-50/30 transition-colors text-slate-700 text-xs">
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Pilih soal nomor ${q.nomor_urut}`}
+                            checked={selectedIds.includes(q.id_soal)}
+                            onChange={() => toggleSelected(q.id_soal)}
+                            className="rounded text-blue-600 cursor-pointer focus:ring-blue-500"
+                          />
+                        </td>
                         <td className="px-4 py-4 text-center font-bold text-slate-500">{idx + 1}</td>
                         <td className="px-4 py-4">
                           {q.id_mapel ? (
@@ -935,8 +1044,11 @@ export default function QuestionBankPage() {
                         <td className="px-5 py-4">
                           <div className="font-bold text-slate-800 text-sm max-w-md sm:max-w-lg truncate flex items-center gap-2" title={cleanPertanyaan}>
                             {q.status_soal === "ARSIP" && (
-                              <span className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-600 uppercase tracking-wider">
-                                Arsip
+                              <span
+                                className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-600 uppercase tracking-wider"
+                                title="Soal ini pernah dipakai ujian dan disimpan apa adanya agar rekap hasil tidak berubah."
+                              >
+                                Versi Lama
                               </span>
                             )}
                             <span className="truncate">{cleanPertanyaan || "Tanpa Redaksi Teks"}</span>
@@ -1099,10 +1211,13 @@ export default function QuestionBankPage() {
                 <select
                   id="form-kumpulan"
                   value={form.id_kumpulan}
-                  onChange={(e) => setForm(p => ({ ...p, id_kumpulan: e.target.value }))}
+                  onChange={(e) => {
+                    if (e.target.value === "__baru__") { setNewCollectionName(""); return; }
+                    setForm(p => ({ ...p, id_kumpulan: e.target.value }));
+                  }}
                   className="w-full h-12 border border-slate-300 rounded-xl px-4 text-sm font-semibold text-slate-800 bg-white focus:border-blue-600 outline-none cursor-pointer shadow-sm"
                 >
-                  <option value="">— Tanpa kumpulan —</option>
+                  <option value="">— Pilih kumpulan (boleh dikosongkan) —</option>
                   {collectionList
                     .filter((c) => !c.bawaan && (!c.id_mapel || !form.id_mapel || c.id_mapel === form.id_mapel))
                     .map((c) => (
@@ -1110,7 +1225,47 @@ export default function QuestionBankPage() {
                         {c.nama_kumpulan}{c.status === "NONAKTIF" ? " (tidak aktif)" : ""}
                       </option>
                     ))}
+                  <option value="__baru__">+ Buat Kumpulan Baru</option>
                 </select>
+                <p className="text-[11px] font-medium text-slate-500">
+                  {editingId === null && form.id_kumpulan && form.id_kumpulan === filterKumpulan
+                    ? `Mengikuti kumpulan yang sedang dibuka: ${collectionName(form.id_kumpulan)}. Bisa diganti sebelum disimpan.`
+                    : "Soal tanpa kumpulan tetap tersimpan di Bank Soal dan bisa dimasukkan ke kumpulan kapan saja."}
+                </p>
+
+                {newCollectionName !== null && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                    <label htmlFor="kumpulan-baru" className="block mb-1.5 font-extrabold text-[10px] text-slate-600 uppercase tracking-widest">
+                      Nama Kumpulan Soal
+                    </label>
+                    <input
+                      id="kumpulan-baru"
+                      value={newCollectionName}
+                      onChange={(e) => setNewCollectionName(e.target.value)}
+                      maxLength={80}
+                      placeholder="Contoh: UH Bab 2, PAS Ganjil, Soal Remedial"
+                      className="w-full h-11 px-4 rounded-xl border border-slate-300 text-sm font-semibold text-slate-800 bg-white focus:border-blue-600 outline-none"
+                    />
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewCollectionName(null)}
+                        disabled={newCollectionBusy}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 font-black text-[11px] cursor-pointer disabled:opacity-60"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCreateCollectionInline}
+                        disabled={newCollectionBusy || newCollectionName.trim() === ""}
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] cursor-pointer disabled:opacity-60"
+                      >
+                        {newCollectionBusy ? "Membuat..." : "Buat"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* AI Generate Panel */}
@@ -1970,14 +2125,76 @@ export default function QuestionBankPage() {
         );
       })()}
 
+      {/* Pindahkan / Keluarkan dari kumpulan — tidak pernah menghapus soal */}
+      {moveTarget !== null && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl">
+            <h3 className="font-black text-base text-slate-900">
+              {moveTarget === "__keluar__" ? "Keluarkan soal dari kumpulan?" : "Pindahkan soal ke kumpulan"}
+            </h3>
+            <p className="mt-2 text-xs font-semibold text-slate-600">
+              {moveTarget === "__keluar__"
+                ? `${selectedIds.length} soal akan dikeluarkan dari kumpulan ini, tetapi tetap tersimpan di Bank Soal dan dapat digunakan kembali.`
+                : `${selectedIds.length} soal akan pindah ke kumpulan yang dipilih. Soal tidak dihapus dan isinya tidak berubah.`}
+            </p>
+
+            {moveTarget !== "__keluar__" && (
+              <>
+                <label htmlFor="move-target" className="block mt-4 mb-1.5 font-extrabold text-[10px] text-slate-500 uppercase tracking-widest">
+                  Kumpulan tujuan
+                </label>
+                <select
+                  id="move-target"
+                  value={moveTarget}
+                  onChange={(e) => setMoveTarget(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none font-bold text-xs text-slate-700 bg-white"
+                >
+                  <option value="">— Pilih kumpulan —</option>
+                  {collectionList.filter((c) => !c.bawaan).map((c) => (
+                    <option key={c.id_kumpulan} value={c.id_kumpulan}>
+                      {c.nama_kumpulan}{c.status === "NONAKTIF" ? " (tidak aktif)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {moveError && <p className="mt-3 text-xs font-bold text-rose-600">{moveError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => { setMoveTarget(null); setMoveError(""); }}
+                disabled={isMoving}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-black text-[11px] cursor-pointer disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => handleMove(moveTarget === "__keluar__" ? "" : moveTarget)}
+                disabled={isMoving || (moveTarget !== "__keluar__" && moveTarget === "")}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] cursor-pointer disabled:opacity-60"
+              >
+                {moveTarget === "__keluar__" ? "Keluarkan" : "Pindahkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirm */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-lg">
           <div className="bg-white rounded-2xl p-xl max-w-sm w-full shadow-2xl border border-outline-variant">
             <h3 className="font-headline-admin text-on-surface mb-sm">Hapus Soal?</h3>
             <p className="font-body-admin text-on-surface-variant mb-md">
-              Soal yang belum pernah dijawab siswa akan dihapus permanen. Soal yang sudah
-              pernah dijawab hanya diarsipkan agar histori ujian tetap utuh.
+              Soal yang belum pernah dipakai dalam ujian akan dihapus dari Bank Soal.
+              Soal yang sudah pernah dipakai tidak dapat dihapus permanen karena masih
+              diperlukan untuk menjaga rekap hasil ujian — soal itu tetap disimpan dan
+              tidak lagi dipakai untuk ujian berikutnya.
+            </p>
+            <p className="font-body-admin text-xs text-on-surface-variant mb-md">
+              Ingin soal ini keluar dari kumpulannya saja? Tutup dialog ini, centang soalnya,
+              lalu pilih &ldquo;Keluarkan dari Kumpulan&rdquo;.
             </p>
             {deleteError && (
               <p className="font-body-admin text-sm text-error bg-error/10 border border-error/30 rounded-xl px-md py-sm mb-md">
@@ -1997,6 +2214,7 @@ export default function QuestionBankPage() {
       {showImportSoal && (
         <ImportSoalModal
           mapelList={mapelList}
+          defaultKumpulanId={filterKumpulan && filterKumpulan !== KUMPULAN_BAWAAN_ID ? filterKumpulan : ""}
           lastNomorFor={(id_mapel) => questions.reduce(
             (max, q) => (q.id_mapel === id_mapel ? Math.max(max, Number(q.nomor_urut) || 0) : max), 0
           )}

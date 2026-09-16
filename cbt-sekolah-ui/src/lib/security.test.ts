@@ -66,6 +66,9 @@ for (const action of [
   "createMataPelajaran", "updateMataPelajaran", "deleteMataPelajaran", "deleteAllMataPelajaran",
   "setExamStatus", "getPrintSettings", "savePrintSettings",
   "saveExamConfig", "getExamSummary", "importQuestions", "getStudentAnalysis",
+  // Kumpulan soal: membuat, mengubah status, dan memindahkan soal tidak pernah
+  // boleh dijangkau siswa maupun request tanpa sesi.
+  "getQuestionCollections", "createQuestionCollection", "updateQuestionCollection", "moveQuestions",
 ]) {
   assert.equal(ACTION_RULES[action]?.role, "admin", `${action} harus admin-only`);
 }

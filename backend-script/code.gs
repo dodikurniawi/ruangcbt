@@ -975,6 +975,9 @@ function doPost(e) {
       case "importQuestions":
         result = handleImportQuestions(params);
         break;
+      case "moveQuestions":
+        result = handleMoveQuestions(params);
+        break;
       case "updateConfig":
         result = handleUpdateConfig(params);
         break;
@@ -2101,6 +2104,98 @@ function handleImportQuestions(params) {
   }
 }
 
+// Pindahkan soal antar kumpulan, atau keluarkan dari kumpulannya (id_kumpulan
+// kosong). Ini murni perubahan pengelompokan: tidak ada baris yang dihapus, isi
+// soal tidak disentuh, dan riwayat versinya tidak berubah. Attempt yang sedang
+// berjalan juga tidak terpengaruh — soalnya dibaca dari snapshot attempt.
+const MOVE_QUESTIONS_MAX = 500;
+
+function handleMoveQuestions(params) {
+  const ids = params && Array.isArray(params.id_soal) ? params.id_soal : [];
+  if (ids.length === 0) return { success: false, message: "Pilih dulu soal yang ingin dipindahkan." };
+  if (ids.length > MOVE_QUESTIONS_MAX) {
+    return { success: false, message: "Maksimal " + MOVE_QUESTIONS_MAX + " soal sekali pindah." };
+  }
+
+  const requested = String((params && params.id_kumpulan) || "").trim();
+  // Kosong maupun bucket bawaan sama-sama berarti "tidak masuk kumpulan mana pun".
+  const target = requested === KUMPULAN_LEGACY_ID ? "" : requested;
+  let targetCollection = null;
+  if (target !== "") {
+    targetCollection = findCollection(readCollections(), target);
+    if (!targetCollection) {
+      return { success: false, message: "Kumpulan soal tidak ditemukan. Pilih ulang kumpulan soal." };
+    }
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+
+  try {
+    const sheet = getSheet("Questions");
+    if (!sheet) return { success: false, message: "Bank Soal belum tersedia." };
+    ensureQuestionColumns(sheet);
+    const rows = sheet.getDataRange().getValues();
+
+    const rowNumberById = {};
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0]) rowNumberById[String(rows[i][0])] = i + 1;
+    }
+
+    const pending = [];
+    const skipped = [];
+    const seen = {};
+    for (let i = 0; i < ids.length; i++) {
+      const id = String(ids[i] == null ? "" : ids[i]).trim();
+      if (id === "" || seen[id]) continue;
+      seen[id] = true;
+      const rowNumber = rowNumberById[id];
+      if (!rowNumber) {
+        skipped.push({ id_soal: id, message: "Soal tidak ditemukan." });
+        continue;
+      }
+      // Kumpulan milik satu mapel tidak boleh menampung soal mapel lain; soal
+      // seperti itu dilewati dan dilaporkan, bukan membatalkan seluruh aksi.
+      const mapel = String(rows[rowNumber - 1][13] || "");
+      if (targetCollection && targetCollection.id_mapel && mapel && targetCollection.id_mapel !== mapel) {
+        skipped.push({ id_soal: id, message: "Mata pelajaran soal berbeda dengan kumpulan tujuan." });
+        continue;
+      }
+      pending.push(rowNumber);
+    }
+
+    if (pending.length === 0) {
+      return { success: false, message: "Tidak ada soal yang dapat dipindahkan.", data: { moved: 0, skipped: skipped } };
+    }
+
+    // Satu tulisan untuk seluruh blok baris terpilih, bukan satu per soal:
+    // memindahkan 50 soal tetap satu operasi Sheets.
+    let minRow = pending[0];
+    let maxRow = pending[0];
+    for (let p = 1; p < pending.length; p++) {
+      if (pending[p] < minRow) minRow = pending[p];
+      if (pending[p] > maxRow) maxRow = pending[p];
+    }
+    const column = [];
+    for (let r = minRow; r <= maxRow; r++) {
+      const existing = rows[r - 1] ? rows[r - 1][QUESTION_COLLECTION_COL - 1] : "";
+      column.push([existing == null ? "" : existing]);
+    }
+    for (let p = 0; p < pending.length; p++) column[pending[p] - minRow][0] = target;
+    sheet.getRange(minRow, QUESTION_COLLECTION_COL, column.length, 1).setValues(column);
+
+    cache.remove("questions"); cache.remove("questions_all");
+    const message = target === ""
+      ? pending.length + " soal dikeluarkan dari kumpulan dan tetap tersimpan di Bank Soal."
+      : pending.length + ' soal dipindahkan ke "' + targetCollection.nama_kumpulan + '".';
+    return { success: true, message: message, data: { moved: pending.length, skipped: skipped } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function handleDeleteQuestion(params) {
   const sheet = getSheet("Questions");
   const { id_soal } = params;
@@ -2127,7 +2222,8 @@ function handleDeleteQuestion(params) {
         cache.remove("questions"); cache.remove("questions_all");
         return {
           success: true,
-          message: "Soal sudah pernah dijawab siswa, jadi diarsipkan agar histori ujian tetap utuh.",
+          message: "Soal ini sudah pernah dipakai dalam ujian, jadi tetap disimpan agar rekap hasil ujian " +
+            "tidak berubah. Soal sudah tidak dipakai lagi untuk ujian berikutnya.",
           archived: true,
         };
       }

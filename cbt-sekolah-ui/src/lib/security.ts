@@ -56,6 +56,7 @@ export const ACTION_RULES: Readonly<Record<string, ActionRule>> = Object.freeze(
   updateQuestion: { method: "POST", role: "admin" },
   deleteQuestion: { method: "POST", role: "admin" },
   importQuestions: { method: "POST", role: "admin" },
+  moveQuestions: { method: "POST", role: "admin" },
   createQuestionCollection: { method: "POST", role: "admin" },
   updateQuestionCollection: { method: "POST", role: "admin" },
   updateConfig: { method: "POST", role: "admin" },
