@@ -211,6 +211,10 @@ export default function QuestionBankPage() {
   const [moveTarget, setMoveTarget] = useState<string | null>(null); // null = dialog tertutup
   const [isMoving, setIsMoving] = useState(false);
   const [moveError, setMoveError] = useState("");
+  // Mode "tambahkan soal dari bank": guru sudah berada di satu kumpulan, jadi
+  // tujuan pemindahan sudah diketahui dan tidak perlu dipilih ulang. Berisi
+  // id_kumpulan tujuan; null = mode mati. Tidak menyentuh aturan filter kumpulan.
+  const [assignTarget, setAssignTarget] = useState<string | null>(null);
   // Buat kumpulan baru tanpa meninggalkan form soal.
   const [newCollectionName, setNewCollectionName] = useState<string | null>(null);
   const [newCollectionBusy, setNewCollectionBusy] = useState(false);
@@ -252,6 +256,9 @@ export default function QuestionBankPage() {
     // Soal yang belum dikelompokkan dilaporkan backend sebagai KUMPULAN_BAWAAN_ID,
     // jadi filter di sini cukup membandingkan nilai apa adanya.
     if (filterKumpulan !== "" && q.id_kumpulan !== filterKumpulan) return false;
+    // Hanya saat memilih kandidat: soal yang sudah berada di kumpulan tujuan
+    // tidak ditawarkan lagi. Di luar mode ini tidak ada efek apa pun.
+    if (assignTarget && q.id_kumpulan === assignTarget) return false;
     if (term === "") return true;
     const kodeMapel = mapelList.find((m) => m.id_mapel === q.id_mapel)?.kode_mapel ?? "";
     return [
@@ -261,6 +268,13 @@ export default function QuestionBankPage() {
       kodeMapel,
     ].some((field) => field.toLowerCase().includes(term));
   });
+
+  // Soal yang benar-benar dapat ditambahkan ke kumpulan yang sedang dibuka:
+  // soal aktif yang belum menjadi anggotanya. Dipakai hanya untuk menjelaskan
+  // empty state, bukan untuk memfilter apa pun.
+  const kandidatCount = questions.filter(
+    (q) => q.status_soal !== "ARSIP" && q.id_kumpulan !== filterKumpulan,
+  ).length;
 
   // entriesCount 0 = tampilkan semua. Seluruh data sudah ada di client, jadi ini
   // murni pemotongan tampilan, bukan pagination server.
@@ -364,6 +378,28 @@ export default function QuestionBankPage() {
     setNotice((res.message || "") + (skipped > 0 ? ` ${skipped} soal dilewati.` : ""));
     setSelectedIds([]);
     setMoveTarget(null);
+    // Selesai menambahkan: kembalikan guru ke kumpulan tujuan supaya hasilnya
+    // langsung terlihat, bukan tertinggal di daftar semua soal.
+    if (assignTarget) {
+      setFilterKumpulan(assignTarget);
+      setAssignTarget(null);
+    }
+  };
+
+  // Empty state → pilih soal yang sudah ada. Filter kumpulan dilepas supaya
+  // seluruh Bank Soal terlihat, tujuannya diingat lewat assignTarget.
+  const startAssign = (id_kumpulan: string) => {
+    setMoveError("");
+    setSelectedIds([]);
+    setFilterKumpulan("");
+    setAssignTarget(id_kumpulan);
+  };
+
+  const cancelAssign = () => {
+    const back = assignTarget ?? "";
+    setAssignTarget(null);
+    setSelectedIds([]);
+    setFilterKumpulan(back);
   };
 
   const openEdit = (q: ImplementedAdminQuestion) => {
@@ -864,7 +900,13 @@ export default function QuestionBankPage() {
         <KumpulanSoalPanel
           mapelList={mapelList}
           activeFilter={filterKumpulan}
-          onFilter={setFilterKumpulan}
+          onFilter={(id) => {
+            // Ganti kumpulan = konteks lama tidak berlaku lagi. Tujuan dan
+            // centang ikut dibuang supaya tidak ada sisa pilihan yang menyesatkan.
+            setAssignTarget(null);
+            setSelectedIds([]);
+            setFilterKumpulan(id);
+          }}
           onNotice={setNotice}
         />
 
@@ -936,30 +978,68 @@ export default function QuestionBankPage() {
           </div>
         </div>
 
-        {/* Aksi untuk soal yang dicentang. Keduanya hanya mengubah pengelompokan. */}
+        {/* Mode menambahkan soal ke satu kumpulan: tujuan sudah pasti, jadi yang
+            tersisa bagi guru hanya mencentang soal. */}
+        {assignTarget !== null && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex flex-wrap items-center gap-3">
+            <div className="min-w-0">
+              <p className="font-black text-xs text-blue-900">
+                Menambahkan soal ke &ldquo;{collectionName(assignTarget) || "kumpulan ini"}&rdquo;
+              </p>
+              <p className="text-[11px] font-semibold text-blue-700">
+                Centang soal yang ingin ditambahkan. Soal tidak digandakan — soal berpindah kumpulan dan isinya tidak berubah.
+              </p>
+            </div>
+            <button
+              onClick={cancelAssign}
+              disabled={isMoving}
+              className="ml-auto px-4 py-2 rounded-xl border border-blue-300 bg-white text-blue-700 hover:border-blue-500 font-black text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-60"
+            >
+              Batalkan
+            </button>
+          </div>
+        )}
+
+        {/* Aksi untuk soal yang dicentang. Semuanya hanya mengubah pengelompokan. */}
         {selectedIds.length > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 flex flex-wrap items-center gap-3">
             <span className="font-black text-xs text-blue-900">{selectedIds.length} soal dipilih</span>
             <div className="flex flex-wrap gap-2 ml-auto">
-              <button
-                onClick={() => { setMoveError(""); setMoveTarget(""); }}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider cursor-pointer"
-              >
-                Pindahkan ke Kumpulan
-              </button>
-              <button
-                onClick={() => { setMoveError(""); setMoveTarget("__keluar__"); }}
-                className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700 font-black text-[11px] uppercase tracking-wider cursor-pointer"
-              >
-                Keluarkan dari Kumpulan
-              </button>
+              {assignTarget !== null ? (
+                // Tujuan berasal dari konteks; dialog pemilihan kumpulan dilewati
+                // supaya guru tidak memilih kumpulan yang sama dua kali.
+                <button
+                  onClick={() => void handleMove(assignTarget)}
+                  disabled={isMoving}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-60"
+                >
+                  {isMoving ? "Menambahkan..." : `Tambahkan ke ${collectionName(assignTarget) || "kumpulan"}`}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setMoveError(""); setMoveTarget(""); }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider cursor-pointer"
+                  >
+                    Pindahkan ke Kumpulan
+                  </button>
+                  <button
+                    onClick={() => { setMoveError(""); setMoveTarget("__keluar__"); }}
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-700 font-black text-[11px] uppercase tracking-wider cursor-pointer"
+                  >
+                    Keluarkan dari Kumpulan
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setSelectedIds([])}
-                className="px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 font-black text-[11px] uppercase tracking-wider cursor-pointer"
+                disabled={isMoving}
+                className="px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 font-black text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-60"
               >
                 Batal Pilih
               </button>
             </div>
+            {moveError && <p className="w-full text-xs font-bold text-rose-600">{moveError}</p>}
           </div>
         )}
 
@@ -1003,8 +1083,53 @@ export default function QuestionBankPage() {
                     <td colSpan={7} className="text-center py-16 text-slate-400 text-xs">
                       <div className="flex flex-col items-center gap-2">
                         <span className="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
-                        <p className="font-bold text-slate-600 text-sm">Belum ada soal tersedia.</p>
-                        <p className="text-slate-400">Klik tombol &quot;Tambah Soal Baru&quot; di atas untuk membuat soal pertama Anda.</p>
+                        {/* Kosong karena filter kumpulan bukan hal yang sama dengan Bank Soal kosong:
+                            menyamakan keduanya membuat guru mengira soalnya hilang. */}
+                        {assignTarget !== null ? (
+                          <>
+                            <p className="font-bold text-slate-600 text-sm">Tidak ada soal yang dapat ditambahkan.</p>
+                            <p className="text-slate-400">
+                              Semua soal yang cocok sudah berada di kumpulan ini, atau tersaring oleh pencarian/filter mata pelajaran.
+                            </p>
+                          </>
+                        ) : questions.length === 0 ? (
+                          <>
+                            <p className="font-bold text-slate-600 text-sm">Belum ada soal tersedia.</p>
+                            <p className="text-slate-400">Klik tombol &quot;Tambah Soal Baru&quot; di atas untuk membuat soal pertama Anda.</p>
+                          </>
+                        ) : filterKumpulan !== "" ? (
+                          <>
+                            <p className="font-bold text-slate-600 text-sm">
+                              Kumpulan &ldquo;{collectionName(filterKumpulan) || "ini"}&rdquo; belum berisi soal.
+                            </p>
+                            <p className="text-slate-400">
+                              {kandidatCount > 0
+                                ? `Anda masih memiliki ${kandidatCount} soal di kumpulan lain atau di "Soal Lama" yang dapat ditambahkan ke sini.`
+                                : "Tidak ada soal aktif lain yang dapat ditambahkan saat ini."}
+                            </p>
+                            <div className="mt-1 flex flex-wrap justify-center gap-2">
+                              {kandidatCount > 0 && (
+                              <button
+                                onClick={() => startAssign(filterKumpulan)}
+                                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] cursor-pointer"
+                              >
+                                Tambahkan Soal dari Bank
+                              </button>
+                              )}
+                              <button
+                                onClick={() => setFilterKumpulan("")}
+                                className="px-3 py-2 rounded-xl border border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 font-black text-[11px] cursor-pointer"
+                              >
+                                Tampilkan Semua Soal
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-bold text-slate-600 text-sm">Tidak ada soal yang cocok dengan filter.</p>
+                            <p className="text-slate-400">Ubah kata kunci pencarian atau filter mata pelajaran.</p>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
