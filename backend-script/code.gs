@@ -100,6 +100,17 @@ function invalidateUsersCache() {
   cache.remove(LIVE_SCORE_CACHE_KEY);
 }
 
+// Satu pintu untuk SEMUA cache turunan Bank Soal. Sebelumnya pasangan
+// remove("questions") + remove("questions_all") disalin di 15 tempat; menambah
+// satu key turunan berarti menambal 15 tempat dan melupakan satu di antaranya.
+const EXAM_SNAPSHOT_CACHE_KEY = "exam_snapshot";
+
+function invalidateQuestionCaches() {
+  cache.remove("questions");
+  cache.remove("questions_all");
+  cache.remove(EXAM_SNAPSHOT_CACHE_KEY);
+}
+
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(
     ContentService.MimeType.JSON
@@ -426,6 +437,23 @@ function collectExamQuestionRows(exam_mapel, collectionIds, questionRows, collec
 }
 
 function buildExamSnapshot() {
+  // Snapshot ujian aktif sama untuk SEMUA siswa yang mulai pada konfigurasi yang
+  // sama, tetapi dulu dibangun ulang — termasuk satu kali baca penuh Bank Soal —
+  // pada setiap login pertama. Pada saat serentak (satu kelas login bersamaan)
+  // itulah pembacaan Sheets paling mahal di seluruh sistem. Hasilnya di-cache
+  // sependek cache Config (60 detik) sehingga kesegarannya tidak pernah lebih
+  // buruk daripada Config yang sudah jadi masukannya, dan setiap perubahan Bank
+  // Soal maupun Config menghapusnya lewat invalidateQuestionCaches().
+  const cachedSnapshot = cache.get(EXAM_SNAPSHOT_CACHE_KEY);
+  if (cachedSnapshot) {
+    try {
+      const parsed = JSON.parse(cachedSnapshot);
+      if (parsed && Array.isArray(parsed.question_ids)) return parsed;
+    } catch (err) {
+      // Entri rusak: bangun ulang di bawah.
+    }
+  }
+
   const config = getConfig();
   const exam_mapel = String(config.exam_mapel || "");
   const selected = collectExamQuestionRows(exam_mapel, parseCollectionSelection(config.exam_kumpulan));
@@ -439,7 +467,7 @@ function buildExamSnapshot() {
 
   const exam_name = String(config.exam_name || "");
   const exam_duration = parseInt(config.exam_duration, 10) || 90;
-  return {
+  const snapshot = {
     exam_id: "EX" + hashToken(
       [exam_name, exam_mapel, exam_duration, fingerprints.join("\u0002")].join("\u0003")
     ),
@@ -448,6 +476,8 @@ function buildExamSnapshot() {
     exam_duration: exam_duration,
     question_ids: question_ids,
   };
+  cachePutSafe(EXAM_SNAPSHOT_CACHE_KEY, JSON.stringify(snapshot), CACHE_DURATION);
+  return snapshot;
 }
 
 // Baris Users kolom 15 → binding. Kosong (baris lama) maupun rusak dibaca null,
@@ -509,6 +539,60 @@ function readUserRow(sheet, id_siswa) {
   return { rowNumber: index + 1, values: data[index] };
 }
 
+// Login mencari siswa berdasarkan USERNAME, bukan id, jadi cache baris milik
+// readUserRow tidak dapat dipakai. Nomor barisnya di-cache terpisah dengan pola
+// yang sama: nilai cache tidak pernah dipercaya begitu saja — username pada baris
+// itu diverifikasi ulang, dan bila tidak cocok (baris bergeser karena impor atau
+// hapus siswa) pemindaian penuh mengambil alih. Karena itu tidak ada invalidasi
+// yang bisa terlupa saat daftar siswa berubah.
+const USERNAME_INDEX_CACHE_KEY = "userlogin_index";
+
+function readUsernameIndex() {
+  const raw = cache.get(USERNAME_INDEX_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return isPlainQuestionObject(parsed) ? parsed : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Satu pemindaian membangun indeks untuk SELURUH siswa, bukan untuk satu siswa
+// saja: kalau tiap username baru memicu pemindaiannya sendiri, satu kelas yang
+// login serentak tetap memindai sheet Users sekali per siswa.
+function readUserRowByUsername(sheet, username) {
+  const wanted = String(username == null ? "" : username).toLowerCase();
+  if (!sheet || wanted === "") return null;
+
+  const index = readUsernameIndex();
+  const cachedRow = index ? Number(index[wanted]) : NaN;
+  if (isFinite(cachedRow) && cachedRow > 1) {
+    try {
+      const values = sheet.getRange(cachedRow, 1, 1, USER_COLUMNS).getValues()[0];
+      if (values && String(values[1] == null ? "" : values[1]).toLowerCase() === wanted) {
+        return { rowNumber: cachedRow, values: values };
+      }
+    } catch (err) {
+      // Baris di luar grid (siswa dihapus): indeks dibangun ulang di bawah.
+    }
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const fresh = {};
+  let hit = null;
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[1] == null || row[1] === "") continue;
+    const name = String(row[1]).toLowerCase();
+    // Username ganda: baris PERTAMA menang, sama seperti pemindaian login lama.
+    if (fresh[name] === undefined) fresh[name] = i + 1;
+    if (name === wanted && !hit) hit = { rowNumber: i + 1, values: row };
+  }
+  cachePutSafe(USERNAME_INDEX_CACHE_KEY, JSON.stringify(fresh), USER_ROW_CACHE_TTL);
+  return hit;
+}
+
 function findUserRowIndex(usersData, id_siswa) {
   if (!id_siswa) return -1;
   for (let i = 1; i < usersData.length; i++) {
@@ -526,6 +610,25 @@ function getAttemptBinding(id_siswa) {
 // Soal yang dibekukan sebuah attempt diambil apa adanya berdasarkan id — termasuk
 // bila sudah diarsipkan setelah ujian mulai — dan dalam urutan snapshot.
 function resolveBoundQuestionRows(binding) {
+  // exam_id adalah sidik jari ISI soal yang dibekukan attempt ini, jadi entri
+  // cache di bawahnya tidak dapat basi terhadap attempt itu — properti yang sama
+  // yang sudah dipakai cache questions_<exam_id>. Yang dihilangkan: satu
+  // pembacaan penuh Bank Soal pada SETIAP submit, tepat saat satu kelas
+  // menyelesaikan ujian pada menit yang sama. Bonus konsistensi: soal yang
+  // dinilai kini berasal dari sumber yang sama dengan soal yang dikirim.
+  const cacheKey = binding && binding.exam_id ? "boundrows_" + binding.exam_id : "";
+  if (cacheKey) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (err) {
+        // Entri rusak: baca ulang dari sheet di bawah.
+      }
+    }
+  }
+
   const sheet = getSheet("Questions");
   const rows = sheet ? sheet.getDataRange().getValues() : [];
   const byId = {};
@@ -537,6 +640,7 @@ function resolveBoundQuestionRows(binding) {
     const row = byId[binding.question_ids[q]];
     if (row) resolved.push(row);
   }
+  if (cacheKey) cachePutSafe(cacheKey, JSON.stringify(resolved), BOUND_QUESTIONS_TTL);
   return resolved;
 }
 
@@ -1563,6 +1667,71 @@ function handleExportResults() {
 
 // ===== POST HANDLERS — AUTH & EXAM =====
 
+// Satu attempt siswa dimulai/dilanjutkan dari baris yang SUDAH ditemukan.
+// Dipisah dari pencariannya supaya pencarian boleh memakai cache nomor baris
+// tanpa menduplikasi aturan login di dua tempat.
+function loginWithRow(sheet, rowNumber, row) {
+  const statusUjian = row[10];
+
+  if (statusUjian === "SELESAI" || statusUjian === "DISKUALIFIKASI") {
+    return { success: false, message: "Kamu sudah menyelesaikan ujian." };
+  }
+
+  // RC-6: flag status_login yang tertinggal karena tab ditutup tidak boleh
+  // mengunci siswa dari attempt-nya sendiri. Hanya sesi yang masih terlihat
+  // hidup (last_seen segar) yang dianggap perangkat lain.
+  const lastSeenMs = row[11] ? new Date(row[11]).getTime() : 0;
+  if (row[5] === true && isFinite(lastSeenMs) && Date.now() - lastSeenMs < REENTRY_GRACE_MS) {
+    return { success: false, message: "Akun sudah login di perangkat lain." };
+  }
+
+  // Nomor baris siswa dicatat sekali di sini. Seluruh autosave, pelanggaran,
+  // dan submit setelahnya cukup membaca satu baris, bukan seluruh sheet.
+  cache.put(userRowCacheKey(row[0]), String(rowNumber), USER_ROW_CACHE_TTL);
+
+  // Re-entry memakai attempt yang sama: waktu_mulai, saved_answers, dan binding
+  // tidak pernah ditulis ulang, jadi login kembali tidak memperpanjang waktu.
+  const waktuMulai = row[6] || new Date();
+  sheet.getRange(rowNumber, 6).setValue(true);
+  if (!row[6]) {
+    sheet.getRange(rowNumber, 7).setValue(waktuMulai);
+    sheet.getRange(rowNumber, 11).setValue("SEDANG");
+  }
+  sheet.getRange(rowNumber, 12).setValue(new Date());
+
+  // Snapshot dibekukan sekali per attempt. Attempt lama dari sebelum Task 5.1
+  // belum punya binding; dibekukan sekarang dari Config yang berlaku supaya
+  // sisa ujiannya tidak lagi ikut berubah.
+  let binding = parseExamBinding(row);
+  if (!binding) {
+    binding = buildExamSnapshot();
+    sheet.getRange(rowNumber, USER_BINDING_COL).setValue(JSON.stringify(binding));
+  }
+
+  // Read saved answers from col 14 (index 13) for recovery
+  var savedRaw = row[13] ? row[13].toString() : "";
+  var savedAnswers = null;
+  if (savedRaw) {
+    try { savedAnswers = JSON.parse(savedRaw); } catch (_e) { savedAnswers = null; }
+  }
+
+  return {
+    success: true,
+    data: {
+      id_siswa: row[0],
+      username: row[1],
+      nama_lengkap: row[3],
+      kelas: row[4],
+      status_ujian: row[10] || "SEDANG",
+      waktu_mulai: waktuMulai,
+      exam_duration: binding.exam_duration,
+      exam_id: binding.exam_id,
+      exam_mapel: binding.exam_mapel,
+      saved_answers: savedAnswers,
+    },
+  };
+}
+
 function handleLogin(params) {
   const { username, password } = params;
 
@@ -1572,73 +1741,27 @@ function handleLogin(params) {
   }
 
   const sheet = getSheet("Users");
-  const data = sheet.getDataRange().getValues();
 
+  // Jalur cepat: nomor baris username ini sudah diketahui dari login sebelumnya,
+  // jadi satu kelas yang login serentak tidak lagi memindai seluruh sheet Users
+  // satu kali per siswa.
+  const cachedHit = readUserRowByUsername(sheet, username);
+  if (cachedHit && cachedHit.values[2] != null &&
+      cachedHit.values[2].toString() === password) {
+    return loginWithRow(sheet, cachedHit.rowNumber, cachedHit.values);
+  }
+
+  // Password tidak cocok atau username belum pernah login: pemindaian penuh,
+  // persis seperti sebelumnya. Username ganda pada tenant lama tetap terlayani
+  // karena pencarian di bawah tetap mencocokkan username DAN password.
+  const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (
       row[1].toString().toLowerCase() === username.toLowerCase() &&
       row[2].toString() === password
     ) {
-      const statusUjian = row[10];
-
-      if (statusUjian === "SELESAI" || statusUjian === "DISKUALIFIKASI") {
-        return { success: false, message: "Kamu sudah menyelesaikan ujian." };
-      }
-
-      // RC-6: flag status_login yang tertinggal karena tab ditutup tidak boleh
-      // mengunci siswa dari attempt-nya sendiri. Hanya sesi yang masih terlihat
-      // hidup (last_seen segar) yang dianggap perangkat lain.
-      const lastSeenMs = row[11] ? new Date(row[11]).getTime() : 0;
-      if (row[5] === true && isFinite(lastSeenMs) && Date.now() - lastSeenMs < REENTRY_GRACE_MS) {
-        return { success: false, message: "Akun sudah login di perangkat lain." };
-      }
-
-      // Nomor baris siswa dicatat sekali di sini. Seluruh autosave, pelanggaran,
-      // dan submit setelahnya cukup membaca satu baris, bukan seluruh sheet.
-      cache.put(userRowCacheKey(row[0]), String(i + 1), USER_ROW_CACHE_TTL);
-
-      // Re-entry memakai attempt yang sama: waktu_mulai, saved_answers, dan binding
-      // tidak pernah ditulis ulang, jadi login kembali tidak memperpanjang waktu.
-      const waktuMulai = row[6] || new Date();
-      sheet.getRange(i + 1, 6).setValue(true);
-      if (!row[6]) {
-        sheet.getRange(i + 1, 7).setValue(waktuMulai);
-        sheet.getRange(i + 1, 11).setValue("SEDANG");
-      }
-      sheet.getRange(i + 1, 12).setValue(new Date());
-
-      // Snapshot dibekukan sekali per attempt. Attempt lama dari sebelum Task 5.1
-      // belum punya binding; dibekukan sekarang dari Config yang berlaku supaya
-      // sisa ujiannya tidak lagi ikut berubah.
-      let binding = parseExamBinding(row);
-      if (!binding) {
-        binding = buildExamSnapshot();
-        sheet.getRange(i + 1, USER_BINDING_COL).setValue(JSON.stringify(binding));
-      }
-
-      // Read saved answers from col 14 (index 13) for recovery
-      var savedRaw = row[13] ? row[13].toString() : "";
-      var savedAnswers = null;
-      if (savedRaw) {
-        try { savedAnswers = JSON.parse(savedRaw); } catch (_e) { savedAnswers = null; }
-      }
-
-      return {
-        success: true,
-        data: {
-          id_siswa: row[0],
-          username: row[1],
-          nama_lengkap: row[3],
-          kelas: row[4],
-          status_ujian: row[10] || "SEDANG",
-          waktu_mulai: waktuMulai,
-          exam_duration: binding.exam_duration,
-          exam_id: binding.exam_id,
-          exam_mapel: binding.exam_mapel,
-          saved_answers: savedAnswers,
-        },
-      };
+      return loginWithRow(sheet, i + 1, row);
     }
   }
 
@@ -2012,7 +2135,7 @@ function commitSubmit(prepared) {
     submissionLog, "", exam_id, exam_mapel,
   ]);
 
-  cache.remove("questions"); cache.remove("questions_all");
+  invalidateQuestionCaches();
 
   return {
     success: true,
@@ -2102,7 +2225,7 @@ function createQuestionVersion(sheet, oldRowNumber, currentRow, data, originId) 
       sheet.getRange(oldRowNumber, QUESTION_ORIGIN_COL).setValue(originId);
     }
 
-    cache.remove("questions"); cache.remove("questions_all");
+    invalidateQuestionCaches();
     return {
       success: true,
       versioned: true,
@@ -2144,7 +2267,7 @@ function handleCreateQuestion(params) {
 
     ensureQuestionColumns(sheet);
     sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", collection.id_kumpulan));
-    cache.remove("questions"); cache.remove("questions_all");
+    invalidateQuestionCaches();
     return { success: true, message: "Question created", id_soal: id_soal };
   } finally {
     lock.releaseLock();
@@ -2187,14 +2310,14 @@ function handleUpdateQuestion(params) {
           // pengelompokan, bukan isi yang menentukan makna jawaban historis.
           if (String(current[1]) !== String(data.nomor_urut)) {
             sheet.getRange(i + 1, 2).setValue(data.nomor_urut);
-            cache.remove("questions"); cache.remove("questions_all");
+            invalidateQuestionCaches();
           }
           const moved = resolveQuestionCollection(data, current[QUESTION_COLLECTION_COL - 1] || "");
           if (moved.error) return { success: false, message: moved.error };
           if (String(current[QUESTION_COLLECTION_COL - 1] || "") !== moved.id_kumpulan) {
             ensureQuestionColumns(sheet);
             sheet.getRange(i + 1, QUESTION_COLLECTION_COL).setValue(moved.id_kumpulan);
-            cache.remove("questions"); cache.remove("questions_all");
+            invalidateQuestionCaches();
           }
           return { success: true, message: "Question updated", versioned: false };
         }
@@ -2208,7 +2331,7 @@ function handleUpdateQuestion(params) {
       sheet.getRange(i + 1, 1, 1, QUESTION_COLUMNS)
         .setValues([questionRowValues(id_soal, data, status, origin, collection.id_kumpulan)]);
 
-      cache.remove("questions"); cache.remove("questions_all");
+      invalidateQuestionCaches();
       return { success: true, message: "Question updated", versioned: false };
     }
   }
@@ -2283,7 +2406,7 @@ function handleImportQuestions(params) {
       sheet.getRange(startRow, 1, rowsToWrite.length, QUESTION_COLUMNS).setValues(rowsToWrite);
     }
 
-    cache.remove("questions"); cache.remove("questions_all");
+    invalidateQuestionCaches();
     return {
       success: true,
       message: added.length + " soal berhasil ditambahkan ke Bank Soal",
@@ -2376,7 +2499,7 @@ function handleMoveQuestions(params) {
     for (let p = 0; p < pending.length; p++) column[pending[p] - minRow][0] = target;
     sheet.getRange(minRow, QUESTION_COLLECTION_COL, column.length, 1).setValues(column);
 
-    cache.remove("questions"); cache.remove("questions_all");
+    invalidateQuestionCaches();
     const message = target === ""
       ? pending.length + " soal dikeluarkan dari kumpulan dan tetap tersimpan di Bank Soal."
       : pending.length + ' soal dipindahkan ke "' + targetCollection.nama_kumpulan + '".';
@@ -2409,7 +2532,7 @@ function handleDeleteQuestion(params) {
           return { success: true, message: "Soal sudah diarsipkan", archived: true };
         }
         sheet.getRange(i + 1, QUESTION_STATUS_COL).setValue(QUESTION_STATUS_ARCHIVED);
-        cache.remove("questions"); cache.remove("questions_all");
+        invalidateQuestionCaches();
         return {
           success: true,
           message: "Soal ini sudah pernah dipakai dalam ujian, jadi tetap disimpan agar rekap hasil ujian " +
@@ -2419,7 +2542,7 @@ function handleDeleteQuestion(params) {
       }
 
       sheet.deleteRow(i + 1);
-      cache.remove("questions"); cache.remove("questions_all");
+      invalidateQuestionCaches();
       return { success: true, message: "Question deleted", archived: false };
     }
   }
@@ -2728,7 +2851,7 @@ function handleUpdateQuestionCollection(params) {
       new Date().toISOString(),
       "",
     ]);
-    cache.remove("questions"); cache.remove("questions_all");
+    invalidateQuestionCaches();
     return { success: true, message: "Kumpulan soal diperbarui." };
   }
 
@@ -2738,7 +2861,7 @@ function handleUpdateQuestionCollection(params) {
   // Status kumpulan ikut menentukan soal ujian berikutnya, jadi cache soal harus
   // ikut kedaluwarsa. Attempt yang sedang berjalan tidak terpengaruh: soalnya
   // dibaca dari snapshot attempt, bukan dari Bank Soal.
-  cache.remove("questions"); cache.remove("questions_all");
+  invalidateQuestionCaches();
 
   const count = collectionQuestionCounts()[id_kumpulan] || 0;
   let message = "Kumpulan soal diperbarui.";
@@ -2942,16 +3065,14 @@ function handleUpdateConfig(params) {
     if (data[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(value);
       cache.remove("config");
-      if (key === "exam_mapel") cache.remove("questions");
-      cache.remove("questions_all");
+      invalidateQuestionCaches();
       return { success: true, message: "Config updated" };
     }
   }
 
   sheet.appendRow([key, value, ""]);
   cache.remove("config");
-  if (key === "exam_mapel") cache.remove("questions");
-  cache.remove("questions_all");
+  invalidateQuestionCaches();
   return { success: true, message: "Config added" };
 }
 
@@ -2987,8 +3108,7 @@ function writeConfigValues(values) {
   }
 
   cache.remove("config");
-  cache.remove("questions");
-  cache.remove("questions_all");
+  invalidateQuestionCaches();
   return true;
 }
 

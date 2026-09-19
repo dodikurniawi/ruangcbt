@@ -149,6 +149,71 @@ for (const n of [1, 5, 10, 20, 30, 50, 100]) {
 }
 
 // ===========================================================================
+// 2b. HOT PATH TANPA FULL-SCAN — login dan submit
+// ===========================================================================
+// Bukti bahwa beban satu siswa TIDAK tumbuh mengikuti jumlah siswa. Tanpa ini,
+// login memindai seluruh sheet Users sekali per siswa dan submit memindai
+// seluruh Bank Soal sekali per submit — tepat pada dua momen paling serentak
+// dalam satu sesi ujian (bel masuk dan bel selesai).
+{
+  const N = 40;
+  const gas = loadGas(studentsState(N), null, CACHE);
+  const users = gas.__sheets.Users;
+  const questions = gas.__sheets.Questions;
+
+  const fullBefore = users.reads;
+  for (let i = 1; i <= N; i++) {
+    const res = gas.handleLogin({ username: `siswa${i}`, password: "pw" });
+    assert.equal(res.success, true, `siswa${i} harus bisa login`);
+    assert.equal(res.data.id_siswa, `S${String(i).padStart(3, "0")}`, "login harus mengembalikan siswa yang benar");
+  }
+  const loginFullReads = users.reads - fullBefore;
+  assert.ok(
+    loginFullReads <= 2,
+    `${N} login hanya boleh memindai sheet Users paling banyak 2 kali (dapat ${loginFullReads})`,
+  );
+
+  const qBefore = questions.reads;
+  for (let i = 1; i <= N; i++) {
+    const res = gas.handleSubmitExam({ id_siswa: `S${String(i).padStart(3, "0")}`, answers: { Q1: "A" } });
+    assert.equal(res.success, true, "submit harus sukses");
+    assert.equal(res.score, "100.00", "skor tetap dihitung dari soal beku attempt");
+  }
+  const submitFullReads = questions.reads - qBefore;
+  assert.ok(
+    submitFullReads <= 1,
+    `${N} submit hanya boleh memindai Bank Soal paling banyak 1 kali (dapat ${submitFullReads})`,
+  );
+}
+
+// Indeks username hanyalah petunjuk; kebenaran login tetap dari isi baris.
+// Baris yang bergeser (siswa dihapus/diimpor setelah indeks dibangun) tidak boleh
+// membuat siswa masuk ke akun orang lain.
+{
+  const gas = loadGas(studentsState(3), null, CACHE);
+  // Login siswa2 membangun indeks username untuk seluruh sheet.
+  assert.equal(gas.handleLogin({ username: "siswa2", password: "pw" }).data.id_siswa, "S002");
+
+  // Siswa pertama dihapus: seluruh nomor baris bergeser satu ke atas, sehingga
+  // entri indeks untuk siswa3 kini menunjuk baris yang salah.
+  gas.__sheets.Users.deleteRow(2);
+  const after = gas.handleLogin({ username: "siswa3", password: "pw" });
+  assert.equal(after.success, true, "siswa tetap bisa login setelah baris bergeser");
+  assert.equal(after.data.id_siswa, "S003", "indeks basi tidak boleh mengembalikan siswa lain");
+
+  // Siswa baru yang belum ada di indeks tetap ditemukan.
+  gas.__sheets.Users.appendRow([
+    "S009", "siswabaru", "pw", "Siswa Baru", "6A", false, "", "", "", 0, "BELUM", "", "", "",
+  ]);
+  const baru = gas.handleLogin({ username: "siswabaru", password: "pw" });
+  assert.equal(baru.success, true, "siswa yang ditambah setelah indeks dibangun tetap bisa login");
+  assert.equal(baru.data.id_siswa, "S009");
+
+  // Password salah tetap ditolak walau username ada di indeks.
+  assert.equal(gas.handleLogin({ username: "siswa3", password: "salah" }).success, false);
+}
+
+// ===========================================================================
 // 3. STALE WRITE — A (lama) start, B (baru) start, B selesai, A selesai
 // ===========================================================================
 function staleScenario(revA, revB, mutateSource) {
