@@ -14,7 +14,13 @@ function makeSheet(rows) {
   let maxColumns = rows.reduce((n, r) => Math.max(n, r.length), 26);
   const sheet = {
     rows,
-    getDataRange: () => ({ getValues: () => rows }),
+    // Dihitung supaya test dapat membuktikan "sheet ini dibaca sekali", bukan
+    // sekadar "hasilnya benar".
+    reads: 0,
+    getDataRange: () => {
+      sheet.reads++;
+      return { getValues: () => rows };
+    },
     getLastRow: () => rows.length,
     getMaxColumns: () => maxColumns,
     insertColumnsAfter(after, howMany) { maxColumns = after + howMany; },
@@ -40,7 +46,9 @@ function makeSheet(rows) {
   return sheet;
 }
 
-function loadGas(sheetRows, mutateSource) {
+// options.liveCache mengganti stub cache kosong dengan cache in-memory sungguhan.
+// Default tetap kosong supaya test lama terus membaca sheet apa adanya.
+function loadGas(sheetRows, mutateSource, options) {
   const sheets = {};
   for (const name of Object.keys(sheetRows)) sheets[name] = makeSheet(sheetRows[name]);
 
@@ -65,8 +73,17 @@ function loadGas(sheetRows, mutateSource) {
     },
   };
 
+  const cacheStore = new Map();
+  const liveCache = {
+    get: (key) => (cacheStore.has(key) ? cacheStore.get(key) : null),
+    put: (key, value) => { cacheStore.set(key, value); },
+    remove: (key) => { cacheStore.delete(key); },
+  };
+  const emptyCache = { get: () => null, put: () => {}, remove: () => {} };
+  const scriptCache = options && options.liveCache ? liveCache : emptyCache;
+
   const context = {
-    CacheService: { getScriptCache: () => ({ get: () => null, put: () => {}, remove: () => {} }) },
+    CacheService: { getScriptCache: () => scriptCache },
     ContentService: {
       MimeType: { JSON: "application/json" },
       createTextOutput(text) { return { text, setMimeType() { return this; } }; },
@@ -115,6 +132,7 @@ function loadGas(sheetRows, mutateSource) {
   if (mutateSource) source = mutateSource(source);
   vm.runInContext(source, context);
   context.__sheets = sheets;
+  context.__cache = cacheStore;
   context.__driveFiles = driveFiles;
   // `const` di top-level script vm tidak menjadi properti context, jadi baca lewat eval.
   context.__eval = function (expr) { return vm.runInContext(expr, context); };

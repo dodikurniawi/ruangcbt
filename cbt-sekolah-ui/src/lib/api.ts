@@ -14,6 +14,7 @@ import type {
     SaveExamConfigInput,
     QuestionCollection
 } from '@/types';
+import { RequestTimeoutError, clientTimeoutMs, fetchWithTimeout } from '@/lib/timeouts';
 
 // Resolve proxy URL: tenant-aware when inside /s/[schoolId]/, fallback to single-tenant
 function getApiUrl(): string {
@@ -50,23 +51,37 @@ async function fetchApi<T>(
             options.body = JSON.stringify({ action, ...(body ?? {}) });
         }
 
-        const response = await fetch(url, options);
+        const response = await fetchWithTimeout(url, options, clientTimeoutMs(action));
         let data: ApiResponse<T>;
         try {
             data = await response.json();
         } catch {
+            // Badan non-JSON berarti perantara (gateway/proxy) yang menjawab, bukan
+            // aplikasi. Dibedakan dari penolakan bisnis yang selalu berbentuk JSON.
             data = {
                 success: false,
-                message: `Server returned invalid response (${response.status})`
+                message: `Server memberi respons yang tidak dikenali (${response.status}).`,
+                code: 'invalid_response',
             };
         }
 
         return data;
     } catch (error) {
-        console.error('API Error:', error);
+        // Batas waktu klien adalah jaring terakhir: server sudah punya batasnya
+        // sendiri yang lebih ketat, jadi sampai di sini artinya jawabannya memang
+        // tidak pernah datang. Pesan dipisahkan dari kegagalan jaringan biasa.
+        if (error instanceof RequestTimeoutError) {
+            return {
+                success: false,
+                message: 'Server tidak merespons tepat waktu. Periksa koneksi lalu coba lagi.',
+                code: 'timeout',
+            };
+        }
+        console.error('API Error:', action);
         return {
             success: false,
-            message: error instanceof Error ? error.message : 'Network error'
+            message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
+            code: 'network',
         };
     }
 }
@@ -103,6 +118,17 @@ export async function getConfig(): Promise<ApiResponse<ExamConfig>> {
         }
     }
     return res;
+}
+
+/**
+ * Status PIN dari satu panggilan Config. Tenant yang GAS-nya belum di-deploy ulang
+ * belum mengirim `isPinRequired`; untuk mereka jawabannya diambil dari action lama
+ * supaya aturan PIN tidak berubah sama sekali.
+ */
+export async function resolvePinRequired(config: ExamConfig | null): Promise<boolean> {
+    if (config && typeof config.isPinRequired === 'boolean') return config.isPinRequired;
+    const res = await getExamPinStatus();
+    return res.data?.isPinRequired === true;
 }
 
 export async function syncAnswers(id_siswa: string, answers: AnswersRecord): Promise<ApiResponse> {

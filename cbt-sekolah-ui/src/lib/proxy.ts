@@ -12,6 +12,7 @@ import {
 } from "./security.ts";
 import { sanitizeQuestionPayload } from "./questionSanitize.ts";
 import { GOOGLE_FORMS_TOKEN_COOKIE, GOOGLE_OAUTH_STATE_COOKIE } from "./googleOAuth.ts";
+import { RequestTimeoutError, fetchWithTimeout, gasTimeoutMs } from "./timeouts.ts";
 
 export interface ProxyTarget {
   gasUrl: string;
@@ -35,7 +36,7 @@ export async function handleProxyRequest(
 ) {
   const parsed = await parseRequest(request, method);
   if (!parsed) {
-    return NextResponse.json({ success: false, message: "Request tidak valid" }, { status: 400 });
+    return NextResponse.json({ success: false, message: "Request tidak valid", code: "bad_request" }, { status: 400 });
   }
 
   const sessionSecret = process.env.SESSION_SIGNING_SECRET;
@@ -44,7 +45,7 @@ export async function handleProxyRequest(
   const createsSession = parsed.action === "login" || parsed.action === "adminLogin";
   if (rule && (rule.role !== "public" || createsSession) && !validSessionSecret) {
     return NextResponse.json(
-      { success: false, message: "Konfigurasi session server belum lengkap" },
+      { success: false, message: "Konfigurasi session server belum lengkap", code: "server_config" },
       { status: 503 }
     );
   }
@@ -55,7 +56,8 @@ export async function handleProxyRequest(
 
   if (!decision.allowed) {
     const message = decision.status === 401 ? "Sesi diperlukan" : "Akses ditolak";
-    return NextResponse.json({ success: false, message }, { status: decision.status });
+    const code = decision.status === 401 ? "unauthenticated" : "forbidden";
+    return NextResponse.json({ success: false, message, code }, { status: decision.status });
   }
 
   if (parsed.action === "logout") {
@@ -67,11 +69,11 @@ export async function handleProxyRequest(
   let body = parsed.body;
   if (decision.rule.role === "student" && STUDENT_IDENTITY_ACTIONS.has(parsed.action)) {
     if (!session) {
-      return NextResponse.json({ success: false, message: "Sesi diperlukan" }, { status: 401 });
+      return NextResponse.json({ success: false, message: "Sesi diperlukan", code: "unauthenticated" }, { status: 401 });
     }
     const bound = bindStudentIdentity(body, session);
     if (!bound.allowed) {
-      return NextResponse.json({ success: false, message: "Identitas siswa tidak sesuai sesi" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "Identitas siswa tidak sesuai sesi", code: "forbidden" }, { status: 403 });
     }
     body = bound.body;
   }
@@ -87,7 +89,7 @@ export async function handleProxyRequest(
   // pernah tersimpan. Renderer tetap menyanitasi ulang untuk data lama.
   if (QUESTION_WRITE_ACTIONS.has(parsed.action)) {
     if (!isPlainObject(body.data)) {
-      return NextResponse.json({ success: false, message: "Data soal tidak valid" }, { status: 400 });
+      return NextResponse.json({ success: false, message: "Data soal tidak valid", code: "validation" }, { status: 400 });
     }
     body = { ...body, data: sanitizeQuestionPayload(body.data) };
   }
@@ -96,18 +98,18 @@ export async function handleProxyRequest(
   // sama dengan entri manual, sebelum GAS memvalidasinya satu per satu.
   if (parsed.action === "importQuestions") {
     if (!Array.isArray(body.questions) || !body.questions.every(isPlainObject)) {
-      return NextResponse.json({ success: false, message: "Data soal tidak valid" }, { status: 400 });
+      return NextResponse.json({ success: false, message: "Data soal tidak valid", code: "validation" }, { status: 400 });
     }
     body = { ...body, questions: body.questions.map(sanitizeQuestionPayload) };
   }
 
   const target = await resolveTarget();
   if (!target) {
-    return NextResponse.json({ success: false, message: "Sekolah tidak ditemukan" }, { status: 404 });
+    return NextResponse.json({ success: false, message: "Sekolah tidak ditemukan", code: "tenant_not_found" }, { status: 404 });
   }
   if (!isStrongSecret(target.sharedSecret)) {
     return NextResponse.json(
-      { success: false, message: "Konfigurasi keamanan sekolah belum lengkap" },
+      { success: false, message: "Konfigurasi keamanan sekolah belum lengkap", code: "tenant_config" },
       { status: 503 }
     );
   }
@@ -119,7 +121,7 @@ export async function handleProxyRequest(
     if (upstream.data.success && (parsed.action === "login" || parsed.action === "adminLogin")) {
       if (!validSessionSecret) {
         return NextResponse.json(
-          { success: false, message: "Konfigurasi session server belum lengkap" },
+          { success: false, message: "Konfigurasi session server belum lengkap", code: "server_config" },
           { status: 503 }
         );
       }
@@ -127,7 +129,7 @@ export async function handleProxyRequest(
         ? "admin"
         : String((upstream.data.data as { id_siswa?: unknown } | undefined)?.id_siswa ?? "");
       if (!subject) {
-        return NextResponse.json({ success: false, message: "Respons login tidak valid" }, { status: 502 });
+        return NextResponse.json({ success: false, message: "Respons login tidak valid", code: "upstream_invalid" }, { status: 502 });
       }
       const token = createSessionToken(
         schoolId,
@@ -149,9 +151,22 @@ export async function handleProxyRequest(
     return response;
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    console.error(`Proxy ${method} error [${schoolId}]:`, detail);
+    console.error(`Proxy ${method} ${parsed.action} error [${schoolId}]:`, detail);
+    // Timeout dibedakan dari kegagalan upstream lain supaya layar dapat menyarankan
+    // "coba lagi" alih-alih menampilkan kegagalan permanen. Detail internal (URL
+    // GAS, stack) tidak pernah ikut ke klien.
+    if (error instanceof RequestTimeoutError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Server sekolah tidak merespons tepat waktu. Silakan coba lagi.",
+          code: "upstream_timeout",
+        },
+        { status: 504 }
+      );
+    }
     return NextResponse.json(
-      { success: false, message: `Gagal terhubung ke server backend (GAS): ${detail}` },
+      { success: false, message: "Gagal terhubung ke server backend (GAS).", code: "upstream_error" },
       { status: 502 }
     );
   }
@@ -181,6 +196,9 @@ export async function callGas(
   body: Record<string, unknown>
 ): Promise<{ data: Record<string, unknown> & { success?: boolean }; status: number }> {
   const gasUrl = new URL(target.gasUrl);
+  // Anggaran waktu per action: import massal tidak boleh dipotong oleh batas
+  // yang dirancang untuk login.
+  const timeoutMs = gasTimeoutMs(action);
   let response: Response;
 
   if (method === "GET") {
@@ -191,14 +209,18 @@ export async function callGas(
       if (typeof value === "string" && value) gasUrl.searchParams.set(key, value);
     }
     gasUrl.searchParams.set("proxy_secret", target.sharedSecret);
-    response = await fetch(gasUrl, { method: "GET", cache: "no-store" });
+    response = await fetchWithTimeout(gasUrl, { method: "GET", cache: "no-store" }, timeoutMs);
   } else {
-    response = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ ...body, action, proxy_secret: target.sharedSecret }),
-      cache: "no-store",
-    });
+    response = await fetchWithTimeout(
+      gasUrl,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ ...body, action, proxy_secret: target.sharedSecret }),
+        cache: "no-store",
+      },
+      timeoutMs
+    );
   }
 
   const text = await response.text();

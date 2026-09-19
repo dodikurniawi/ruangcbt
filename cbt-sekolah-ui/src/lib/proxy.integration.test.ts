@@ -4,11 +4,14 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { NextRequest } from "next/server.js";
 import { handleProxyRequest, type ProxyTarget } from "./proxy.ts";
+import { GAS_TIMEOUT_MS } from "./timeouts.ts";
 
 const sharedSecret = "tenant-shared-secret-32-characters-minimum";
 process.env.SESSION_SIGNING_SECRET = "session-signing-secret-32-characters-minimum";
 
 let upstreamCalls = 0;
+// Dipakai skenario kegagalan: GAS yang menggantung dan GAS yang menjawab HTML.
+let upstreamMode: "normal" | "hang" | "html" = "normal";
 let lastBody: Record<string, unknown> = {};
 let lastQuery: URLSearchParams = new URLSearchParams();
 
@@ -31,6 +34,12 @@ const server = createServer(async (request, response) => {
   upstreamCalls++;
   lastBody = body;
   lastQuery = url.searchParams;
+  if (upstreamMode === "hang") return; // sengaja tidak pernah menjawab
+  if (upstreamMode === "html") {
+    response.writeHead(500, { "Content-Type": "text/html" });
+    response.end("<html><body>Google Apps Script error</body></html>");
+    return;
+  }
   const result: Record<string, unknown> = action === "adminLogin"
     ? { success: body.password === "admin-pass", message: "Login" }
     : action === "login"
@@ -288,8 +297,52 @@ try {
 
   const directGas = await fetch(target.gasUrl + "?action=getUsers");
   assert.equal(directGas.status, 401);
+
+  // ===== KONTRAK ERROR: sebab kegagalan harus dapat dibedakan =====
+
+  // Penolakan bisnis (password salah) adalah jawaban yang sah: HTTP 200, tanpa
+  // `code`, sehingga tidak pernah tertukar dengan kegagalan teknis.
+  const wrongPassword = await handleProxyRequest(
+    request("POST", "adminLogin", undefined, { password: "salah" }),
+    "POST", "tenant-a", resolveTarget
+  );
+  assert.equal(wrongPassword.status, 200);
+  const wrongBody = await wrongPassword.json();
+  assert.equal(wrongBody.success, false);
+  assert.equal(wrongBody.code, undefined, "penolakan bisnis tidak boleh diberi kode kegagalan teknis");
+
+  // Sekolah tidak ditemukan berbeda dari backend yang gagal.
+  const noTenant = await handleProxyRequest(
+    request("POST", "adminLogin", undefined, { password: "admin-pass" }),
+    "POST", "tenant-a", async () => null
+  );
+  assert.equal(noTenant.status, 404);
+  assert.equal((await noTenant.json()).code, "tenant_not_found");
+
+  // GAS menjawab HTML (deployment salah akses / halaman error Google) bukan timeout.
+  upstreamMode = "html";
+  const htmlUpstream = await handleProxyRequest(request("GET", "getConfig"), "GET", "tenant-a", resolveTarget);
+  assert.equal(htmlUpstream.status, 502);
+  const htmlBody = await htmlUpstream.json();
+  assert.equal(htmlBody.code, "upstream_error");
+  assert.equal(JSON.stringify(htmlBody).includes(target.gasUrl), false, "URL GAS tidak boleh bocor ke klien");
+  assert.equal(JSON.stringify(htmlBody).includes(sharedSecret), false, "secret tidak boleh bocor ke klien");
+  upstreamMode = "normal";
+
+  // GAS menggantung: HARUS berakhir sebagai timeout, bukan menunggu selamanya.
+  upstreamMode = "hang";
+  const startedHang = Date.now();
+  const hung = await handleProxyRequest(request("GET", "getConfig"), "GET", "tenant-a", resolveTarget);
+  const hangElapsed = Date.now() - startedHang;
+  assert.equal(hung.status, 504, "GAS menggantung wajib menghasilkan 504, bukan request abadi");
+  const hungBody = await hung.json();
+  assert.equal(hungBody.success, false);
+  assert.equal(hungBody.code, "upstream_timeout");
+  assert.ok(hangElapsed < GAS_TIMEOUT_MS + 5000, `timeout memakan ${hangElapsed}ms, di luar anggaran`);
+  assert.equal(JSON.stringify(hungBody).includes(target.gasUrl), false, "URL GAS tidak boleh bocor ke klien");
+  upstreamMode = "normal";
 } finally {
   server.close();
 }
 
-console.log("proxy integration: auth, role, IDOR, tenant, live score, logout PASS");
+console.log("proxy integration: auth, role, IDOR, tenant, live score, logout, kontrak error + timeout PASS");

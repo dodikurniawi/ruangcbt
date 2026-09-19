@@ -52,6 +52,51 @@ function getConfig() {
   return config;
 }
 
+// CacheService menolak nilai di atas ~100 KB dan melempar. Sekolah dengan ratusan
+// siswa bisa melewatinya, dan kegagalan cache tidak boleh menggagalkan permintaan
+// yang datanya sendiri sudah benar.
+const CACHE_MAX_VALUE_BYTES = 95 * 1024;
+
+function cachePutSafe(key, value, seconds) {
+  if (value.length > CACHE_MAX_VALUE_BYTES) return;
+  try {
+    cache.put(key, value, seconds);
+  } catch (error) {
+    console.warn("Cache put dilewati untuk " + key);
+  }
+}
+
+// TTL pendek: layar guru dan layar monitoring memang memanggil tiap 5 detik.
+// Yang dihilangkan cache ini bukan kesegaran data, melainkan pembacaan sheet
+// berulang ketika beberapa layar memanggil pada jendela waktu yang sama.
+const USERS_CACHE_TTL = 4;
+const USERS_CACHE_KEY = "users_list";
+const LIVE_SCORE_CACHE_KEY = "live_score";
+
+// Dipanggil setiap kali status siswa BERUBAH ARTI bagi layar pemantauan:
+// login, submit, pelanggaran, reset, dan perubahan data siswa. Autosave sengaja
+// tidak memanggilnya — yang disentuhnya hanya last_seen dan saved_answers, dan
+// TTL 4 detik sudah lebih pendek dari satu siklus polling.
+// Action yang mengubah kolom Users yang terlihat di layar guru atau papan skor.
+// syncAnswers sengaja TIDAK di sini: yang ditulisnya hanya last_seen dan
+// saved_answers, dan TTL 4 detik sudah lebih pendek dari satu siklus polling.
+const USERS_MUTATING_ACTIONS = Object.freeze({
+  login: true,
+  submitExam: true,
+  reportViolation: true,
+  resetUserLogin: true,
+  createStudent: true,
+  updateStudent: true,
+  deleteStudent: true,
+  deleteAllStudents: true,
+  importStudents: true,
+});
+
+function invalidateUsersCache() {
+  cache.remove(USERS_CACHE_KEY);
+  cache.remove(LIVE_SCORE_CACHE_KEY);
+}
+
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(
     ContentService.MimeType.JSON
@@ -242,9 +287,14 @@ function readCollections() {
 
 // id_kumpulan → status. Id yang tidak tercatat (termasuk bucket legacy yang belum
 // pernah disentuh) dibaca AKTIF supaya soal lama tidak hilang dari ujian.
-function collectionStatusMap() {
+function readQuestionRows() {
+  const sheet = getSheet("Questions");
+  return sheet ? sheet.getDataRange().getValues() : [];
+}
+
+function collectionStatusMap(collections) {
   const map = {};
-  const list = readCollections();
+  const list = collections || readCollections();
   for (let i = 0; i < list.length; i++) map[list[i].id_kumpulan] = list[i].status;
   return map;
 }
@@ -334,11 +384,13 @@ function questionFingerprint(row) {
 // urutan deterministic (nomor_urut, lalu id_soal). Satu-satunya tempat aturan
 // "soal apa yang masuk ujian" hidup — dipakai snapshot attempt maupun jumlah soal
 // yang ditampilkan ke guru, jadi angka yang dilihat guru = soal yang diterima siswa.
-function collectExamQuestionRows(exam_mapel, collectionIds) {
+// questionRows dan collectionStatus boleh dioper pemanggil yang SUDAH membaca
+// kedua sheet itu, supaya satu permintaan tidak membaca sheet yang sama dua kali.
+// Tanpa argumen, perilakunya persis seperti sebelumnya.
+function collectExamQuestionRows(exam_mapel, collectionIds, questionRows, collectionStatus) {
   const mapel = String(exam_mapel || "");
-  const sheet = getSheet("Questions");
-  const rows = sheet ? sheet.getDataRange().getValues() : [];
-  const statusMap = collectionStatusMap();
+  const rows = questionRows || readQuestionRows();
+  const statusMap = collectionStatus || collectionStatusMap();
   // Daftar pilihan kosong = seluruh kumpulan aktif pada mapel ini.
   const wanted = {};
   const ids = collectionIds || [];
@@ -1058,6 +1110,12 @@ function doPost(e) {
         result = { success: false, message: "Unknown action: " + action };
     }
 
+    // Satu tempat invalidasi untuk seluruh penulis sheet Users. Dipasang di router,
+    // bukan di tiap handler, supaya cabang return baru tidak bisa lupa memanggilnya.
+    if (result && result.success && USERS_MUTATING_ACTIONS[action]) {
+      invalidateUsersCache();
+    }
+
     return createJsonResponse(result);
   } catch (error) {
     console.error("doPost failed", error);
@@ -1088,6 +1146,10 @@ function handleGetConfig() {
     exam_status: asConfigText(config.exam_status) || "OPEN",
     exam_mapel: asConfigText(config.exam_mapel),
     kkm: resolveKkm(config),
+    // Turunan, bukan PIN-nya: layar masuk ujian hanya perlu tahu "diminta atau
+    // tidak". Nilai exam_pin sendiri tidak pernah ikut keluar dari server, sama
+    // seperti admin_password dan live_score_pin yang juga tidak ada di allowlist.
+    isPinRequired: String(config.exam_pin || "").trim() !== "",
   };
   return { success: true, data: safeConfig };
 }
@@ -1195,6 +1257,9 @@ function handleGetQuestions(skipMapelFilter, id_siswa) {
 }
 
 function handleGetLiveScore() {
+  const cached = cache.get(LIVE_SCORE_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
   const sheet = getSheet("Users");
   const data = sheet.getDataRange().getValues();
   const scores = [];
@@ -1233,14 +1298,19 @@ function handleGetLiveScore() {
 
   scores.forEach(function(item, index) { item.rank = index + 1; });
 
-  return {
+  const result = {
     success: true,
     data: scores,
     stats: { total: totalUsers, sedang, selesai, diskualifikasi, belum },
   };
+  cachePutSafe(LIVE_SCORE_CACHE_KEY, JSON.stringify(result), USERS_CACHE_TTL);
+  return result;
 }
 
 function handleGetUsers(params) {
+  const cached = cache.get(USERS_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
   const sheet = getSheet("Users");
   const data = sheet.getDataRange().getValues();
   const users = [];
@@ -1272,7 +1342,9 @@ function handleGetUsers(params) {
     });
   }
 
-  return { success: true, data: users };
+  const result = { success: true, data: users };
+  cachePutSafe(USERS_CACHE_KEY, JSON.stringify(result), USERS_CACHE_TTL);
+  return result;
 }
 
 // ===== ANALISIS HASIL BELAJAR — STATISTIK DETERMINISTIC =====
@@ -2752,14 +2824,16 @@ function handleUpdateConfig(params) {
     if (data[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(value);
       cache.remove("config");
-      if (key === "exam_mapel") cache.remove("questions"); cache.remove("questions_all");
+      if (key === "exam_mapel") cache.remove("questions");
+      cache.remove("questions_all");
       return { success: true, message: "Config updated" };
     }
   }
 
   sheet.appendRow([key, value, ""]);
   cache.remove("config");
-  if (key === "exam_mapel") cache.remove("questions"); cache.remove("questions_all");
+  if (key === "exam_mapel") cache.remove("questions");
+  cache.remove("questions_all");
   return { success: true, message: "Config added" };
 }
 
@@ -2805,9 +2879,12 @@ function writeConfigValues(values) {
 // tanpa memuat seluruh Bank Soal.
 function handleGetExamSummary() {
   const config = getConfig();
-  const sheet = getSheet("Questions");
-  const rows = sheet ? sheet.getDataRange().getValues() : [];
-  const statusMap = collectionStatusMap();
+  // Satu kali baca Questions dan satu kali baca KumpulanSoal untuk SELURUH angka
+  // di layar guru. Sebelumnya kedua sheet itu dibaca ulang oleh helper di bawah,
+  // jadi satu permintaan menghasilkan lima pembacaan sheet.
+  const rows = readQuestionRows();
+  const collections = readCollections();
+  const statusMap = collectionStatusMap(collections);
   const counts = {};
   // Jumlah soal per kumpulan, per mapel, dan gabungan mapel dihitung dari satu
   // kali baca Questions — layar guru tidak perlu memuat seluruh Bank Soal.
@@ -2835,18 +2912,18 @@ function handleGetExamSummary() {
       exam_duration: parseInt(config.exam_duration, 10) || 90,
       exam_status: config.exam_status || "OPEN",
       question_counts: counts,
-      question_count: collectExamQuestionRows(exam_mapel, exam_kumpulan).length,
+      question_count: collectExamQuestionRows(exam_mapel, exam_kumpulan, rows, statusMap).length,
       exam_kumpulan: exam_kumpulan,
-      collections: collectionListPayload(collection_counts),
+      collections: collectionListPayload(collection_counts, collections),
     },
   };
 }
 
 // Daftar kumpulan untuk layar guru. Bucket legacy hanya muncul bila memang ada
 // soal yang belum dikelompokkan.
-function collectionListPayload(counts) {
+function collectionListPayload(counts, collections) {
   const questionCounts = counts || collectionQuestionCounts();
-  const list = readCollections();
+  const list = collections || readCollections();
   const payload = [];
   let legacyListed = false;
   for (let i = 0; i < list.length; i++) {

@@ -17,6 +17,10 @@ export interface ExamConfig {
     exam_mapel?: string; // id_mapel yang diujikan, kosong = semua mapel
     exam_kumpulan?: string; // daftar id kumpulan dipisah koma, kosong = semua yang aktif
     kkm?: number; // handleGetConfig resolve Config.kkm; fallback 70
+    // Turunan aman dari Config.exam_pin: hanya "PIN dibutuhkan atau tidak",
+    // PIN-nya sendiri tidak pernah meninggalkan server. Opsional karena tenant
+    // yang GAS-nya belum di-deploy ulang belum mengirimkannya.
+    isPinRequired?: boolean;
 }
 
 /** Ringkasan layar "Adakan Ujian": konfigurasi aktif + jumlah soal aktif per mapel. */
@@ -276,6 +280,12 @@ export interface LiveScoreStats {
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message?: string;
+    // Sebab kegagalan yang dapat dibaca program. Penolakan bisnis dari GAS tidak
+    // memakainya, jadi kehadiran `code` berarti kegagalan teknis (timeout,
+    // jaringan, tenant, konfigurasi), bukan jawaban "tidak" dari aturan ujian.
+    code?: 'timeout' | 'network' | 'invalid_response' | 'upstream_timeout'
+        | 'upstream_error' | 'upstream_invalid' | 'tenant_not_found' | 'tenant_config'
+        | 'server_config' | 'unauthenticated' | 'forbidden' | 'validation' | 'bad_request';
     data?: T;
     stats?: LiveScoreStats;
     score?: string;

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "
 import { useTenantRouter } from "@/hooks/useTenantRouter";
 import { useExamStore } from "@/store/examStore";
 import {
-  getQuestions, getConfig, getExamStatus, getExamPinStatus,
+  getQuestions, getConfig, resolvePinRequired,
   syncAnswers, submitExam, reportViolation,
 } from "@/lib/api";
 import { useExamSecurity } from "@/hooks/useExamSecurity";
@@ -169,20 +169,22 @@ export default function ExamPage() {
         return;
       }
 
-      const statusRes = await getExamStatus();
-      if (statusRes.data?.exam_status === "CLOSED") {
+      // Satu panggilan Config melayani ketiga keputusan masuk ujian: status ujian,
+      // kebutuhan PIN, dan parameter ujian. Sebelumnya tiga round-trip berurutan
+      // untuk objek Config yang sama.
+      const cfgRes = await getConfig();
+      const cfg = cfgRes.success && cfgRes.data ? cfgRes.data : null;
+
+      if (cfg?.exam_status === "CLOSED") {
         router.replace("/student-status");
         return;
       }
 
-      const pinRes = await getExamPinStatus();
-      if (pinRes.data?.isPinRequired && !sessionStorage.getItem("pin_verified")) {
+      if (await resolvePinRequired(cfg) && !sessionStorage.getItem("pin_verified")) {
         router.replace("/pin-verification");
         return;
       }
 
-      const cfgRes = await getConfig();
-      const cfg = cfgRes.success && cfgRes.data ? cfgRes.data : null;
       // Durasi beku milik attempt menang atas Config: admin yang mengubah durasi
       // di tengah ujian tidak boleh menggeser deadline siswa yang sudah mulai.
       // Config hanya dipakai bila attempt belum membawa durasinya sendiri.
@@ -221,7 +223,13 @@ export default function ExamPage() {
       setIsLoading(false);
     };
 
-    init();
+    // Kegagalan tak terduga tidak boleh meninggalkan layar pada "Memuat soal
+    // ujian..." selamanya: setiap jalur keluar wajib berakhir dengan pesan atau
+    // perpindahan halaman.
+    init().catch(() => {
+      setLoadError("Gagal menyiapkan ujian. Periksa koneksi lalu muat ulang halaman.");
+      setIsLoading(false);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
