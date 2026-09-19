@@ -1,0 +1,10 @@
+{
+  "/admin/login/page": "app/admin/login/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/api/[schoolId]/proxy/route": "app/api/[schoolId]/proxy/route.js",
+  "/api/health/route": "app/api/health/route.js",
+  "/api/proxy/route": "app/api/proxy/route.js",
+  "/exam/page": "app/exam/page.js",
+  "/login/page": "app/login/page.js",
+  "/pin-verification/page": "app/pin-verification/page.js"
+}

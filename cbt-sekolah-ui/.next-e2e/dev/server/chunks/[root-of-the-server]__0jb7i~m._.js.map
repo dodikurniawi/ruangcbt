@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 40, "column": 0}, "map": {"version":3,"sources":["file:///D:/Projects/Webappscript/ruangcbt/cbt-sekolah-ui/src/app/api/health/route.ts"],"sourcesContent":["export async function GET() {\n  return Response.json({ status: 'ok', timestamp: new Date().toISOString() });\n}\n"],"names":["GET","Response","json","status","timestamp","Date","toISOString"],"mappings":";;;;AAAO,eAAeA;IACpB,OAAOC,SAASC,IAAI,CAAC;QAAEC,QAAQ;QAAMC,WAAW,IAAIC,OAAOC,WAAW;IAAG;AAC3E"}}]
+}
