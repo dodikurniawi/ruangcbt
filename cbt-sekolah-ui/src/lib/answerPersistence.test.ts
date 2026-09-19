@@ -211,8 +211,12 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   assert.equal(second.status, "SELESAI");
   assert.equal(appended.Responses?.length, 1, "TIDAK boleh ada baris Responses kedua");
 
-  // GAP B: submit mengambil lock
-  assert.ok(lockCount() >= 2, "setiap submit harus mengambil ScriptLock");
+  // GAP B: submit yang benar-benar menulis mengambil lock. Retry duplikat
+  // sengaja dijawab TANPA lock: statusnya sudah final (SELESAI/DISKUALIFIKASI
+  // tidak pernah kembali sendiri), jadi memaksanya mengantre hanya membuat badai
+  // retry ikut memblokir submit siswa lain. Penjaga "sudah submit?" tetap
+  // diperiksa ulang di dalam lock sebelum menulis.
+  assert.ok(lockCount() >= 1, "submit yang menulis harus mengambil ScriptLock");
 }
 
 // --- Retry tidak boleh mengubah skor walau jawaban yang dikirim berbeda ---

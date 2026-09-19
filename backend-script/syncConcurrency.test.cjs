@@ -72,15 +72,17 @@ function concurrentSync(n, mutateSource) {
   }
 
   const usersOps = gas.__ops ? null : null;
+  const users = gas.__sheets.Users;
   return {
     n, total: results.length, success, busy,
     failure: results.length - success - busy,
     corrupt, lost,
+    fullReads: users.reads, rowReads: users.rangeReads,
   };
 }
 
 const concurrency = {};
-for (const n of [1, 5, 10, 20]) {
+for (const n of [1, 5, 10, 20, 30, 50, 100]) {
   const r = concurrentSync(n);
   concurrency[n] = r;
   assert.equal(r.total, n, `n=${n}: semua request harus dicoba`);
@@ -89,6 +91,32 @@ for (const n of [1, 5, 10, 20]) {
   assert.equal(r.failure, 0, `n=${n}: tidak boleh ada kegagalan lain`);
   assert.equal(r.corrupt, 0, `n=${n}: jawaban siswa tidak boleh masuk baris siswa lain`);
   assert.equal(r.lost, 0, `n=${n}: tidak boleh ada jawaban yang hilang`);
+}
+
+// Autosave tidak boleh memindai seluruh sheet Users. Kalau ia memindai, beban
+// tiap siswa ikut tumbuh mengikuti jumlah siswa — justru pada saat semua siswa
+// sedang ujian bersamaan.
+{
+  const gas = loadGas(studentsState(20), null, CACHE);
+  for (let i = 1; i <= 20; i++) gas.handleLogin({ username: `siswa${i}`, password: "pw" });
+  const users = gas.__sheets.Users;
+  const fullBefore = users.reads;
+  for (let cycle = 0; cycle < 3; cycle++) {
+    for (let i = 1; i <= 20; i++) {
+      gas.handleSyncAnswers({
+        id_siswa: `S${String(i).padStart(3, "0")}`,
+        answers: { Q1: "A", cycle: cycle },
+        rev: Date.now() + cycle * 1000 + i,
+      });
+    }
+  }
+  const fullReads = users.reads - fullBefore;
+  assert.equal(fullReads, 0, `60 autosave tidak boleh memindai seluruh sheet (dapat ${fullReads} kali)`);
+  // Jawaban tetap tersimpan benar di baris masing-masing.
+  for (let i = 1; i <= 20; i++) {
+    const saved = JSON.parse(users.rows[i][13]);
+    assert.equal(saved.milik === undefined ? saved.cycle : saved.cycle, 2, `siswa ${i}: siklus terakhir tersimpan`);
+  }
 }
 
 // ===========================================================================
@@ -293,14 +321,32 @@ function mutate(find, replaceWith, label) {
 
 const mutations = [
   {
+    label: "autosave kembali memindai seluruh sheet Users",
+    apply: mutate(
+      "  var found = readUserRow(sheet, id_siswa);",
+      "  var __all = sheet.getDataRange().getValues();\n  var __i = findUserRowIndex(__all, id_siswa);\n  var found = __i === -1 ? null : { rowNumber: __i + 1, values: __all[__i] };",
+      "FULLSCAN",
+    ),
+    run: (apply) => {
+      const gas = loadGas(studentsState(5), apply, CACHE);
+      for (let i = 1; i <= 5; i++) gas.handleLogin({ username: `siswa${i}`, password: "pw" });
+      const users = gas.__sheets.Users;
+      const before = users.reads;
+      for (let i = 1; i <= 5; i++) {
+        gas.handleSyncAnswers({ id_siswa: `S00${i}`, answers: { Q1: "A" }, rev: Date.now() + i });
+      }
+      return users.reads - before === 0;
+    },
+  },
+  {
     label: "ScriptLock dikembalikan ke syncAnswers",
     apply: mutate(
       "  var sheet = getSheet(\"Users\");\n  var data = sheet.getDataRange().getValues();\n\n  for (var i = 1; i < data.length; i++) {\n    if (data[i][0] === id_siswa) {",
       "  var __lock = LockService.getScriptLock();\n  if (!__lock.tryLock(5000)) return { success: false, message: \"Server busy, retry later\" };\n  var sheet = getSheet(\"Users\");\n  var data = sheet.getDataRange().getValues();\n\n  for (var i = 1; i < data.length; i++) {\n    if (data[i][0] === id_siswa) {",
       "LOCK",
     ),
-    run: () => {
-      const r = concurrentSync(10, mutations[0].apply);
+    run: (apply) => {
+      const r = concurrentSync(10, apply);
       return r.success === 10;   // masih 10 = test tidak mendeteksi lock
     },
   },
@@ -311,7 +357,7 @@ const mutations = [
       "        if (false) {",
       "STALE",
     ),
-    run: () => staleScenario(100, 105, mutations[1].apply).final === "BARU",
+    run: (apply) => staleScenario(100, 105, apply).final === "BARU",
   },
   {
     label: "revisi tidak pernah disimpan",
@@ -320,7 +366,7 @@ const mutations = [
       "      if (false) cache.put(revKey, String(incomingRev), 3600);",
       "REVSTORE",
     ),
-    run: () => staleScenario(100, 105, mutations[2].apply).final === "BARU",
+    run: (apply) => staleScenario(100, 105, apply).final === "BARU",
   },
   {
     label: "guard revisi mendahului aturan submit",
@@ -329,10 +375,10 @@ const mutations = [
       "      if (false) {\n        return { success: false, message: \"already_submitted\" };\n      }",
       "SUBMITGUARD",
     ),
-    run: () => {
+    run: (apply) => {
       const state = studentsState(1);
       state.Users[1][10] = "SELESAI";
-      const gas = loadGas(state, mutations[3].apply, CACHE);
+      const gas = loadGas(state, apply, CACHE);
       return gas.handleSyncAnswers({ id_siswa: "S001", answers: { Q1: "x" }, rev: 1 }).message === "already_submitted";
     },
   },
@@ -340,11 +386,12 @@ const mutations = [
 
 for (const m of mutations) {
   let survived = false;
-  try { survived = m.run() === true; } catch { survived = false; }
+  try { survived = m.run(m.apply) === true; } catch { survived = false; }
   assert.equal(survived, false, `mutation "${m.label}" LOLOS — test tidak mendeteksi regresi`);
   console.log("  KILLED ", m.label);
 }
 
 console.log(
-  "syncConcurrency: concurrency 1/5/10/20, isolasi row, stale-write, submit race, boundary + 4 mutation PASS",
+  "syncConcurrency: concurrency 1/5/10/20/30/50/100, autosave tanpa full-scan, isolasi row, "
+  + "stale-write, submit race, boundary + 5 mutation PASS",
 );

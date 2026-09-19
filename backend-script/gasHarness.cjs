@@ -20,6 +20,7 @@ function makeSheet(rows) {
     // Dihitung supaya test dapat membuktikan "sheet ini dibaca sekali" dan
     // "ditulis satu kali secara batch", bukan sekadar "hasilnya benar".
     reads: 0,
+    rangeReads: 0,
     appendRows: 0,
     setValueCalls: 0,
     setValuesCalls: 0,
@@ -44,6 +45,28 @@ function makeSheet(rows) {
     deleteRow(rowNumber) { rows.splice(rowNumber - 1, 1); },
     getRange(row, col, numRows, numCols) {
       return {
+        // Sheets bisa membaca satu range kecil, bukan hanya seluruh sheet. Tanpa
+        // ini, kode yang membaca satu baris selalu melempar di test dan diam-diam
+        // jatuh ke pemindaian penuh — optimasinya tidak pernah teruji.
+        getValues() {
+          const nr = numRows || 1;
+          const nc = numCols || 1;
+          if (row < 1 || col < 1 || row + nr - 1 > maxRows || col + nc - 1 > maxColumns) {
+            throw new Error(
+              "The coordinates or dimensions of the range are invalid. " +
+              `(baris ${row}..${row + nr - 1}, kolom ${col}..${col + nc - 1})`,
+            );
+          }
+          sheet.rangeReads++;
+          const out = [];
+          for (let r = 0; r < nr; r++) {
+            const source = rows[row - 1 + r] || [];
+            const line = [];
+            for (let c = 0; c < nc; c++) line.push(source[col - 1 + c]);
+            out.push(line);
+          }
+          return out;
+        },
         setValue(value) {
           sheet.setValueCalls++;
           while (rows[row - 1].length < col) rows[row - 1].push("");

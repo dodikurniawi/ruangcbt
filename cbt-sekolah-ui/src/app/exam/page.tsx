@@ -178,6 +178,16 @@ export default function ExamPage() {
       // Satu panggilan Config melayani ketiga keputusan masuk ujian: status ujian,
       // kebutuhan PIN, dan parameter ujian. Sebelumnya tiga round-trip berurutan
       // untuk objek Config yang sama.
+      //
+      // Soal diminta BERSAMAAN dengan Config, bukan sesudahnya: keduanya tidak
+      // saling bergantung, jadi menunggu berurutan hanya menambah satu perjalanan
+      // jaringan penuh sebelum soal pertama muncul. Bila ternyata halaman ini
+      // harus mengalihkan siswa (ujian ditutup / PIN belum diverifikasi),
+      // permintaan soal yang terlanjur berjalan hanya dibuang — ia tidak
+      // mengubah apa pun di server.
+      const questionsPromise = questions.length === 0 ? getQuestions() : null;
+      if (questionsPromise) questionsPromise.catch(() => {});
+
       const cfgRes = await getConfig();
       const cfg = cfgRes.success && cfgRes.data ? cfgRes.data : null;
 
@@ -209,8 +219,8 @@ export default function ExamPage() {
         setMaxViolations(cfg.max_violations ?? 3);
       }
 
-      if (questions.length === 0) {
-        const qRes = await getQuestions();
+      if (questionsPromise) {
+        const qRes = await questionsPromise;
         if (qRes.success && qRes.data) {
           setQuestions(qRes.data);
           setIsExamStarted(true);

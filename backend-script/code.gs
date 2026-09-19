@@ -5,6 +5,9 @@
 
 // ===== CONFIGURATION =====
 const CACHE_DURATION = 60; // seconds
+// Soal satu attempt tidak berubah sepanjang attempt itu (exam_id = sidik jari isi),
+// jadi tidak ada gunanya membangunnya ulang tiap menit.
+const BOUND_QUESTIONS_TTL = 3600;
 const cache = CacheService.getScriptCache();
 const PROXY_SECRET_PROPERTY = "SHARED_SECRET";
 
@@ -471,6 +474,41 @@ function parseExamBinding(userRow) {
   };
 }
 
+// Autosave, pelanggaran, dan submit hanya butuh SATU baris siswa, bukan seluruh
+// sheet. Nomor barisnya di-cache dari pembacaan sebelumnya sehingga jalur panas
+// cukup membaca satu range kecil. Cache yang meleset (baris bergeser karena
+// hapus/impor siswa) tidak pernah mengembalikan baris orang lain: id pada kolom 1
+// selalu diverifikasi, dan bila tidak cocok pemindaian penuh mengambil alih lalu
+// memperbarui cache. Jadi tidak ada invalidasi yang bisa terlupa.
+const USER_ROW_CACHE_TTL = 21600;   // satu sesi ujian
+const USER_COLUMNS = 16;            // sampai USER_PHOTO_COL
+
+function userRowCacheKey(id_siswa) {
+  return "userrow_" + id_siswa;
+}
+
+function readUserRow(sheet, id_siswa) {
+  if (!sheet || !id_siswa) return null;
+
+  const cachedRow = Number(cache.get(userRowCacheKey(id_siswa)));
+  if (isFinite(cachedRow) && cachedRow > 1) {
+    try {
+      const values = sheet.getRange(cachedRow, 1, 1, USER_COLUMNS).getValues()[0];
+      if (values && String(values[0]) === String(id_siswa)) {
+        return { rowNumber: cachedRow, values: values };
+      }
+    } catch (err) {
+      // Baris di luar grid (siswa dihapus): pemindaian penuh di bawah.
+    }
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const index = findUserRowIndex(data, id_siswa);
+  if (index === -1) return null;
+  cache.put(userRowCacheKey(id_siswa), String(index + 1), USER_ROW_CACHE_TTL);
+  return { rowNumber: index + 1, values: data[index] };
+}
+
 function findUserRowIndex(usersData, id_siswa) {
   if (!id_siswa) return -1;
   for (let i = 1; i < usersData.length; i++) {
@@ -481,10 +519,8 @@ function findUserRowIndex(usersData, id_siswa) {
 
 function getAttemptBinding(id_siswa) {
   const sheet = getSheet("Users");
-  if (!sheet || !id_siswa) return null;
-  const data = sheet.getDataRange().getValues();
-  const index = findUserRowIndex(data, id_siswa);
-  return index === -1 ? null : parseExamBinding(data[index]);
+  const found = readUserRow(sheet, id_siswa);
+  return found ? parseExamBinding(found.values) : null;
 }
 
 // Soal yang dibekukan sebuah attempt diambil apa adanya berdasarkan id — termasuk
@@ -1259,7 +1295,11 @@ function handleGetQuestions(skipMapelFilter, id_siswa) {
   if (!binding) questions.sort(function(a, b) { return a.nomor_urut - b.nomor_urut; });
 
   const result = { success: true, data: questions };
-  cache.put(cacheKey, JSON.stringify(result), CACHE_DURATION);
+  // Soal milik satu attempt dibekukan oleh exam_id (sidik jari isi), jadi entri
+  // cache-nya tidak pernah bisa basi terhadap attempt itu. TTL 60 detik hanya
+  // membuat seluruh siswa membaca ulang Users+MataPelajaran+Questions tiap menit
+  // tanpa alasan. Bank Soal admin dan attempt tanpa binding tetap 60 detik.
+  cache.put(cacheKey, JSON.stringify(result), binding ? BOUND_QUESTIONS_TTL : CACHE_DURATION);
   return result;
 }
 
@@ -1554,6 +1594,10 @@ function handleLogin(params) {
         return { success: false, message: "Akun sudah login di perangkat lain." };
       }
 
+      // Nomor baris siswa dicatat sekali di sini. Seluruh autosave, pelanggaran,
+      // dan submit setelahnya cukup membaca satu baris, bukan seluruh sheet.
+      cache.put(userRowCacheKey(row[0]), String(i + 1), USER_ROW_CACHE_TTL);
+
       // Re-entry memakai attempt yang sama: waktu_mulai, saved_answers, dan binding
       // tidak pernah ditulis ulang, jadi login kembali tidak memperpanjang waktu.
       const waktuMulai = row[6] || new Date();
@@ -1609,21 +1653,26 @@ function handleSyncAnswers(params) {
   // state antar siswa berbeda, sehingga concurrent syncAnswers dari 10 siswa pun
   // tidak pernah menyentuh row yang sama. Submit-race ditangani oleh guard
   // "already_submitted" di bawah, bukan oleh lock.
+  //
+  // Hanya satu baris yang dibaca: autosave adalah jalur terpanas di seluruh sistem
+  // (tiap siswa, tiap kali jawabannya berubah), dan memindai seluruh sheet Users
+  // untuk satu baris membuat beban tumbuh kuadratik terhadap jumlah siswa.
   var sheet = getSheet("Users");
-  var data = sheet.getDataRange().getValues();
+  var found = readUserRow(sheet, id_siswa);
 
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === id_siswa) {
+  if (found) {
+    var userRow = found.values;
+    {
       // ponytail: server-side guard — reject sync after submit to close autosave race
-      var status = data[i][10] || "BELUM";
+      var status = userRow[10] || "BELUM";
       if (status === "SELESAI" || status === "DISKUALIFIKASI") {
         return { success: false, message: "already_submitted" };
       }
       // Deadline attempt memakai durasi beku; Config yang berubah di tengah ujian
       // tidak boleh memutus autosave siswa yang sedang berjalan.
-      var syncBinding = parseExamBinding(data[i]);
+      var syncBinding = parseExamBinding(userRow);
       var syncDuration = syncBinding ? syncBinding.exam_duration : getConfig().exam_duration;
-      if (isExamDeadlinePassed(data[i][6], syncDuration)) {
+      if (isExamDeadlinePassed(userRow[6], syncDuration)) {
         return { success: false, message: "deadline_expired" };
       }
       // Stale-write guard. Tanpa ScriptLock, autosave yang berangkat lebih dulu
@@ -1644,8 +1693,11 @@ function handleSyncAnswers(params) {
       var serialized = JSON.stringify(answers);
       cache.put("answers_" + id_siswa, serialized, 3600);
       if (hasRev) cache.put(revKey, String(incomingRev), 3600);
-      sheet.getRange(i + 1, 12).setValue(new Date());  // last_seen
-      sheet.getRange(i + 1, 14).setValue(serialized);  // saved_answers (col N)
+      // Sengaja DUA tulisan terpisah, bukan satu range 12..14: kolom 13
+      // (mapel_diujikan) milik submit. Menulisnya ulang dengan nilai dari snapshot
+      // baris yang sudah lawas akan menimpa tulisan submit yang lebih baru.
+      sheet.getRange(found.rowNumber, 12).setValue(new Date());   // last_seen
+      sheet.getRange(found.rowNumber, 14).setValue(serialized);   // saved_answers
       return { success: true, message: "Synced" };
     }
   }
@@ -1821,62 +1873,58 @@ function scoreExam(questionRows, answers, examMapel, frozen) {
   };
 }
 
+// Submit dipecah dua: PERSIAPAN (baca + penilaian) di luar lock, PENULISAN di
+// dalam lock. Penilaian tidak mengubah apa pun — memegang lock global selama
+// membaca Bank Soal dan menghitung skor membuat setiap siswa lain yang submit
+// pada saat bersamaan ikut mengantre di belakangnya. Yang benar-benar harus
+// atomic hanyalah "cek sudah submit? lalu tulis", dan itulah yang dipagari.
 function handleSubmitExam(params) {
-  // Lock dipegang selama seluruh submit agar autosave (yang juga mengunci) tidak
-  // berselang-seling, dan agar dua submit bersamaan tidak sama-sama lolos penjaga.
+  const prepared = prepareSubmit(params);
+  if (prepared.response) return prepared.response;
+
   var submitLock = LockService.getScriptLock();
   if (!submitLock.tryLock(10000)) {
     return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
   }
   try {
-    return submitExamLocked(params);
+    return commitSubmit(prepared);
   } finally {
     submitLock.releaseLock();
   }
 }
 
+// Satu pintu tanpa lock, dipakai test dan pemanggil lama.
 function submitExamLocked(params) {
+  const prepared = prepareSubmit(params);
+  if (prepared.response) return prepared.response;
+  return commitSubmit(prepared);
+}
+
+function prepareSubmit(params) {
   const { id_siswa, answers, forced } = params;
 
-  // Satu read saja untuk idempotency check, binding, dan write data.
   const sheet = getSheet("Users");
-  const data = sheet.getDataRange().getValues();
+  const found = readUserRow(sheet, id_siswa);
+  const userRow = found ? found.values : null;
 
   // Idempotency: kalau siswa sudah pernah submit, kembalikan hasil yang tersimpan
   // tanpa menghitung ulang dan tanpa menambah baris Responses. Ini menutup retry
   // setelah browser timeout padahal server sebenarnya sudah sukses.
-  for (let g = 1; g < data.length; g++) {
-    if (data[g][0] === id_siswa) {
-      const prevStatus = data[g][10];
-      if (prevStatus === "SELESAI" || prevStatus === "DISKUALIFIKASI") {
-        const prevScore = data[g][8];
-        return {
-          success: true,
-          score: (prevScore === "" || prevScore === null || prevScore === undefined)
-            ? "0.00"
-            : Number(prevScore).toFixed(2),
-          status: prevStatus,
-          duplicate: true,
-        };
-      }
-      break;
-    }
-  }
+  const duplicate = duplicateSubmitResponse(userRow);
+  if (duplicate) return { response: duplicate };
 
   // Seluruh parameter penilaian diambil dari binding attempt. Config hanya dipakai
   // untuk attempt lama yang belum punya binding.
-  const guardIndex = findUserRowIndex(data, id_siswa);
-  const binding = guardIndex === -1 ? null : parseExamBinding(data[guardIndex]);
+  const binding = userRow ? parseExamBinding(userRow) : null;
   const config = getConfig();
   const exam_mapel = binding ? binding.exam_mapel : (config.exam_mapel || "");
   const exam_id = binding ? binding.exam_id : "";
   const examDuration = binding ? binding.exam_duration : Number(config.exam_duration);
-  const authoritativeStart = guardIndex === -1 ? null : data[guardIndex][6];
+  const authoritativeStart = userRow ? userRow[6] : null;
   const deadlineMs = getExamDeadlineMs(authoritativeStart, examDuration);
   if (deadlineMs === null) {
-    return { success: false, message: "Waktu mulai ujian tidak valid" };
+    return { response: { success: false, message: "Waktu mulai ujian tidak valid" } };
   }
-  const isLate = Date.now() >= deadlineMs;
 
   const submittedAnswers = isPlainQuestionObject(answers) ? answers : {};
   // Soal yang dinilai adalah soal yang dibekukan saat attempt dimulai, bukan Bank
@@ -1885,29 +1933,66 @@ function submitExamLocked(params) {
   const scoring = binding
     ? scoreExam([null].concat(resolveBoundQuestionRows(binding)), submittedAnswers, "", true)
     : scoreExam(getSheet("Questions").getDataRange().getValues(), submittedAnswers, exam_mapel);
-  const finalScore = scoring.finalScore;
 
-  // Cari row siswa dari data yang sudah dibaca
+  return {
+    sheet: sheet, id_siswa: id_siswa, forced: forced,
+    submittedAnswers: submittedAnswers,
+    finalScore: scoring.finalScore,
+    exam_mapel: exam_mapel, exam_id: exam_id,
+    isLate: Date.now() >= deadlineMs,
+  };
+}
+
+function duplicateSubmitResponse(userRow) {
+  if (!userRow) return null;
+  const prevStatus = userRow[10];
+  if (prevStatus !== "SELESAI" && prevStatus !== "DISKUALIFIKASI") return null;
+  const prevScore = userRow[8];
+  return {
+    success: true,
+    score: (prevScore === "" || prevScore === null || prevScore === undefined)
+      ? "0.00"
+      : Number(prevScore).toFixed(2),
+    status: prevStatus,
+    duplicate: true,
+  };
+}
+
+function commitSubmit(prepared) {
+  const sheet = prepared.sheet;
+  const id_siswa = prepared.id_siswa;
+  const forced = prepared.forced;
+  const exam_mapel = prepared.exam_mapel;
+  const finalScore = prepared.finalScore;
+  const submittedAnswers = prepared.submittedAnswers;
+  const exam_id = prepared.exam_id;
+  const isLate = prepared.isLate;
+
+  // Dibaca ULANG di dalam lock: antara penilaian dan penulisan, submit lain
+  // (mis. auto-submit karena pelanggaran) bisa saja sudah menyelesaikan siswa ini.
+  const found = readUserRow(sheet, id_siswa);
+  const duplicate = duplicateSubmitResponse(found ? found.values : null);
+  if (duplicate) return duplicate;
+
   let userName = "", userClass = "", waktuMulai = null, violationLog = "";
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === id_siswa) {
-      userName = data[i][3];
-      userClass = data[i][4];
-      waktuMulai = data[i][6];
-      violationLog = "Tab switch/violations: " + (data[i][9] || 0) + "x";
+  if (found) {
+    const row = found.values;
+    userName = row[3];
+    userClass = row[4];
+    waktuMulai = row[6];
+    violationLog = "Tab switch/violations: " + (row[9] || 0) + "x";
 
-      // Batch write kolom 6–9 dalam satu operasi Sheets (range kontinu):
-      //   col 6 = status_login (false)
-      //   col 7 = waktu_mulai — tidak diubah, ditulis ulang nilai yang sudah ada
-      //   col 8 = waktu_selesai (now)
-      //   col 9 = skor_akhir
-      // ponytail: col 7 ditulis ulang agar range tetap kontinu; nilainya identik.
-      sheet.getRange(i + 1, 6, 1, 4).setValues([[false, data[i][6], new Date(), finalScore.toFixed(2)]]);
-      sheet.getRange(i + 1, 11).setValue(forced ? "DISKUALIFIKASI" : "SELESAI");
-      sheet.getRange(i + 1, 13).setValue(exam_mapel); // simpan mapel yang diujikan
-      break;
-    }
+    // Kolom 6..9 aman dibatch: keempatnya milik submit (kolom 7 ditulis ulang
+    // dengan nilainya sendiri, dan hanya login/reset yang pernah mengubahnya).
+    //   col 6 = status_login  col 7 = waktu_mulai (tetap)
+    //   col 8 = waktu_selesai col 9 = skor_akhir
+    sheet.getRange(found.rowNumber, 6, 1, 4).setValues([[false, row[6], new Date(), finalScore.toFixed(2)]]);
+    // Kolom 10 (pelanggaran) dan 12 (last_seen) TIDAK ikut dibatch: keduanya
+    // ditulis reportViolation dan autosave tanpa lock, jadi menulisnya ulang dari
+    // snapshot ini akan menimpa nilai yang lebih baru.
+    sheet.getRange(found.rowNumber, 11).setValue(forced ? "DISKUALIFIKASI" : "SELESAI");
+    sheet.getRange(found.rowNumber, 13).setValue(exam_mapel);
   }
 
   const durasiMenit = waktuMulai
@@ -1941,25 +2026,21 @@ function handleReportViolation(params) {
   const { id_siswa, type } = params;
 
   const sheet = getSheet("Users");
-  const data = sheet.getDataRange().getValues();
+  const found = readUserRow(sheet, id_siswa);
+  if (!found) return { success: false, message: "User not found" };
+
   const config = getConfig();
   const maxViolations = parseInt(config.max_violations) || 3;
+  const newCount = (found.values[9] || 0) + 1;
+  const disqualified = newCount >= maxViolations;
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === id_siswa) {
-      const newCount = (data[i][9] || 0) + 1;
-      sheet.getRange(i + 1, 10).setValue(newCount);
+  sheet.getRange(found.rowNumber, 10).setValue(newCount);
+  // Kolom 11 hanya disentuh saat status benar-benar berubah. Menulisnya ulang
+  // dengan nilai lama pada setiap pelanggaran dapat menimpa SELESAI dari submit
+  // yang berjalan bersamaan.
+  if (disqualified) sheet.getRange(found.rowNumber, 11).setValue("DISKUALIFIKASI");
 
-      if (newCount >= maxViolations) {
-        sheet.getRange(i + 1, 11).setValue("DISKUALIFIKASI");
-        return { success: true, disqualified: true, violations: newCount };
-      }
-
-      return { success: true, disqualified: false, violations: newCount };
-    }
-  }
-
-  return { success: false, message: "User not found" };
+  return { success: true, disqualified: disqualified, violations: newCount };
 }
 
 function handleAdminLogin(params) {
