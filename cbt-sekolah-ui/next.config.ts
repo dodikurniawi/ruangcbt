@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  distDir: ".next_validation_tmp",
+  /* config options here */
 };
 
 export default nextConfig;
