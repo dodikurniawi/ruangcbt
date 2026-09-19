@@ -1286,7 +1286,7 @@ function handleGetConfig() {
   const safeConfig = {
     exam_name: asConfigText(config.exam_name),
     exam_duration: config.exam_duration,
-    max_violations: config.max_violations,
+    max_violations: resolveMaxViolations(config),
     auto_submit: config.auto_submit,
     shuffle_questions: config.shuffle_questions,
     admin_wa: asConfigText(config.admin_wa),
@@ -1506,6 +1506,20 @@ function handleGetUsers(params) {
 const DEFAULT_KKM = 70;
 
 // KKM tunggal seluruh sistem: Config.kkm bila diisi guru, jika tidak 70.
+// Satu-satunya tempat "berapa batas pelanggaran" dijawab. Dipakai handler yang
+// MENEGAKKAN aturan (reportViolation) dan handler yang MENAMPILKANNYA ke layar
+// siswa (getConfig), supaya angka yang dilihat siswa selalu sama dengan angka
+// yang dipakai server. Sel kosong, teks, 0, dan negatif semuanya jatuh ke 3 —
+// perilaku tenant lama yang belum pernah mengatur nilai ini.
+const DEFAULT_MAX_VIOLATIONS = 3;
+
+function resolveMaxViolations(config) {
+  const limit = Number((config || {}).max_violations);
+  return isFinite(limit) && Math.floor(limit) === limit && limit >= 1
+    ? limit
+    : DEFAULT_MAX_VIOLATIONS;
+}
+
 function resolveKkm(config) {
   const raw = Number((config || {}).kkm);
   return isFinite(raw) && raw > 0 && raw <= 100 ? raw : DEFAULT_KKM;
@@ -2153,7 +2167,7 @@ function handleReportViolation(params) {
   if (!found) return { success: false, message: "User not found" };
 
   const config = getConfig();
-  const maxViolations = parseInt(config.max_violations) || 3;
+  const maxViolations = resolveMaxViolations(config);
   const newCount = (found.values[9] || 0) + 1;
   const disqualified = newCount >= maxViolations;
 
@@ -3052,12 +3066,38 @@ function handleSavePrintSettings(params) {
 
 // ===== CONFIG HANDLERS =====
 
+// Nilai Config yang punya ARTI bagi aturan ujian divalidasi di server, bukan
+// hanya di form admin: request dapat datang tanpa melewati form itu, dan nilai
+// yang rusak baru terasa saat siswa sedang ujian. Nilai yang tidak lolos tidak
+// pernah menimpa nilai lama.
+const CONFIG_VALUE_VALIDATORS = {
+  // Batas pelanggaran dipakai handleReportViolation sebagai ambang diskualifikasi.
+  // 0 atau negatif berarti siswa didiskualifikasi sebelum melanggar; pecahan
+  // membuat ambangnya tidak pernah persis tercapai. Tidak ada batas atas: guru
+  // yang ingin "praktis tanpa batas" cukup mengisi angka besar, dan tidak ada
+  // aturan lain di sistem ini yang membatasinya.
+  max_violations: function (value) {
+    const limit = Number(value);
+    if (!isFinite(limit) || Math.floor(limit) !== limit || limit < 1) {
+      return { message: "Batas pelanggaran harus bilangan bulat minimal 1." };
+    }
+    return { value: limit };
+  },
+};
+
 function handleUpdateConfig(params) {
   const sheet = getSheet("Config");
-  const { key, value } = params;
+  const { key } = params;
+  let value = params.value;
   const protectedKeys = ["shared_secret", "proxy_secret", "registry_secret", "session_signing_secret"];
   if (protectedKeys.indexOf(String(key || "").toLowerCase()) !== -1) {
     return { success: false, message: "Security config tidak dapat diubah melalui API" };
+  }
+  const validator = CONFIG_VALUE_VALIDATORS[String(key || "")];
+  if (validator) {
+    const checked = validator(value);
+    if (checked.message) return { success: false, message: checked.message };
+    value = checked.value;
   }
   const data = sheet.getDataRange().getValues();
 

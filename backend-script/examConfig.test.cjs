@@ -368,4 +368,112 @@ function mutate(find, replaceWith, label) {
   assert.equal(typeof cfg.admin_wa, "string");
 }
 
+// ===========================================================================
+// BATAS PELANGGARAN — configurable oleh guru, ditegakkan server
+// ===========================================================================
+// Ambang diskualifikasi hidup di Config tenant. Test ini mengunci ARTINYA:
+// pelanggaran ke-N mendiskualifikasi ketika batasnya N, tidak lebih awal.
+function violationState(limit) {
+  const config = [
+    ["key", "value"],
+    ["exam_name", "Ujian"],
+    ["exam_mapel", "MAPEL_A"],
+    ["exam_duration", 90],
+    ["exam_status", "OPEN"],
+  ];
+  if (limit !== undefined) config.push(["max_violations", limit]);
+  return examState({
+    Config: config,
+    Users: [
+      USER_HEADER,
+      ["S1", "siswa", "pw", "Siswa", "6A", true, new Date(), "", "", 0, "SEDANG", "", "", ""],
+    ],
+  });
+}
+
+// Urutan status siswa setelah pelanggaran ke-1..count.
+function violationRun(gas, count) {
+  const trail = [];
+  for (let i = 1; i <= count; i++) {
+    const res = post(gas, "reportViolation", { id_siswa: "S1" });
+    assert.equal(res.success, true, "pelanggaran ke-" + i + " harus tercatat");
+    assert.equal(res.violations, i, "jumlah pelanggaran harus bertambah satu per satu");
+    trail.push({
+      disqualified: res.disqualified,
+      status: gas.__sheets.Users.rows[1][10],
+      counted: gas.__sheets.Users.rows[1][9],
+    });
+  }
+  return trail;
+}
+
+for (const limit of [1, 2, 3, 5]) {
+  const gas = loadGas(violationState(limit));
+  const trail = violationRun(gas, limit);
+  for (let i = 0; i < limit - 1; i++) {
+    assert.equal(trail[i].disqualified, false, `limit ${limit}: pelanggaran ke-${i + 1} belum boleh mendiskualifikasi`);
+    assert.equal(trail[i].status, "SEDANG", `limit ${limit}: siswa harus tetap ujian sampai batas tercapai`);
+    assert.equal(trail[i].counted, i + 1, `limit ${limit}: pelanggaran tetap dicatat walau belum diskualifikasi`);
+  }
+  const last = trail[limit - 1];
+  assert.equal(last.disqualified, true, `limit ${limit}: pelanggaran ke-${limit} harus mendiskualifikasi`);
+  assert.equal(last.status, "DISKUALIFIKASI", `limit ${limit}: status siswa harus DISKUALIFIKASI`);
+}
+
+// Tenant yang belum pernah mengatur nilai ini berperilaku persis seperti dulu: 3.
+{
+  const gas = loadGas(violationState(undefined));
+  const trail = violationRun(gas, 3);
+  assert.equal(trail[0].disqualified, false, "default: pelanggaran ke-1 belum diskualifikasi");
+  assert.equal(trail[1].disqualified, false, "default: pelanggaran ke-2 belum diskualifikasi");
+  assert.equal(trail[2].disqualified, true, "default: pelanggaran ke-3 mendiskualifikasi");
+  assert.equal(get(gas, "getConfig").data.max_violations, 3, "layar siswa melihat batas efektif, bukan sel kosong");
+}
+
+// Sel Config yang rusak/kosong/0 tidak boleh mendiskualifikasi siswa lebih cepat.
+for (const broken of ["", 0, -2, "banyak", 2.5]) {
+  const gas = loadGas(violationState(broken));
+  const trail = violationRun(gas, 3);
+  assert.equal(trail[0].disqualified, false, `nilai rusak (${broken}) harus jatuh ke default 3`);
+  assert.equal(trail[1].disqualified, false, `nilai rusak (${broken}) harus jatuh ke default 3`);
+  assert.equal(trail[2].disqualified, true, `nilai rusak (${broken}) harus jatuh ke default 3`);
+}
+
+// Guru menyimpan lewat updateConfig: nilai berlaku untuk request BERIKUTNYA.
+// Cache Config yang tidak diinvalidasi akan membuat assert ini merah.
+{
+  const gas = loadGas(violationState(3), null, { liveCache: true });
+  // Panaskan cache config lebih dulu — tanpa ini, invalidasi tidak teruji.
+  assert.equal(get(gas, "getConfig").data.max_violations, 3);
+
+  assert.equal(post(gas, "updateConfig", { key: "max_violations", value: 5 }).success, true);
+  assert.equal(get(gas, "getConfig").data.max_violations, 5, "nilai baru harus langsung terbaca");
+  const naik = violationRun(gas, 5);
+  assert.equal(naik[3].disqualified, false, "setelah simpan 5: pelanggaran ke-4 belum mendiskualifikasi");
+  assert.equal(naik[4].disqualified, true, "setelah simpan 5: pelanggaran ke-5 mendiskualifikasi");
+}
+
+{
+  // Turun ke 2 pada siswa yang belum pernah melanggar.
+  const gas = loadGas(violationState(5), null, { liveCache: true });
+  assert.equal(get(gas, "getConfig").data.max_violations, 5);
+  assert.equal(post(gas, "updateConfig", { key: "max_violations", value: 2 }).success, true);
+  const turun = violationRun(gas, 2);
+  assert.equal(turun[0].disqualified, false, "setelah simpan 2: pelanggaran ke-1 belum mendiskualifikasi");
+  assert.equal(turun[1].disqualified, true, "setelah simpan 2: pelanggaran ke-2 mendiskualifikasi");
+}
+
+// Nilai tidak sah ditolak server dan TIDAK menimpa nilai lama.
+{
+  const gas = loadGas(violationState(4), null, { liveCache: true });
+  for (const bad of [0, -1, 2.5, "dua", "", null]) {
+    const res = post(gas, "updateConfig", { key: "max_violations", value: bad });
+    assert.equal(res.success, false, `nilai ${JSON.stringify(bad)} harus ditolak server`);
+  }
+  assert.equal(get(gas, "getConfig").data.max_violations, 4, "nilai lama harus utuh setelah request ditolak");
+  const trail = violationRun(gas, 4);
+  assert.equal(trail[2].disqualified, false, "batas lama (4) tetap berlaku");
+  assert.equal(trail[3].disqualified, true, "batas lama (4) tetap berlaku");
+}
+
 console.log("examConfig: validasi, ujian kosong, buka/tutup, integrasi snapshot, monitoring publik + mutations A/B/C/D/E PASS");

@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, uploadImage, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
-import type { User } from "@/types";
+import type { ApiResponse, User } from "@/types";
 import AISettingsPanel from "@/components/admin/AISettingsPanel";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
@@ -72,6 +72,7 @@ export default function AdminManagement() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoTargetId = useRef<string>("");
   const [configSaved, setConfigSaved] = useState(false);
+  const [configError, setConfigError] = useState("");
   const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "" });
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -93,7 +94,7 @@ export default function AdminManagement() {
   }, [router]);
 
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR("getUsers", getUsers, { refreshInterval: 10000 });
-  const { data: configRes } = useSWR("getConfig", getConfig);
+  const { data: configRes, mutate: mutateConfig } = useSWR("getConfig", getConfig);
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
@@ -294,14 +295,37 @@ export default function AdminManagement() {
     const exam_pin = (fd.get("exam_pin") as string) || "";
     const admin_password = (fd.get("admin_password") as string) || "";
     const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
+    const rawLimit = ((fd.get("max_violations") as string) || "").trim();
 
+    // Validasi di sini hanya untuk memberi pesan cepat ke guru; server memvalidasi
+    // ulang dan nilai yang ditolak server tidak pernah menimpa nilai lama.
+    const maxViolations = Number(rawLimit);
+    if (rawLimit === "" || !Number.isInteger(maxViolations) || maxViolations < 1) {
+      setConfigSaved(false);
+      setConfigError("Batas pelanggaran harus bilangan bulat minimal 1.");
+      return;
+    }
+
+    setConfigError("");
     setIsSavingConfig(true);
-    const tasks: Promise<unknown>[] = [updateConfig("admin_wa", admin_wa)];
+    const tasks: Promise<ApiResponse>[] = [
+      updateConfig("admin_wa", admin_wa),
+      updateConfig("max_violations", maxViolations),
+    ];
     if (exam_pin) tasks.push(updateConfig("exam_pin", exam_pin));
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
-    await Promise.all(tasks);
-    setConfigSaved(true);
+    const results = await Promise.all(tasks);
     setIsSavingConfig(false);
+
+    const failed = results.find((res) => !res.success);
+    if (failed) {
+      setConfigError(failed.message || "Konfigurasi gagal disimpan. Coba lagi.");
+      return;
+    }
+    // Angka batas pelanggaran dibaca ulang dari server: yang ditampilkan ke guru
+    // adalah nilai yang benar-benar tersimpan, bukan yang baru saja diketik.
+    await mutateConfig();
+    setConfigSaved(true);
     setTimeout(() => setConfigSaved(false), 3000);
   };
 
@@ -733,7 +757,14 @@ export default function AdminManagement() {
               </div>
             )}
 
-            <form ref={configFormRef} key={config?.admin_wa ?? "loading"} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
+            {configError && (
+              <div className="mb-6 bg-rose-50 text-rose-700 px-4 py-3 rounded-xl border border-rose-200/50 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm">
+                <span className="material-symbols-outlined text-[18px]">error</span>
+                {configError}
+              </div>
+            )}
+
+            <form ref={configFormRef} key={`${config?.admin_wa ?? ""}|${config?.max_violations ?? ""}`} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
               <div className="bg-blue-50/60 border border-blue-200/70 rounded-xl px-4 py-3 flex items-start gap-2">
                 <span className="material-symbols-outlined text-[18px] text-[#2563EB] shrink-0">info</span>
                 <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
@@ -753,6 +784,24 @@ export default function AdminManagement() {
                 />
                 <p className="mt-1 text-[10px] text-slate-400">
                   PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian.
+                </p>
+              </div>
+              <div>
+                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2" htmlFor="max_violations">
+                  Batas Pelanggaran
+                </label>
+                <input
+                  id="max_violations"
+                  name="max_violations"
+                  type="number"
+                  min={1}
+                  step={1}
+                  required
+                  defaultValue={config?.max_violations ?? 3}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
+                />
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Jumlah pelanggaran sebelum siswa otomatis didiskualifikasi dari ujian.
                 </p>
               </div>
               <div>
