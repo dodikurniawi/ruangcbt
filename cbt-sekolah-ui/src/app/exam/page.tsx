@@ -95,6 +95,11 @@ export default function ExamPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasSubmittedRef = useRef(false);
+  // In-flight guard: skip autosave interval jika request sebelumnya masih berjalan
+  // (mencegah lost update ketika GAS lambat > 10s). Dirty tracking: skip jika
+  // jawaban tidak berubah sejak sync terakhir yang sukses (hemat GAS quota).
+  const syncInFlightRef = useRef(false);
+  const lastSyncedAnswersRef = useRef("");
 
   const doSubmit = useCallback(async (forced: boolean) => {
     if (!user || hasSubmittedRef.current) return;
@@ -258,35 +263,54 @@ export default function ExamPage() {
     if (isLoading || !user) return;
 
     const handleOnline = () => {
-      // Immediate sync on reconnect
+      // Immediate sync on reconnect — pakai in-flight guard yang sama
+      if (syncInFlightRef.current || hasSubmittedRef.current) return;
       const a = useExamStore.getState().answers;
-      if (Object.keys(a).length > 0 && !hasSubmittedRef.current) {
-        setSyncStatus('saving');
-        setIsSyncing(true);
-        syncAnswers(user.id_siswa, a).then((res) => {
-          if (res.success) {
-            setLastSync(new Date());
-            setSyncStatus('saved');
-          } else {
-            setSyncStatus('failed');
-          }
-          setIsSyncing(false);
-        });
-      }
+      const serialized = JSON.stringify(a);
+      if (Object.keys(a).length === 0) return;
+      // Dirty check: jika jawaban identik dengan sync terakhir, tidak perlu kirim ulang
+      if (serialized === lastSyncedAnswersRef.current) return;
+      syncInFlightRef.current = true;
+      setSyncStatus('saving');
+      setIsSyncing(true);
+      syncAnswers(user.id_siswa, a).then((res) => {
+        if (res.success) {
+          lastSyncedAnswersRef.current = serialized;
+          setLastSync(new Date());
+          setSyncStatus('saved');
+        } else {
+          setSyncStatus('failed');
+        }
+        syncInFlightRef.current = false;
+        setIsSyncing(false);
+      }).catch(() => {
+        syncInFlightRef.current = false;
+        setSyncStatus('failed');
+        setIsSyncing(false);
+      });
     };
     // Status offline ditampilkan lewat isOnline (useSyncExternalStore), bukan state di sini.
     window.addEventListener('online', handleOnline);
 
     syncRef.current = setInterval(async () => {
-      if (hasSubmittedRef.current) return;
-      if (!navigator.onLine) return;
+      if (hasSubmittedRef.current || !navigator.onLine) return;
+      // In-flight guard: jangan kirim request baru jika request sebelumnya masih
+      // berjalan. Tanpa ini, GAS yang lambat (>10s) bisa menyebabkan dua request
+      // concurrent, dan request lama yang selesai belakangan menimpa jawaban baru.
+      if (syncInFlightRef.current) return;
       const currentAnswers = useExamStore.getState().answers;
       if (Object.keys(currentAnswers).length === 0) return;
+      // Dirty tracking: skip jika jawaban tidak berubah sejak sync terakhir sukses.
+      // lastSyncedAnswersRef hanya di-update setelah server confirm success.
+      const serialized = JSON.stringify(currentAnswers);
+      if (serialized === lastSyncedAnswersRef.current) return;
+      syncInFlightRef.current = true;
       setSyncStatus('saving');
       setIsSyncing(true);
       try {
         const res = await syncAnswers(user.id_siswa, currentAnswers);
         if (res.success) {
+          lastSyncedAnswersRef.current = serialized;
           setLastSync(new Date());
           setSyncStatus('saved');
         } else {
@@ -295,8 +319,10 @@ export default function ExamPage() {
         }
       } catch {
         setSyncStatus('failed');
+      } finally {
+        syncInFlightRef.current = false;
+        setIsSyncing(false);
       }
-      setIsSyncing(false);
     }, 10000);
 
     return () => {

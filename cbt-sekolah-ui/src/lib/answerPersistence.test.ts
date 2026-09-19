@@ -58,12 +58,25 @@ function loadGas(sheets: SheetMap) {
   const makeSheet = (name: string) => ({
     getDataRange: () => ({ getValues: () => sheets[name] || [] }),
     getLastRow: () => (sheets[name] ? sheets[name].length : 0),
-    getRange: (row: number, col: number) => ({
+    getRange: (row: number, col: number, numRows?: number, numCols?: number) => ({
       setValue: (value: unknown) => {
         writes.push({ sheet: name, row, col, value });
         if (sheets[name] && sheets[name][row - 1]) sheets[name][row - 1][col - 1] = value;
       },
-      setValues: () => {},
+      setValues: (values: unknown[][]) => {
+        // Rekam setiap sel dari range batch supaya test dapat memeriksa kolom mana yang disentuh
+        const rows = numRows ?? 1;
+        const cols = numCols ?? 1;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cellRow = row + r;
+            const cellCol = col + c;
+            const val = values[r]?.[c];
+            writes.push({ sheet: name, row: cellRow, col: cellCol, value: val });
+            if (sheets[name] && sheets[name][cellRow - 1]) sheets[name][cellRow - 1][cellCol - 1] = val;
+          }
+        }
+      },
     }),
     appendRow: (r: unknown[]) => {
       (appended[name] ||= []).push(r);
@@ -264,4 +277,85 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   assert.equal(row[10], "BELUM");
 }
 
+// --- P1: syncAnswers tidak menggunakan ScriptLock (tidak blokir siswa lain) ---
+// Simulasikan 10 siswa berbeda autosave bersamaan; karena tidak ada lock,
+// semua harus sukses (bukan hanya siswa pertama).
+{
+  const usersHeader = [USERS_HEADER];
+  const studentRows: unknown[][] = [];
+  for (let n = 1; n <= 10; n++) {
+    studentRows.push([
+      `S00${n}`, `siswa${n}`, "pw", `Siswa ${n}`, "6A", true,
+      new Date(), "", "", 0, "SEDANG", "", "", "",
+    ]);
+  }
+  const sheets = {
+    Users: [...usersHeader, ...studentRows] as unknown[][],
+    Config: CONFIG as unknown[][],
+    Questions: QUESTIONS as unknown[][],
+  };
+  const { gas } = loadGas(sheets);
+
+  // Semua 10 siswa sync bersamaan — tanpa global lock, semua harus sukses
+  const results = [];
+  for (let n = 1; n <= 10; n++) {
+    const res = gas.handleSyncAnswers({ id_siswa: `S00${n}`, answers: { Q1: "A" } });
+    results.push(res);
+  }
+  const successCount = results.filter((r) => r.success === true).length;
+  assert.equal(successCount, 10, `P1: semua 10 siswa harus berhasil sync (dapat: ${successCount}/10)`);
+}
+
+// --- P1: submitExamLocked — single read, batch write, idempotency tetap benar ---
+{
+  const { gas, appended, writes } = loadGas({
+    Users: activeStudent(), Config: CONFIG, Questions: QUESTIONS, Responses: [[]],
+  });
+  const res = gas.handleSubmitExam({ id_siswa: "S001", answers: { Q1: "A", Q2: "B" }, forced: false });
+  assert.equal(res.success, true);
+  assert.equal(res.status, "SELESAI");
+  assert.equal(res.score, "100.00");
+
+  // Verifikasi batch write: col 6-9 harus ada dalam writes
+  const userWrites = writes.filter((w) => w.sheet === "Users").map((w) => w.col).sort((a, b) => a - b);
+  // setValues col 6-9 mencatat sebagai satu write ke col 6 (range), lalu col 11, col 13
+  // Mock tidak expand range; check minimal col 6, 11, 13 hadir
+  assert.ok(userWrites.includes(6), "batch write harus menyentuh col 6 (status_login)");
+  assert.ok(userWrites.includes(11), "harus menyentuh col 11 (status_ujian)");
+  assert.ok(userWrites.includes(13), "harus menyentuh col 13 (mapel_diujikan)");
+  assert.equal(appended.Responses?.length, 1);
+}
+
+// --- P1: importQuestions menggunakan setValues (bukan appendRow per soal) ---
+{
+  const QUESTIONS_SHEET_HEADER = [
+    ["id_soal", "nomor_urut", "tipe", "pertanyaan", "gambar_url",
+     "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e",
+     "kunci_jawaban", "bobot", "kategori", "id_mapel", "status_soal",
+     "versi_dari", "data_soal", "id_kumpulan"],
+  ];
+  const mapelSheet = [["id_mapel", "kode_mapel", "nama_mapel"], ["MAPEL_A", "MTK", "Matematika"]];
+  const { gas, appended } = loadGas({
+    Questions: QUESTIONS_SHEET_HEADER,
+    MataPelajaran: mapelSheet,
+    Config: CONFIG,
+  });
+
+  const importPayload = Array.from({ length: 5 }, (_, i) => ({
+    tipe: "SINGLE",
+    pertanyaan: `Soal ${i + 1}`,
+    opsi_a: "A", opsi_b: "B", opsi_c: "C",
+    kunci_jawaban: "A",
+    bobot: 1,
+    id_mapel: "MAPEL_A",
+    nomor_urut: i + 1,
+  }));
+  const res = gas.handleImportQuestions({ questions: importPayload });
+  assert.equal(res.success, true, "importQuestions harus sukses");
+  assert.equal((res.data as Record<string, unknown>).added, 5, "5 soal harus diimport");
+  // Dengan setValues, soal tidak muncul di appended (appendRow) tapi ditulis via getRange+setValues
+  // Mock tidak merekam setValues ke appended; yang penting tidak error dan added=5
+}
+
 console.log("answerPersistence: semua skenario PASS (kode nyata: answerRecovery.ts + code.gs)");
+

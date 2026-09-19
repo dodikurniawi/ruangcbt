@@ -1597,41 +1597,37 @@ function handleLogin(params) {
 function handleSyncAnswers(params) {
   const { id_siswa, answers } = params;
 
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) {
-    return { success: false, message: "Server busy, retry later" };
-  }
+  // ponytail: ScriptLock dihapus. Setiap siswa punya row unik; device guard (RC-6)
+  // mencegah dua sesi siswa yang sama berjalan bersamaan. Tidak ada shared mutable
+  // state antar siswa berbeda, sehingga concurrent syncAnswers dari 10 siswa pun
+  // tidak pernah menyentuh row yang sama. Submit-race ditangani oleh guard
+  // "already_submitted" di bawah, bukan oleh lock.
+  var sheet = getSheet("Users");
+  var data = sheet.getDataRange().getValues();
 
-  try {
-    var sheet = getSheet("Users");
-    var data = sheet.getDataRange().getValues();
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === id_siswa) {
-        // ponytail: server-side guard — reject sync after submit to close autosave race
-        var status = data[i][10] || "BELUM";
-        if (status === "SELESAI" || status === "DISKUALIFIKASI") {
-          return { success: false, message: "already_submitted" };
-        }
-        // Deadline attempt memakai durasi beku; Config yang berubah di tengah ujian
-        // tidak boleh memutus autosave siswa yang sedang berjalan.
-        var syncBinding = parseExamBinding(data[i]);
-        var syncDuration = syncBinding ? syncBinding.exam_duration : getConfig().exam_duration;
-        if (isExamDeadlinePassed(data[i][6], syncDuration)) {
-          return { success: false, message: "deadline_expired" };
-        }
-        var serialized = JSON.stringify(answers);
-        cache.put("answers_" + id_siswa, serialized, 3600);
-        sheet.getRange(i + 1, 12).setValue(new Date());  // last_seen
-        sheet.getRange(i + 1, 14).setValue(serialized);  // saved_answers (col N)
-        return { success: true, message: "Synced" };
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === id_siswa) {
+      // ponytail: server-side guard — reject sync after submit to close autosave race
+      var status = data[i][10] || "BELUM";
+      if (status === "SELESAI" || status === "DISKUALIFIKASI") {
+        return { success: false, message: "already_submitted" };
       }
+      // Deadline attempt memakai durasi beku; Config yang berubah di tengah ujian
+      // tidak boleh memutus autosave siswa yang sedang berjalan.
+      var syncBinding = parseExamBinding(data[i]);
+      var syncDuration = syncBinding ? syncBinding.exam_duration : getConfig().exam_duration;
+      if (isExamDeadlinePassed(data[i][6], syncDuration)) {
+        return { success: false, message: "deadline_expired" };
+      }
+      var serialized = JSON.stringify(answers);
+      cache.put("answers_" + id_siswa, serialized, 3600);
+      sheet.getRange(i + 1, 12).setValue(new Date());  // last_seen
+      sheet.getRange(i + 1, 14).setValue(serialized);  // saved_answers (col N)
+      return { success: true, message: "Synced" };
     }
-
-    return { success: false, message: "User not found" };
-  } finally {
-    lock.releaseLock();
   }
+
+  return { success: false, message: "User not found" };
 }
 
 // ===== TYPE-AWARE SCORING =====
@@ -1819,16 +1815,18 @@ function handleSubmitExam(params) {
 function submitExamLocked(params) {
   const { id_siswa, answers, forced } = params;
 
+  // Satu read saja untuk idempotency check, binding, dan write data.
+  const sheet = getSheet("Users");
+  const data = sheet.getDataRange().getValues();
+
   // Idempotency: kalau siswa sudah pernah submit, kembalikan hasil yang tersimpan
   // tanpa menghitung ulang dan tanpa menambah baris Responses. Ini menutup retry
   // setelah browser timeout padahal server sebenarnya sudah sukses.
-  const guardSheet = getSheet("Users");
-  const guardData = guardSheet.getDataRange().getValues();
-  for (let g = 1; g < guardData.length; g++) {
-    if (guardData[g][0] === id_siswa) {
-      const prevStatus = guardData[g][10];
+  for (let g = 1; g < data.length; g++) {
+    if (data[g][0] === id_siswa) {
+      const prevStatus = data[g][10];
       if (prevStatus === "SELESAI" || prevStatus === "DISKUALIFIKASI") {
-        const prevScore = guardData[g][8];
+        const prevScore = data[g][8];
         return {
           success: true,
           score: (prevScore === "" || prevScore === null || prevScore === undefined)
@@ -1844,13 +1842,13 @@ function submitExamLocked(params) {
 
   // Seluruh parameter penilaian diambil dari binding attempt. Config hanya dipakai
   // untuk attempt lama yang belum punya binding.
-  const guardIndex = findUserRowIndex(guardData, id_siswa);
-  const binding = guardIndex === -1 ? null : parseExamBinding(guardData[guardIndex]);
+  const guardIndex = findUserRowIndex(data, id_siswa);
+  const binding = guardIndex === -1 ? null : parseExamBinding(data[guardIndex]);
   const config = getConfig();
   const exam_mapel = binding ? binding.exam_mapel : (config.exam_mapel || "");
   const exam_id = binding ? binding.exam_id : "";
   const examDuration = binding ? binding.exam_duration : Number(config.exam_duration);
-  const authoritativeStart = guardIndex === -1 ? null : guardData[guardIndex][6];
+  const authoritativeStart = guardIndex === -1 ? null : data[guardIndex][6];
   const deadlineMs = getExamDeadlineMs(authoritativeStart, examDuration);
   if (deadlineMs === null) {
     return { success: false, message: "Waktu mulai ujian tidak valid" };
@@ -1866,22 +1864,25 @@ function submitExamLocked(params) {
     : scoreExam(getSheet("Questions").getDataRange().getValues(), submittedAnswers, exam_mapel);
   const finalScore = scoring.finalScore;
 
-  const uSheet = getSheet("Users");
-  const users = uSheet.getDataRange().getValues();
+  // Cari row siswa dari data yang sudah dibaca
   let userName = "", userClass = "", waktuMulai = null, violationLog = "";
 
-  for (let i = 1; i < users.length; i++) {
-    if (users[i][0] === id_siswa) {
-      userName = users[i][3];
-      userClass = users[i][4];
-      waktuMulai = users[i][6];
-      violationLog = "Tab switch/violations: " + (users[i][9] || 0) + "x";
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === id_siswa) {
+      userName = data[i][3];
+      userClass = data[i][4];
+      waktuMulai = data[i][6];
+      violationLog = "Tab switch/violations: " + (data[i][9] || 0) + "x";
 
-      uSheet.getRange(i + 1, 6).setValue(false);
-      uSheet.getRange(i + 1, 8).setValue(new Date());
-      uSheet.getRange(i + 1, 9).setValue(finalScore.toFixed(2));
-      uSheet.getRange(i + 1, 11).setValue(forced ? "DISKUALIFIKASI" : "SELESAI");
-      uSheet.getRange(i + 1, 13).setValue(exam_mapel); // simpan mapel yang diujikan
+      // Batch write kolom 6–9 dalam satu operasi Sheets (range kontinu):
+      //   col 6 = status_login (false)
+      //   col 7 = waktu_mulai — tidak diubah, ditulis ulang nilai yang sudah ada
+      //   col 8 = waktu_selesai (now)
+      //   col 9 = skor_akhir
+      // ponytail: col 7 ditulis ulang agar range tetap kontinu; nilainya identik.
+      sheet.getRange(i + 1, 6, 1, 4).setValues([[false, data[i][6], new Date(), finalScore.toFixed(2)]]);
+      sheet.getRange(i + 1, 11).setValue(forced ? "DISKUALIFIKASI" : "SELESAI");
+      sheet.getRange(i + 1, 13).setValue(exam_mapel); // simpan mapel yang diujikan
       break;
     }
   }
@@ -2129,7 +2130,7 @@ function handleImportQuestions(params) {
     };
   }
 
-  // Lock dipegang dari baca id sampai append terakhir supaya dua import bersamaan
+  // Lock dipegang dari baca id sampai write terakhir supaya dua import bersamaan
   // tidak menghasilkan id_soal yang sama.
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
@@ -2152,6 +2153,10 @@ function handleImportQuestions(params) {
 
     const added = [];
     const rejected = [];
+    // ponytail: kumpulkan semua baris valid dahulu, tulis satu kali dengan setValues.
+    // 200 appendRow = 200 Sheets API calls; satu setValues = 1 call.
+    // Ordering terjaga karena baris dibangun dalam urutan items[].
+    const rowsToWrite = [];
     for (let i = 0; i < items.length; i++) {
       const data = items[i];
       const invalid = validateQuestionPayload(data);
@@ -2161,8 +2166,13 @@ function handleImportQuestions(params) {
       }
       const id_soal = generateQuestionId(takenIds);
       takenIds[id_soal] = true;
-      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", target.id_kumpulan));
+      rowsToWrite.push(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", target.id_kumpulan));
       added.push(id_soal);
+    }
+
+    if (rowsToWrite.length > 0) {
+      const startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, rowsToWrite.length, QUESTION_COLUMNS).setValues(rowsToWrite);
     }
 
     cache.remove("questions"); cache.remove("questions_all");
