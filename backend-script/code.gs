@@ -836,6 +836,13 @@ function canonicalDataSoalCell(raw) {
 
 // Sheet lama bisa punya lebih sedikit kolom daripada QUESTION_COLUMNS; menulis
 // 17 kolom ke sheet 16 kolom adalah error di Apps Script, bukan auto-expand.
+// Pastikan grid punya cukup baris untuk ditulisi sampai lastRowNeeded.
+function ensureQuestionRows(sheet, lastRowNeeded) {
+  if (!sheet || typeof sheet.getMaxRows !== "function" || typeof sheet.insertRowsAfter !== "function") return;
+  const maxRows = sheet.getMaxRows();
+  if (lastRowNeeded > maxRows) sheet.insertRowsAfter(maxRows, lastRowNeeded - maxRows);
+}
+
 function ensureQuestionColumns(sheet) {
   if (!sheet || typeof sheet.getMaxColumns !== "function") return;
   const current = sheet.getMaxColumns();
@@ -1619,8 +1626,24 @@ function handleSyncAnswers(params) {
       if (isExamDeadlinePassed(data[i][6], syncDuration)) {
         return { success: false, message: "deadline_expired" };
       }
+      // Stale-write guard. Tanpa ScriptLock, autosave yang berangkat lebih dulu
+      // bisa tiba lebih akhir dan menimpa jawaban yang lebih baru. `rev` adalah
+      // penghitung monoton milik klien (satu per browser, dibagi antar tab) yang
+      // HANYA dipakai untuk mengurutkan autosave — bukan untuk identitas, bukan
+      // untuk otorisasi, bukan untuk menentukan sudah-submit atau deadline.
+      // Request tanpa rev tetap diterima supaya klien/tenant lama tidak rusak.
+      var revKey = "syncrev_" + id_siswa;
+      var incomingRev = Number(params.rev);
+      var hasRev = isFinite(incomingRev) && incomingRev > 0;
+      if (hasRev) {
+        var storedRev = Number(cache.get(revKey));
+        if (isFinite(storedRev) && storedRev > 0 && incomingRev < storedRev) {
+          return { success: false, message: "stale_write" };
+        }
+      }
       var serialized = JSON.stringify(answers);
       cache.put("answers_" + id_siswa, serialized, 3600);
+      if (hasRev) cache.put(revKey, String(incomingRev), 3600);
       sheet.getRange(i + 1, 12).setValue(new Date());  // last_seen
       sheet.getRange(i + 1, 14).setValue(serialized);  // saved_answers (col N)
       return { success: true, message: "Synced" };
@@ -2172,6 +2195,10 @@ function handleImportQuestions(params) {
 
     if (rowsToWrite.length > 0) {
       const startRow = sheet.getLastRow() + 1;
+      // appendRow menumbuhkan grid sendiri; setValues tidak. Tanpa penjagaan ini
+      // sheet yang mendekati batas baris membuat SELURUH import gagal, padahal
+      // Bank Soal masih sanggup menampungnya.
+      ensureQuestionRows(sheet, startRow + rowsToWrite.length - 1);
       sheet.getRange(startRow, 1, rowsToWrite.length, QUESTION_COLUMNS).setValues(rowsToWrite);
     }
 

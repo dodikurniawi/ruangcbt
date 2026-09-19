@@ -54,6 +54,7 @@ function loadGas(sheets: SheetMap) {
   const appended: Record<string, unknown[][]> = {};
   const writes: Array<{ sheet: string; row: number; col: number; value: unknown }> = [];
   let lockAcquired = 0;
+  let lockHeld = false;
 
   const makeSheet = (name: string) => ({
     getDataRange: () => ({ getValues: () => sheets[name] || [] }),
@@ -64,16 +65,20 @@ function loadGas(sheets: SheetMap) {
         if (sheets[name] && sheets[name][row - 1]) sheets[name][row - 1][col - 1] = value;
       },
       setValues: (values: unknown[][]) => {
-        // Rekam setiap sel dari range batch supaya test dapat memeriksa kolom mana yang disentuh
-        const rows = numRows ?? 1;
-        const cols = numCols ?? 1;
+        // Rekam tiap sel dari range batch supaya test dapat memeriksa kolom mana
+        // yang disentuh, dan tumbuhkan baris seperti Sheets di dalam grid.
+        const rows = numRows ?? values.length;
+        const cols = numCols ?? (values[0]?.length ?? 0);
+        sheets[name] ||= [];
         for (let r = 0; r < rows; r++) {
+          const cellRow = row + r;
+          while (sheets[name].length < cellRow) sheets[name].push([]);
           for (let c = 0; c < cols; c++) {
-            const cellRow = row + r;
             const cellCol = col + c;
             const val = values[r]?.[c];
             writes.push({ sheet: name, row: cellRow, col: cellCol, value: val });
-            if (sheets[name] && sheets[name][cellRow - 1]) sheets[name][cellRow - 1][cellCol - 1] = val;
+            while (sheets[name][cellRow - 1].length < cellCol) sheets[name][cellRow - 1].push("");
+            sheets[name][cellRow - 1][cellCol - 1] = val;
           }
         }
       },
@@ -98,10 +103,13 @@ function loadGas(sheets: SheetMap) {
         getProperty: (k: string) => (k === "SHARED_SECRET" ? TENANT_SECRET : null),
       }),
     },
+    // Lock dimodelkan sungguhan: tryLock GAGAL saat lock sedang dipegang. Stub
+    // lama selalu mengembalikan true, sehingga test apa pun akan lulus baik
+    // dengan maupun tanpa ScriptLock.
     LockService: {
       getScriptLock: () => ({
-        tryLock: () => { lockAcquired++; return true; },
-        releaseLock: () => {},
+        tryLock: () => { if (lockHeld) return false; lockHeld = true; lockAcquired++; return true; },
+        releaseLock: () => { lockHeld = false; },
       }),
     },
     SpreadsheetApp: {
@@ -277,9 +285,12 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   assert.equal(row[10], "BELUM");
 }
 
-// --- P1: syncAnswers tidak menggunakan ScriptLock (tidak blokir siswa lain) ---
-// Simulasikan 10 siswa berbeda autosave bersamaan; karena tidak ada lock,
-// semua harus sukses (bukan hanya siswa pertama).
+// --- P1: 10 siswa berbeda menulis baris masing-masing ---
+// CATATAN: pemanggilan di bawah ini BERURUTAN, jadi ia TIDAK membuktikan
+// concurrency — tanpa lock maupun dengan lock hasilnya sama. Bukti concurrency
+// yang sebenarnya (eksekusi dijalin, mendeteksi kembalinya ScriptLock) ada di
+// backend-script/syncConcurrency.test.cjs. Yang dijaga di sini hanyalah bahwa
+// tiap siswa mendarat di barisnya sendiri.
 {
   const usersHeader = [USERS_HEADER];
   const studentRows: unknown[][] = [];
@@ -296,14 +307,18 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   };
   const { gas } = loadGas(sheets);
 
-  // Semua 10 siswa sync bersamaan — tanpa global lock, semua harus sukses
   const results = [];
   for (let n = 1; n <= 10; n++) {
-    const res = gas.handleSyncAnswers({ id_siswa: `S00${n}`, answers: { Q1: "A" } });
-    results.push(res);
+    results.push(gas.handleSyncAnswers({ id_siswa: `S00${n}`, answers: { Q1: "A", milik: `S00${n}` } }));
   }
   const successCount = results.filter((r) => r.success === true).length;
-  assert.equal(successCount, 10, `P1: semua 10 siswa harus berhasil sync (dapat: ${successCount}/10)`);
+  assert.equal(successCount, 10, `10 siswa harus berhasil sync (dapat: ${successCount}/10)`);
+
+  // Tiap jawaban mendarat di baris pemiliknya, bukan tercampur.
+  for (let n = 1; n <= 10; n++) {
+    const saved = sheets.Users[n][13] as string;
+    assert.equal(JSON.parse(saved).milik, `S00${n}`, `baris ${n} harus memuat jawaban S00${n}`);
+  }
 }
 
 // --- P1: submitExamLocked — single read, batch write, idempotency tetap benar ---
@@ -335,11 +350,12 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
      "versi_dari", "data_soal", "id_kumpulan"],
   ];
   const mapelSheet = [["id_mapel", "kode_mapel", "nama_mapel"], ["MAPEL_A", "MTK", "Matematika"]];
-  const { gas, appended } = loadGas({
-    Questions: QUESTIONS_SHEET_HEADER,
-    MataPelajaran: mapelSheet,
-    Config: CONFIG,
-  });
+  const sheetsForImport = {
+    Questions: QUESTIONS_SHEET_HEADER as unknown[][],
+    MataPelajaran: mapelSheet as unknown[][],
+    Config: CONFIG as unknown[][],
+  };
+  const { gas, appended } = loadGas(sheetsForImport);
 
   const importPayload = Array.from({ length: 5 }, (_, i) => ({
     tipe: "SINGLE",
@@ -353,8 +369,17 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   const res = gas.handleImportQuestions({ questions: importPayload });
   assert.equal(res.success, true, "importQuestions harus sukses");
   assert.equal((res.data as Record<string, unknown>).added, 5, "5 soal harus diimport");
-  // Dengan setValues, soal tidak muncul di appended (appendRow) tapi ditulis via getRange+setValues
-  // Mock tidak merekam setValues ke appended; yang penting tidak error dan added=5
+  // Baris hasil import diperiksa isinya, bukan hanya nilai kembaliannya.
+  const questionRows = sheetsForImport.Questions;
+  assert.equal(questionRows.length, 6, "header + 5 soal");
+  for (let i = 1; i <= 5; i++) {
+    assert.equal(questionRows[i][1], i, `soal ${i}: ordering nomor_urut terjaga`);
+    assert.equal(questionRows[i][3], `Soal ${i}`, `soal ${i}: pertanyaan benar`);
+    assert.equal(questionRows[i][10], "A", `soal ${i}: kunci jawaban benar`);
+    assert.equal(questionRows[i][13], "MAPEL_A", `soal ${i}: mapel benar`);
+    assert.equal(questionRows[i][14], "AKTIF", `soal ${i}: status AKTIF`);
+  }
+  assert.equal(appended.Questions, undefined, "import tidak lagi memakai appendRow per soal");
 }
 
 console.log("answerPersistence: semua skenario PASS (kode nyata: answerRecovery.ts + code.gs)");

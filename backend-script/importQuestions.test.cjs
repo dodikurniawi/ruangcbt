@@ -244,9 +244,11 @@ function mutate(find, replaceWith, label) {
   ), undefined, "mutation E tidak terdeteksi");
 
   // Soal import ditulis sebagai versi dari soal lain / langsung arsip.
+  // Baris import dikumpulkan lalu ditulis sekali dengan setValues; titik mutation
+  // mengikuti bentuk itu, bukan appendRow per soal seperti implementasi lama.
   const wrongStatus = mutate(
-    "      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, \"\", target.id_kumpulan));",
-    "      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ARCHIVED, \"Q1\"));",
+    "      rowsToWrite.push(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, \"\", target.id_kumpulan));",
+    "      rowsToWrite.push(questionRowValues(id_soal, data, QUESTION_STATUS_ARCHIVED, \"Q1\", target.id_kumpulan));",
     "F",
   );
   const gasF = loadGas(importState(), wrongStatus);

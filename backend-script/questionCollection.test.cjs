@@ -529,9 +529,10 @@ function mutate(find, replaceWith, label) {
     undefined, "mutation D tidak terdeteksi");
 
   // E. Soal import diletakkan di luar kumpulan tujuan.
+  // Baris import ditulis sekali lewat setValues; titik mutation mengikuti bentuk itu.
   const ignoreImportTarget = mutate(
-    '      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", target.id_kumpulan));',
-    '      sheet.appendRow(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", ""));',
+    '      rowsToWrite.push(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", target.id_kumpulan));',
+    '      rowsToWrite.push(questionRowValues(id_soal, data, QUESTION_STATUS_ACTIVE, "", ""));',
     "E",
   );
   const gasE = loadGas(bankState(), ignoreImportTarget);

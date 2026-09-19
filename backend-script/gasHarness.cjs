@@ -12,31 +12,69 @@ function makeSheet(rows) {
   // Sheet baru Apps Script punya 26 kolom; grid tiruan mengikuti itu agar tulisan
   // ke kolom 15-17 berperilaku sama seperti di Sheets sungguhan.
   let maxColumns = rows.reduce((n, r) => Math.max(n, r.length), 26);
+  // Grid Sheets punya batas baris; sheet baru default 1000. Dimodelkan supaya
+  // penulisan yang melewati grid GAGAL di test seperti gagalnya di Sheets nyata.
+  let maxRows = Math.max(1000, rows.length);
   const sheet = {
     rows,
-    // Dihitung supaya test dapat membuktikan "sheet ini dibaca sekali", bukan
-    // sekadar "hasilnya benar".
+    // Dihitung supaya test dapat membuktikan "sheet ini dibaca sekali" dan
+    // "ditulis satu kali secara batch", bukan sekadar "hasilnya benar".
     reads: 0,
+    appendRows: 0,
+    setValueCalls: 0,
+    setValuesCalls: 0,
     getDataRange: () => {
       sheet.reads++;
-      return { getValues: () => rows };
+      // Sheets mengembalikan SALINAN nilai, bukan acuan hidup. Kalau tiruan ini
+      // mengembalikan array aslinya, race "baca dulu, tulis belakangan" tidak
+      // pernah dapat direproduksi karena pembacanya ikut melihat tulisan baru.
+      const snapshot = rows.map((r) => r.slice());
+      return { getValues: () => snapshot };
     },
     getLastRow: () => rows.length,
     getMaxColumns: () => maxColumns,
+    getMaxRows: () => maxRows,
     insertColumnsAfter(after, howMany) { maxColumns = after + howMany; },
-    appendRow(values) { rows.push(values.slice()); },
+    insertRowsAfter(after, howMany) { maxRows = Math.max(maxRows, after + howMany); },
+    appendRow(values) {
+      sheet.appendRows++;
+      rows.push(values.slice());
+      if (rows.length > maxRows) maxRows = rows.length;   // appendRow menumbuhkan grid
+    },
     deleteRow(rowNumber) { rows.splice(rowNumber - 1, 1); },
     getRange(row, col, numRows, numCols) {
       return {
         setValue(value) {
+          sheet.setValueCalls++;
           while (rows[row - 1].length < col) rows[row - 1].push("");
           rows[row - 1][col - 1] = value;
         },
         setValues(values) {
-          for (let r = 0; r < (numRows || 1); r++) {
-            for (let c = 0; c < (numCols || values[r].length); c++) {
-              while (rows[row - 1 + r].length < col + c) rows[row - 1 + r].push("");
-              rows[row - 1 + r][col - 1 + c] = values[r][c];
+          sheet.setValuesCalls++;
+          const nr = numRows || values.length;
+          const nc = numCols || (values[0] ? values[0].length : 0);
+          // Sheets menolak range di luar grid. appendRow menumbuhkan sheet,
+          // setValues tidak — perbedaan itu harus terlihat di test.
+          if (row + nr - 1 > maxRows) {
+            throw new Error(
+              "The coordinates or dimensions of the range are invalid. " +
+              `(baris ${row}..${row + nr - 1} melewati maxRows ${maxRows})`,
+            );
+          }
+          if (values.length !== nr) {
+            throw new Error(`Tinggi data (${values.length}) tidak sama dengan tinggi range (${nr}).`);
+          }
+          for (let r = 0; r < nr; r++) {
+            if (values[r].length !== nc) {
+              throw new Error(`Lebar data (${values[r].length}) tidak sama dengan lebar range (${nc}).`);
+            }
+            // Baris di bawah baris terakhir yang berisi data memang belum ada di
+            // array tiruan; Sheets menganggapnya sel kosong yang sah ditulisi.
+            const target = row - 1 + r;
+            while (rows.length <= target) rows.push([]);
+            for (let c = 0; c < nc; c++) {
+              while (rows[target].length < col + c) rows[target].push("");
+              rows[target][col - 1 + c] = values[r][c];
             }
           }
         },

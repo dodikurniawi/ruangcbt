@@ -131,8 +131,18 @@ export async function resolvePinRequired(config: ExamConfig | null): Promise<boo
     return res.data?.isPinRequired === true;
 }
 
-export async function syncAnswers(id_siswa: string, answers: AnswersRecord): Promise<ApiResponse> {
-    return fetchApi('syncAnswers', 'POST', { id_siswa, answers });
+/**
+ * `rev` hanya menentukan urutan autosave di server (mana yang lebih baru saat dua
+ * request saling mendahului). Identitas, status submit, dan deadline tetap
+ * ditentukan server. Dihilangkan bila tidak diberikan supaya tenant GAS lama
+ * tetap menerima request ini apa adanya.
+ */
+export async function syncAnswers(
+    id_siswa: string,
+    answers: AnswersRecord,
+    rev?: number,
+): Promise<ApiResponse> {
+    return fetchApi('syncAnswers', 'POST', rev === undefined ? { id_siswa, answers } : { id_siswa, answers, rev });
 }
 
 export async function submitExam(

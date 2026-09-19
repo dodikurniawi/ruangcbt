@@ -11,6 +11,7 @@ import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { requestExamFullscreen, exitExamFullscreen, isFullscreenActive, isFullscreenSupported } from "@/lib/examFocus";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
+import { nextSyncRevision } from "@/lib/syncRevision";
 import { isAnswered, countAnswered } from "@/lib/answerSemantics";
 import { updateTrueFalseAnswer } from "@/lib/trueFalse";
 import { updateMatchingAnswer } from "@/lib/matching";
@@ -273,7 +274,7 @@ export default function ExamPage() {
       syncInFlightRef.current = true;
       setSyncStatus('saving');
       setIsSyncing(true);
-      syncAnswers(user.id_siswa, a).then((res) => {
+      syncAnswers(user.id_siswa, a, nextSyncRevision()).then((res) => {
         if (res.success) {
           lastSyncedAnswersRef.current = serialized;
           setLastSync(new Date());
@@ -308,7 +309,9 @@ export default function ExamPage() {
       setSyncStatus('saving');
       setIsSyncing(true);
       try {
-        const res = await syncAnswers(user.id_siswa, currentAnswers);
+        // Nomor revisi diambil saat request berangkat, bukan saat ia kembali:
+        // itulah yang membuat server dapat mengenali autosave yang sudah basi.
+        const res = await syncAnswers(user.id_siswa, currentAnswers, nextSyncRevision());
         if (res.success) {
           lastSyncedAnswersRef.current = serialized;
           setLastSync(new Date());
