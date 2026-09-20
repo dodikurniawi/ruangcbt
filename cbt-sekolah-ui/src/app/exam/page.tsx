@@ -18,6 +18,7 @@ import { updateMatchingAnswer } from "@/lib/matching";
 import {
   School, Clock3, Type, TriangleAlert, CircleAlert, X, Grid2X2,
   CircleHelp, ChevronLeft, ChevronRight, LoaderCircle, Maximize,
+  CheckCircle2, ShieldAlert, Play,
 } from "lucide-react";
 import {
   fillInPetunjuk,
