@@ -425,28 +425,69 @@ export default function ExamPage() {
   if (!hasStarted) {
     const fsSupported = typeof document !== "undefined" && isFullscreenSupported(document, document.documentElement);
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 font-body-student p-lg">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-xl text-center">
-          <Maximize aria-hidden="true" className="h-12 w-12 text-[#2563EB]" />
-          <h1 className="font-headline-student text-lg font-extrabold text-slate-800 mt-2">Siap mengerjakan ujian?</h1>
-          <p className="font-body-student text-sm text-slate-500 leading-relaxed mt-2">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200/90 font-body-student p-4 sm:p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200/80 border border-slate-200/90 p-6 sm:p-8 text-center flex flex-col items-center relative overflow-hidden transition-all">
+          {/* Subtle Ambient Background Accents */}
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Icon Badge */}
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#1D4ED8] border border-blue-100/90 flex items-center justify-center shadow-xs mb-5 shrink-0">
+            <Maximize aria-hidden="true" className="h-8 w-8" />
+          </div>
+
+          {/* Title & Description */}
+          <h1 className="font-headline-student text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Siap mengerjakan ujian?
+          </h1>
+          <p className="font-body-student text-xs sm:text-sm text-slate-600 font-medium leading-relaxed mt-2.5 px-1">
             {fsSupported
               ? "Setelah menekan “Mulai Ujian”, ujian akan dibuka dalam mode layar penuh agar kamu tetap fokus."
               : "Perangkat ini tidak mendukung mode layar penuh. Ujian tetap dapat dikerjakan seperti biasa."}
           </p>
-          <ul className="text-left text-xs text-slate-600 mt-4 space-y-1">
-            <li>✓ Koneksi internet stabil</li>
-            <li>✓ Baterai cukup</li>
-            <li>✓ Tidak perlu membuka aplikasi/tab lain</li>
-          </ul>
-          <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
-            Meninggalkan halaman ujian atau keluar dari layar penuh akan tercatat sebagai pelanggaran dan terlihat oleh pengawas.
-          </p>
+
+          {/* Requirements Checklist */}
+          <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-200/70 my-5 text-left">
+            <p className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 mb-2.5">
+              Persyaratan Sebelum Memulai
+            </p>
+            <ul className="space-y-2.5 text-xs font-semibold text-slate-700">
+              <li className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <span>Koneksi internet stabil</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <span>Baterai cukup</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <span>Tidak perlu membuka aplikasi/tab lain</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Security Notice */}
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3 text-left mb-6">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] sm:text-xs text-amber-900 font-semibold leading-relaxed">
+              Meninggalkan halaman ujian atau keluar dari layar penuh akan tercatat sebagai pelanggaran dan terlihat oleh pengawas.
+            </p>
+          </div>
+
+          {/* CTA Button */}
           <button
             onClick={handleStartExam}
-            className="w-full mt-6 h-12 bg-[#2563EB] text-white rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer hover:opacity-95 transition-all"
+            className="w-full h-13 sm:h-14 bg-[#1D4ED8] hover:bg-blue-700 active:scale-[0.98] text-white rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider cursor-pointer shadow-md shadow-blue-600/25 transition-all flex items-center justify-center gap-2"
           >
-            Mulai Ujian
+            <span>Mulai Ujian</span>
+            <Play className="w-4 h-4 fill-white shrink-0" />
           </button>
         </div>
       </div>
