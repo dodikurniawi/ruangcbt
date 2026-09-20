@@ -204,3 +204,25 @@ html, body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* Isi soal berasal dari editor guru: tabel/gambar/rumus lebar tidak boleh
+   mendorong halaman ujian keluar viewport ponsel. Yang lebar menggulir di
+   dalam kotaknya sendiri, bukan menggeser seluruh layar. */
+.question-body {
+  overflow-wrap: anywhere;
+}
+.question-body img,
+.question-body video,
+.question-body iframe {
+  max-width: 100%;
+  height: auto;
+}
+.question-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.question-body pre {
+  max-width: 100%;
+  overflow-x: auto;
+}

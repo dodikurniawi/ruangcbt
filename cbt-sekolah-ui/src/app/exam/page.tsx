@@ -56,7 +56,7 @@ export default function ExamPage() {
   const {
     user, questions, currentQuestionIndex, answers,
     timeRemaining, violations,
-    setQuestions, setTimeRemaining,
+    setQuestions, setTimeRemaining, setViolations,
     setAnswer, setCurrentQuestionIndex, nextQuestion, prevQuestion,
     setIsSubmitted, resetExam, setLastSync, setIsSyncing, setIsExamStarted,
   } = useExamStore();
@@ -80,6 +80,8 @@ export default function ExamPage() {
   const [fullscreenGranted, setFullscreenGranted] = useState(false);
   const [isFullscreenOn, setIsFullscreenOn] = useState(false);
 
+  // Panel navigasi soal: overlay di mobile, kolom tetap di desktop.
+  const [isNavOpen, setIsNavOpen] = useState(false);
   const [raguraguSet, setRaguraguSet] = useState<Set<string>>(new Set());
   const [fontSize, setFontSize] = useState<'sm'|'base'|'lg'>('base');
   const fontSizeClass = { sm: 'text-sm', base: 'text-base', lg: 'text-lg' }[fontSize];
@@ -132,10 +134,15 @@ export default function ExamPage() {
 
   const handleViolation = useCallback(async (type: ViolationType, count: number) => {
     if (!user) return;
+    // Hitungan dari useExamSecurity adalah satu-satunya sumber untuk tampilan:
+    // tanpa baris ini spanduk "PELANGGARAN (n/maks)" tidak pernah muncul karena
+    // store tidak pernah ikut naik. Penegakan sendiri tetap di useExamSecurity
+    // dan di server; angka ini hanya yang dilihat siswa.
+    setViolations(count);
     setViolationToast(`Peringatan: ${type.replace("_", " ")}. Pelanggaran ke-${count}`);
     setTimeout(() => setViolationToast(""), 4000);
     await reportViolation(user.id_siswa, type);
-  }, [user]);
+  }, [user, setViolations]);
 
   const handleMaxViolations = useCallback(() => {
     doSubmit(true);
@@ -167,9 +174,23 @@ export default function ExamPage() {
     requestExamFullscreen(document, document.documentElement).then(setFullscreenGranted);
   }, []);
 
+  // Rehidrasi sessionStorage oleh zustand/persist selesai SETELAH render pertama.
+  // Tanpa menunggunya, memuat ulang halaman di tengah ujian membaca user === null
+  // dan melempar siswa kembali ke /login. Server tetap pemilik attempt; ini hanya
+  // menunda keputusan sampai state klien benar-benar terbaca.
+  const [isStoreHydrated, setIsStoreHydrated] = useState(
+    () => useExamStore.persist?.hasHydrated?.() ?? true,
+  );
+  useEffect(() => {
+    if (isStoreHydrated) return;
+    return useExamStore.persist?.onFinishHydration?.(() => setIsStoreHydrated(true));
+  }, [isStoreHydrated]);
+
   // Load exam data on mount
   useEffect(() => {
+    if (!isStoreHydrated) return;
     const init = async () => {
+      const user = useExamStore.getState().user;
       if (!user) {
         router.replace("/login");
         return;
@@ -247,7 +268,7 @@ export default function ExamPage() {
       setIsLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isStoreHydrated]);
 
   // Countdown display only; deadlineMs remains the source of truth.
   useEffect(() => {
@@ -440,44 +461,44 @@ export default function ExamPage() {
   };
 
   return (
-    <div className="bg-slate-100 font-body-student text-slate-800 min-h-screen flex flex-col">
+    <div className="bg-slate-100 font-body-student text-slate-800 min-h-screen flex flex-col overflow-x-hidden">
       {/* HEADER SECTION - FIXED 2 ROWS */}
       <div className="sticky top-0 z-50 flex flex-col flex-shrink-0 shadow-md">
         {/* ROW 1: DARK bg-slate-900 */}
-        <div className="bg-[#0f172a] h-[72px] px-6 flex justify-between items-center border-b border-slate-800">
+        <div className="bg-[#0f172a] h-14 px-3 gap-2 lg:h-[72px] lg:px-6 flex justify-between items-center border-b border-slate-800">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-sky-400 text-3xl">school</span>
-            <span className="font-extrabold text-xl tracking-wider text-white">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="material-symbols-outlined text-sky-400 text-2xl lg:text-3xl">school</span>
+            <span className="hidden sm:inline font-extrabold text-lg lg:text-xl tracking-wider text-white">
               CBT<span className="text-sky-400">SEKOLAH</span>
             </span>
           </div>
 
           {/* Subject & Class */}
-          <div className="flex flex-col text-center">
+          <div className="hidden lg:flex flex-col text-center min-w-0">
             <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-1">
               MATA PELAJARAN
             </span>
-            <span className="text-white font-extrabold text-sm tracking-wide">
+            <span className="text-white font-extrabold text-sm tracking-wide truncate">
               {subjectName || examName} – KELAS {user?.kelas || "X"}
             </span>
           </div>
 
           {/* Timer */}
-          <div className="flex items-center gap-3 px-4 py-2 rounded-xl border border-slate-800 bg-slate-900/60 shadow-inner">
+          <div className="flex items-center gap-2 lg:gap-3 px-2.5 py-1.5 lg:px-4 lg:py-2 rounded-xl border border-slate-800 bg-slate-900/60 shadow-inner shrink-0">
             <div className="flex flex-col items-end">
-              <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest leading-none mb-1">
+              <span className="hidden sm:inline text-[9px] text-slate-400 font-extrabold uppercase tracking-widest leading-none mb-1">
                 SISA WAKTU
               </span>
-              <span className={`text-2xl font-black leading-none tracking-wider font-mono ${isTimeWarning ? "text-red-400 animate-pulse" : "text-white"}`}>
+              <span className={`text-lg lg:text-2xl font-black leading-none tracking-wider font-mono ${isTimeWarning ? "text-red-400 animate-pulse" : "text-white"}`}>
                 {formatTime(timeRemaining)}
               </span>
             </div>
-            <span className="material-symbols-outlined text-sky-400 text-2xl">schedule</span>
+            <span className="material-symbols-outlined text-sky-400 text-xl lg:text-2xl">schedule</span>
           </div>
 
           {/* Sync Status Indicator */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800" title={
+          <div className="flex items-center gap-1.5 px-2 py-1.5 lg:px-3 rounded-lg bg-slate-900/60 border border-slate-800 shrink-0" title={
             displayStatus === 'saved' ? 'Jawaban tersimpan' :
             displayStatus === 'saving' ? 'Menyimpan...' :
             displayStatus === 'failed' ? 'Gagal menyimpan' :
@@ -489,7 +510,7 @@ export default function ExamPage() {
               displayStatus === 'failed' ? 'bg-red-400' :
               displayStatus === 'offline' ? 'bg-slate-500' : 'bg-slate-600'
             }`} />
-            <span className={`text-[9px] font-bold uppercase tracking-wider ${
+            <span className={`hidden lg:inline text-[9px] font-bold uppercase tracking-wider ${
               displayStatus === 'saved' ? 'text-emerald-400' :
               displayStatus === 'saving' ? 'text-amber-400' :
               displayStatus === 'failed' ? 'text-red-400' :
@@ -504,10 +525,10 @@ export default function ExamPage() {
         </div>
 
         {/* ROW 2: bg-slate-800 */}
-        <div className="bg-[#1e293b] h-[56px] px-6 flex justify-between items-center border-b border-slate-700">
+        <div className="bg-[#1e293b] min-h-[44px] lg:h-[56px] px-3 lg:px-6 gap-2 flex justify-between items-center border-b border-slate-700">
           {/* Font Size controls */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-slate-400">
+          <div className="flex items-center gap-2 lg:gap-4 shrink-0">
+            <div className="hidden lg:flex items-center gap-1.5 text-slate-400">
               <span className="material-symbols-outlined text-sm">format_size</span>
               <span className="text-[10px] font-extrabold uppercase tracking-widest">T FONT SIZE</span>
             </div>
@@ -516,7 +537,9 @@ export default function ExamPage() {
                 <button
                   key={sz}
                   onClick={() => setFontSize(sz)}
-                  className={`w-8 h-8 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                  aria-label={`Ukuran teks ${sz === 'sm' ? 'kecil' : sz === 'base' ? 'sedang' : 'besar'}`}
+                  aria-pressed={fontSize === sz}
+                  className={`w-9 h-9 lg:w-8 lg:h-8 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
                     fontSize === sz
                       ? "bg-[#2563EB] border-[#2563EB] text-white shadow-sm"
                       : "border-slate-600 text-slate-300 hover:border-slate-500 hover:text-white"
@@ -530,20 +553,27 @@ export default function ExamPage() {
 
           {/* Violation Banner */}
           {violations > 0 ? (
-            <div className="bg-red-600 text-white rounded-lg px-4 py-1.5 flex items-center gap-3 shadow-md border border-red-500 max-w-md animate-pulse">
-              <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
-              <div className="flex flex-col">
-                <span className="text-xs font-extrabold uppercase tracking-wider leading-none">PELANGGARAN TERDETEKSI!! ({violations}/{maxViolations})</span>
-                <span className="text-[10px] text-red-100 mt-0.5 font-medium">Sisa {maxViolations - violations} peringatan sebelum ujian ditangguhkan.</span>
+            <div className="bg-red-600 text-white rounded-lg px-2.5 py-1 lg:px-4 lg:py-1.5 flex items-center gap-2 lg:gap-3 shadow-md border border-red-500 flex-1 max-w-md min-w-0 animate-pulse">
+              <span className="material-symbols-outlined text-white text-[18px] lg:text-[20px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] lg:text-xs font-extrabold uppercase tracking-wider leading-none">PELANGGARAN ({violations}/{maxViolations})</span>
+                <span className="text-[9px] lg:text-[10px] text-red-100 mt-0.5 font-medium leading-tight">Sisa {maxViolations - violations} peringatan sebelum ujian ditangguhkan.</span>
               </div>
             </div>
           ) : (
             <div className="flex-1" />
           )}
 
+          {/* Mapel: di ponsel baris 1 tidak muat, jadi ditampilkan di sini. */}
+          {violations === 0 && (
+            <span className="lg:hidden min-w-0 truncate text-[11px] font-bold text-slate-300 tracking-wide">
+              {subjectName || examName} · {user?.kelas || "X"}
+            </span>
+          )}
+
           {/* Identitas Peserta */}
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col text-right">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="hidden lg:flex flex-col text-right">
               <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest leading-none mb-1">IDENTITAS PESERTA</span>
               <span className="text-sky-400 font-extrabold text-xs uppercase">{user?.nama_lengkap || user?.username}</span>
             </div>
@@ -556,7 +586,7 @@ export default function ExamPage() {
 
       {/* Floating Violation Toast */}
       {violationToast && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-bounce">
+        <div className="fixed top-[108px] lg:top-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm lg:w-auto bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-bounce">
           <span className="material-symbols-outlined text-red-500">warning</span>
           <span className="font-bold text-xs uppercase tracking-wide">{violationToast}</span>
         </div>
@@ -565,34 +595,34 @@ export default function ExamPage() {
       {/* BODY SECTION: TWO-COLUMN LAYOUT */}
       <div className="flex flex-1 relative min-h-0">
         {/* LEFT COLUMN: QUESTION AREA */}
-        <div className="flex-1 overflow-y-auto p-8 pb-32 bg-white">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 pb-28 lg:pb-32 bg-white">
           {currentQuestion && (
             <div className="max-w-3xl mx-auto">
               {/* Question Header */}
-              <div className="flex items-center gap-4 border-b border-slate-100 pb-4 mb-6">
-                <div className="w-10 h-10 rounded-full bg-[#2563EB] text-white font-extrabold text-sm flex items-center justify-center shadow-md shadow-blue-500/10">
+              <div className="flex flex-wrap items-center gap-3 lg:gap-4 border-b border-slate-100 pb-4 mb-6">
+                <div data-testid="question-number" className="w-9 h-9 lg:w-10 lg:h-10 shrink-0 rounded-full bg-[#2563EB] text-white font-extrabold text-sm flex items-center justify-center shadow-md shadow-blue-500/10">
                   {currentQuestion.nomor_urut}
                 </div>
                 <span className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">
                   PERTANYAAN
                 </span>
                 {currentQuestion.tipe === "COMPLEX" && (
-                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+                  <span className="ml-auto max-lg:ml-0 font-extrabold text-[10px] uppercase tracking-wider bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
                     PILIHAN GANDA KOMPLEKS (LEBIH DARI SATU)
                   </span>
                 )}
                 {currentQuestion.tipe === "TRUE_FALSE" && (
-                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+                  <span className="ml-auto max-lg:ml-0 font-extrabold text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
                     BENAR / SALAH PER PERNYATAAN
                   </span>
                 )}
                 {currentQuestion.tipe === "FILL_IN" && (
-                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200">
+                  <span className="ml-auto max-lg:ml-0 font-extrabold text-[10px] uppercase tracking-wider bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200">
                     ISIAN SINGKAT
                   </span>
                 )}
                 {currentQuestion.tipe === "MATCHING" && (
-                  <span className="ml-auto font-extrabold text-[10px] uppercase tracking-wider bg-violet-50 text-violet-700 px-3 py-1 rounded-full border border-violet-200">
+                  <span className="ml-auto max-lg:ml-0 font-extrabold text-[10px] uppercase tracking-wider bg-violet-50 text-violet-700 px-3 py-1 rounded-full border border-violet-200">
                     PASANGKAN SETIAP ITEM
                   </span>
                 )}
@@ -600,7 +630,8 @@ export default function ExamPage() {
 
               {/* Question Text */}
               <div
-                className={`font-body-student text-slate-800 leading-relaxed my-6 font-medium ${fontSizeClass}`}
+                data-testid="question-text"
+                className={`question-body font-body-student text-slate-800 leading-relaxed my-6 font-medium ${fontSizeClass}`}
                 dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(currentQuestion.pertanyaan) }}
               />
 
@@ -610,7 +641,7 @@ export default function ExamPage() {
                 <img
                   src={currentQuestion.gambar_url}
                   alt="Gambar soal"
-                  className="max-h-60 rounded-lg object-contain border border-slate-200 bg-slate-50 mb-6"
+                  className="max-w-full max-h-60 rounded-lg object-contain border border-slate-200 bg-slate-50 mb-6"
                   onError={(e) => {
                     const el = e.currentTarget;
                     const idMatch = el.src.match(/[?&]id=([-\w]{25,})/);
@@ -730,21 +761,23 @@ export default function ExamPage() {
                     return (
                       <button
                         key={opt}
+                        data-testid={`option-${opt}`}
+                        aria-pressed={selected}
                         onClick={() => handleSelectAnswer(currentQuestion.id_soal, opt, currentQuestion.tipe === "COMPLEX")}
-                        className={`flex items-start gap-4 border rounded-xl p-4 cursor-pointer text-left transition-all ${
+                        className={`flex items-start gap-3 lg:gap-4 border rounded-xl p-3 lg:p-4 cursor-pointer text-left transition-all ${
                           selected
                             ? "border-[#2563EB] bg-blue-50/50 shadow-sm"
                             : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
                         }`}
                       >
-                        <div className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
+                        <div className={`w-8 h-8 lg:w-9 lg:h-9 rounded-lg border-2 flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
                           selected
                             ? "bg-[#2563EB] border-[#2563EB] text-white shadow-sm"
                             : "bg-white border-slate-300 text-slate-500"
                         }`}>
                           {opt.toUpperCase()}
                         </div>
-                        <div className={`text-slate-700 font-medium leading-relaxed self-center ${fontSizeClass}`}>
+                        <div className={`min-w-0 break-words text-slate-700 font-medium leading-relaxed self-center ${fontSizeClass}`}>
                           {label}
                         </div>
                       </button>
@@ -765,14 +798,37 @@ export default function ExamPage() {
           )}
         </div>
 
-        {/* RIGHT COLUMN: SIDEBAR */}
-        <div className="w-[288px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col h-[calc(100vh-128px)] sticky top-[128px] overflow-hidden">
+        {/* Backdrop panel navigasi (hanya mobile) */}
+        {isNavOpen && (
+          <button
+            aria-label="Tutup navigasi soal"
+            onClick={() => setIsNavOpen(false)}
+            className="lg:hidden fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-[1px] cursor-pointer"
+          />
+        )}
+
+        {/* RIGHT COLUMN: SIDEBAR — panel geser di mobile, kolom tetap di desktop */}
+        <div
+          data-testid="question-nav-panel"
+          id="question-nav-panel"
+          className={`bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden
+            max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-[70] max-lg:w-[280px] max-lg:max-w-[85vw] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200
+            ${isNavOpen ? "max-lg:translate-x-0" : "max-lg:translate-x-full max-lg:invisible"}
+            lg:w-[288px] lg:shrink-0 lg:visible lg:translate-x-0 lg:h-[calc(100vh-128px)] lg:sticky lg:top-[128px]`}
+        >
           {/* Section 1: Header */}
-          <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center h-12 flex-shrink-0">
+          <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center h-12 flex-shrink-0 gap-2">
             <span className="text-[10px] font-extrabold uppercase tracking-wider">NAVIGASI SOAL</span>
             <span className="bg-[#2563EB] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">
               {questions.length} SOAL
             </span>
+            <button
+              onClick={() => setIsNavOpen(false)}
+              aria-label="Tutup navigasi soal"
+              className="lg:hidden ml-auto -mr-1 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-white cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
           </div>
 
           {/* Section 2: Grid */}
@@ -797,8 +853,8 @@ export default function ExamPage() {
                 return (
                   <button
                     key={q.id_soal}
-                    onClick={() => setCurrentQuestionIndex(idx)}
-                    className={`w-full aspect-square rounded-lg text-xs font-extrabold flex items-center justify-center cursor-pointer transition-all ${btnClass}`}
+                    onClick={() => { setCurrentQuestionIndex(idx); setIsNavOpen(false); }}
+                    className={`w-full aspect-square min-h-9 rounded-lg text-xs font-extrabold flex items-center justify-center cursor-pointer transition-all ${btnClass}`}
                   >
                     {q.nomor_urut}
                   </button>
@@ -857,46 +913,65 @@ export default function ExamPage() {
       </div>
 
       {/* BOTTOM NAV BAR */}
-      <div className="fixed bottom-0 left-0 right-[288px] h-20 bg-white border-t border-slate-200 px-6 py-4 flex items-center justify-between z-40">
+      <div className="fixed bottom-0 left-0 right-0 lg:right-[288px] h-14 lg:h-20 bg-white border-t border-slate-200 px-2 lg:px-6 py-1.5 lg:py-4 gap-1 lg:gap-2 flex items-center justify-between z-40 pb-[max(0.375rem,env(safe-area-inset-bottom))] lg:pb-4 max-w-full overflow-hidden">
         {/* Sebelumnya */}
         <button
+          data-testid="nav-prev"
           onClick={prevQuestion}
           disabled={currentQuestionIndex === 0}
-          className="border border-slate-300 text-slate-600 rounded-xl px-6 h-11 font-bold text-xs uppercase hover:bg-slate-50 transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer"
+          aria-label="Soal sebelumnya"
+          className="border border-slate-300 text-slate-600 rounded-xl px-2 lg:px-6 h-10 lg:h-11 font-bold text-xs uppercase hover:bg-slate-50 transition-all disabled:opacity-40 flex items-center gap-1 lg:gap-2 cursor-pointer shrink-0"
         >
-          <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-          <span>Sebelumnya</span>
+          <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none">chevron_left</span>
+          <span className="hidden lg:inline">Sebelumnya</span>
+        </button>
+
+        {/* Pembuka panel navigasi — hanya mobile; di desktop sidebar selalu tampil. */}
+        <button
+          data-testid="toggle-question-nav"
+          onClick={() => setIsNavOpen(true)}
+          aria-label="Buka navigasi soal"
+          aria-expanded={isNavOpen}
+          aria-controls="question-nav-panel"
+          className="lg:hidden flex items-center gap-1 border border-slate-300 text-slate-700 rounded-xl px-2 h-10 font-bold text-xs cursor-pointer shrink-0 min-w-0"
+        >
+          <span className="material-symbols-outlined text-[18px] w-4.5 h-4.5 overflow-hidden inline-block shrink-0 leading-none">grid_view</span>
+          <span className="tabular-nums">{currentQuestionIndex + 1}/{totalQuestions}</span>
         </button>
 
         {/* Ragu-Ragu Toggle */}
         {currentQuestion && (
           <button
             onClick={() => toggleRaguragu(currentQuestion.id_soal)}
-            className={`rounded-xl px-6 h-11 font-extrabold text-xs uppercase transition-all flex items-center gap-2 cursor-pointer border ${
+            aria-label="Tandai ragu-ragu"
+            aria-pressed={raguraguSet.has(currentQuestion.id_soal)}
+            className={`rounded-xl px-2 lg:px-6 h-10 lg:h-11 font-extrabold text-xs uppercase transition-all flex items-center gap-1 lg:gap-2 cursor-pointer border shrink-0 ${
               raguraguSet.has(currentQuestion.id_soal)
                 ? "bg-orange-100 border-orange-400 text-orange-600 shadow-sm"
                 : "border-orange-300 text-orange-500 hover:bg-orange-50/50"
             }`}
           >
-            <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: raguraguSet.has(currentQuestion.id_soal) ? "'FILL' 1" : undefined }}>help_outline</span>
-            <span>Ragu-Ragu</span>
+            <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none" style={{ fontVariationSettings: raguraguSet.has(currentQuestion.id_soal) ? "'FILL' 1" : undefined }}>help_outline</span>
+            <span className="hidden lg:inline">Ragu-Ragu</span>
           </button>
         )}
 
         {/* Berikutnya */}
         <button
+          data-testid="nav-next"
           onClick={nextQuestion}
           disabled={currentQuestionIndex === totalQuestions - 1}
-          className="bg-[#2563EB] text-white rounded-xl px-6 h-11 font-bold text-xs uppercase hover:opacity-95 transition-all disabled:opacity-40 flex items-center gap-2 cursor-pointer"
+          aria-label="Soal berikutnya"
+          className="bg-[#2563EB] text-white rounded-xl px-2 lg:px-6 h-10 lg:h-11 font-bold text-xs uppercase hover:opacity-95 transition-all disabled:opacity-40 flex items-center gap-1 lg:gap-2 cursor-pointer shrink-0"
         >
-          <span>Berikutnya</span>
-          <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+          <span className="hidden lg:inline">Berikutnya</span>
+          <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none">chevron_right</span>
         </button>
       </div>
 
       {/* Ajakan kembali ke layar penuh; ujian tetap bisa dikerjakan. */}
       {fullscreenGranted && !isFullscreenOn && !isSubmitting && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[90] bg-white border border-amber-300 shadow-lg rounded-xl px-5 py-3 flex items-center gap-3">
+        <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[90] w-[calc(100vw-2rem)] max-w-sm lg:w-auto bg-white border border-amber-300 shadow-lg rounded-xl px-4 lg:px-5 py-3 flex flex-wrap items-center justify-center gap-2 lg:gap-3">
           <span className="material-symbols-outlined text-amber-500">warning</span>
           <span className="font-body-student text-xs text-slate-600">Mode layar penuh telah ditutup.</span>
           <button
