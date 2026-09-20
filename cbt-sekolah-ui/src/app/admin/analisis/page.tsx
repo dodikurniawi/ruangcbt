@@ -364,9 +364,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis")
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -378,9 +378,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/kelas")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/kelas") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -390,9 +390,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/mata-pelajaran")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/mata-pelajaran") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -404,9 +404,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/management")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/management") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -416,9 +416,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/questions")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/questions") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -428,9 +428,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/cetak")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/cetak") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -440,9 +440,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin/analisis")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/analisis") 
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -454,9 +454,9 @@ export default function AnalisisButirSoalPage() {
           <Link 
             href={tenantPath("/admin")} 
             onClick={() => setIsSidebarOpen(false)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
               isLinkActive("/admin") && !isLinkActive("/kelas") && !isLinkActive("/mata-pelajaran") && !isLinkActive("/management") && !isLinkActive("/questions") && !isLinkActive("/cetak") && !isLinkActive("/analisis")
-                ? "bg-[#2563EB] text-white font-bold shadow-md shadow-blue-500/10" 
+                ? "bg-[#1D4ED8] text-white font-bold shadow-md shadow-blue-700/20" 
                 : "text-slate-300 hover:text-white hover:bg-white/5"
             }`}
           >
@@ -494,7 +494,7 @@ export default function AnalisisButirSoalPage() {
               </button>
             )}
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#1D4ED8] to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-[#1D4ED8] text-white flex items-center justify-center shadow-md shadow-blue-700/20 shrink-0">
                 <span className="material-symbols-outlined text-2xl">analytics</span>
               </div>
               <div>
@@ -548,15 +548,15 @@ export default function AnalisisButirSoalPage() {
         )}
 
         {/* Tab switcher */}
-        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/70 backdrop-blur-xs mb-8 gap-1.5">
+        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/60 backdrop-blur-xs mb-8 gap-1.5">
           {([["butir", "Butir Soal"], ["hasil", "Hasil Belajar Siswa"]] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 activeTab === key
-                  ? "bg-[#1D4ED8] text-white shadow-md shadow-blue-700/20 scale-[1.02]"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60 font-extrabold"
+                  ? "bg-[#1D4ED8] text-white shadow-md shadow-blue-700/20"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60 font-semibold"
               }`}
             >
               {label}
@@ -568,12 +568,12 @@ export default function AnalisisButirSoalPage() {
 
         {activeTab === "butir" && (
         <>
-        {/* SECTION 2: Stats summary */}
+        {/* SECTION 2: Stats summary (Soft pastel indicators) */}
         {questions.length > 0 && (
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             {/* Total Soal */}
-            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-[#1D4ED8]">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-blue-400/80">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#1D4ED8] border border-blue-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-2xl">quiz</span>
               </div>
               <div>
@@ -583,8 +583,8 @@ export default function AnalisisButirSoalPage() {
             </div>
 
             {/* Sudah Dianalisis */}
-            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-emerald-500">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/25">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-emerald-400/80">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-2xl">check_circle</span>
               </div>
               <div>
@@ -594,8 +594,8 @@ export default function AnalisisButirSoalPage() {
             </div>
 
             {/* Perlu Revisi */}
-            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-rose-500">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/25">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-rose-400/80">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-2xl">edit_note</span>
               </div>
               <div>
@@ -605,8 +605,8 @@ export default function AnalisisButirSoalPage() {
             </div>
 
             {/* Soal Baik */}
-            <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-amber-500">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/25">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-4 border-l-4 border-l-amber-400/80">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-2xl">star</span>
               </div>
               <div>
@@ -672,7 +672,7 @@ export default function AnalisisButirSoalPage() {
               <button 
                 onClick={handleBatchAnalyze}
                 disabled={isBatchAnalyzing || filtered.filter(q => !getAnalysisResult(q)).length === 0}
-                className="bg-gradient-to-r from-[#1D4ED8] via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl px-6 h-11 text-xs font-black flex items-center justify-center gap-2.5 shadow-md shadow-blue-700/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider cursor-pointer active:scale-95"
+                className="bg-[#1D4ED8] hover:bg-blue-800 text-white rounded-2xl px-6 h-11 text-xs font-black flex items-center justify-center gap-2.5 shadow-md shadow-blue-700/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all uppercase tracking-wider cursor-pointer active:scale-95"
               >
                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
                 <span>Analisis Semua ({filtered.filter(q => !getAnalysisResult(q)).length} soal)</span>
@@ -724,7 +724,7 @@ export default function AnalisisButirSoalPage() {
 
                     return (
                       <React.Fragment key={q.id_soal}>
-                        <tr className="hover:bg-blue-50/40 transition-colors">
+                        <tr className="hover:bg-slate-50/70 transition-colors">
                           {/* No */}
                           <td className="px-6 py-4 text-center font-bold text-xs text-slate-400">{idx + 1}</td>
 
@@ -764,7 +764,7 @@ export default function AnalisisButirSoalPage() {
                           {/* Rating */}
                           <td className="px-6 py-4">
                             {isAnalyzing ? (
-                              <div className="flex items-center gap-2 text-blue-600 font-extrabold text-xs">
+                              <div className="flex items-center gap-2 text-[#1D4ED8] font-extrabold text-xs">
                                 <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
                                 <span>Menganalisis...</span>
                               </div>
@@ -776,19 +776,19 @@ export default function AnalisisButirSoalPage() {
                             ) : res ? (
                               <div className="space-y-1">
                                 {res.rating === "Baik" && (
-                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-emerald-500 text-white shadow-xs shadow-emerald-500/30 tracking-wide uppercase">
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 tracking-wide uppercase">
                                     <span className="material-symbols-outlined text-[13px]">star</span>
                                     <span>BAIK</span>
                                   </span>
                                 )}
                                 {res.rating === "Cukup" && (
-                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-amber-500 text-white shadow-xs shadow-amber-500/30 tracking-wide uppercase">
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-amber-50 text-amber-700 border border-amber-200/80 tracking-wide uppercase">
                                     <span className="material-symbols-outlined text-[13px]">tune</span>
                                     <span>CUKUP</span>
                                   </span>
                                 )}
                                 {res.rating === "Perlu Revisi" && (
-                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-rose-600 text-white shadow-xs shadow-rose-600/30 tracking-wide uppercase">
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-full bg-rose-50 text-rose-700 border border-rose-200/80 tracking-wide uppercase">
                                     <span className="material-symbols-outlined text-[13px]">warning</span>
                                     <span>PERLU REVISI</span>
                                   </span>
@@ -799,7 +799,7 @@ export default function AnalisisButirSoalPage() {
                                 <div className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">
                                   via {res.model_used.split("-")[0]}
                                 </div>
-                              </div>
+                               </div>
                             ) : (
                               <span className="text-slate-300 font-bold">—</span>
                             )}
@@ -813,13 +813,13 @@ export default function AnalisisButirSoalPage() {
                                   <button
                                     onClick={() => handleAnalyze(q)}
                                     disabled={isAnalyzing}
-                                    className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl px-3.5 h-8.5 text-xs font-extrabold cursor-pointer transition-all shrink-0 shadow-2xs whitespace-nowrap"
+                                    className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl px-3.5 h-8.5 text-xs font-bold cursor-pointer transition-all shrink-0 shadow-2xs whitespace-nowrap"
                                   >
                                     Analisis Ulang
                                   </button>
                                   <button
                                     onClick={() => setExpandedId(isExpanded ? null : q.id_soal)}
-                                    className="bg-[#1D4ED8] hover:bg-blue-700 text-white font-black text-xs px-4 h-8.5 rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+                                    className="bg-[#1D4ED8] hover:bg-blue-800 text-white font-black text-xs px-4 h-8.5 rounded-xl shadow-md shadow-blue-700/20 transition-all cursor-pointer shrink-0 whitespace-nowrap"
                                   >
                                     {isExpanded ? "Tutup" : "Lihat Detail"}
                                   </button>
@@ -828,7 +828,7 @@ export default function AnalisisButirSoalPage() {
                                 <button
                                   onClick={() => handleAnalyze(q)}
                                   disabled={isAnalyzing}
-                                  className="px-5 h-8.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                  className="px-5 h-8.5 bg-[#1D4ED8] hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow-md shadow-blue-700/20 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
                                 >
                                   <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
                                   <span>{isAnalyzing ? "..." : "Analisis"}</span>
@@ -840,34 +840,34 @@ export default function AnalisisButirSoalPage() {
 
                         {/* Expanded Detail Row */}
                         {isExpanded && res && (
-                          <tr className="bg-blue-50/20">
+                          <tr className="bg-slate-50/60">
                             <td colSpan={6} className="px-6 py-2">
-                              <div className="bg-gradient-to-br from-slate-50 via-blue-50/20 to-slate-50 border border-slate-200/90 rounded-2xl p-6 my-2 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-6 transition-all">
+                              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 my-2 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-6 transition-all">
                                 {/* Left Column: Catatan */}
                                 <div>
-                                  <h4 className="text-[10px] uppercase font-black tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
+                                  <h4 className="text-[10px] uppercase font-bold tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
                                     <span className="material-symbols-outlined text-sm">lightbulb</span>
                                     Catatan Analisis
                                   </h4>
-                                  <p className="text-xs text-slate-800 leading-relaxed font-bold bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
+                                  <p className="text-xs text-slate-800 leading-relaxed font-semibold bg-slate-50/70 p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                     {res.catatan || "Tidak ada catatan analisis khusus."}
                                   </p>
                                 </div>
 
                                 {/* Right Column: Saran */}
                                 <div>
-                                  <h4 className="text-[10px] uppercase font-black tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
+                                  <h4 className="text-[10px] uppercase font-bold tracking-widest text-[#1D4ED8] mb-2 flex items-center gap-1.5">
                                     <span className="material-symbols-outlined text-sm">check_circle_outline</span>
                                     Saran Perbaikan
                                   </h4>
                                   {res.saran.length === 0 ? (
-                                    <p className="text-xs text-slate-600 font-bold bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
+                                    <p className="text-xs text-slate-600 font-semibold bg-slate-50/70 p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                       Tidak ada saran perbaikan khusus. Butir soal sudah sangat baik!
                                     </p>
                                   ) : (
-                                    <ul className="space-y-2 bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
+                                    <ul className="space-y-2 bg-slate-50/70 p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                                       {res.saran.map((s, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-xs text-slate-800 font-bold">
+                                        <li key={i} className="flex items-start gap-2 text-xs text-slate-800 font-semibold">
                                           <span className="material-symbols-outlined text-[#1D4ED8] text-[16px] shrink-0 mt-0.5">chevron_right</span>
                                           <span>{s}</span>
                                         </li>
@@ -877,7 +877,7 @@ export default function AnalisisButirSoalPage() {
                                 </div>
 
                                 {/* Bottom Info */}
-                                <div className="md:col-span-2 text-[10px] text-slate-400 font-extrabold text-right border-t border-slate-200/60 pt-3">
+                                <div className="md:col-span-2 text-[10px] text-slate-400 font-bold text-right border-t border-slate-200/60 pt-3">
                                   Dianalisis: {new Date(res.analyzed_at).toLocaleString("id-ID")} menggunakan {res.model_used}
                                 </div>
                               </div>

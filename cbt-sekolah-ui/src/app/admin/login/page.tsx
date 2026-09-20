@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
-import { adminLogin, getExamSummary, getExamStatus, getMataPelajaran } from "@/lib/api";
+import { adminLogin, getExamSummary, getMataPelajaran } from "@/lib/api";
 import { ShieldCheck } from "lucide-react";
 import { mutate } from "swr";
 
@@ -14,11 +14,6 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Warm the GAS cold-start while admin types their password.
-    // getExamStatus is the cheapest unauthenticated read action.
-    // Fire-and-forget: we don't care about the result.
-    getExamStatus().catch(() => {});
-
     // Pre-download the /admin page JS bundle so navigation is instant.
     router.prefetch("/admin");
   // eslint-disable-next-line react-hooks/exhaustive-deps

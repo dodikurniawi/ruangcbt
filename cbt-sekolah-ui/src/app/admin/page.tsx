@@ -62,8 +62,16 @@ export default function AdminDashboard() {
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR(
     "getUsers", getUsers, { refreshInterval: 5000 }
   );
-  const { data: summaryRes, mutate: mutateSummary } = useSWR("getExamSummary", getExamSummary, { refreshInterval: 10000 });
-  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
+  // Login page seeds these keys before navigation. Do not immediately revalidate
+  // existing data: that caused a second GAS request for each key on mount.
+  // Empty cache still fetches normally; refreshInterval/manual mutate stays active.
+  const { data: summaryRes, mutate: mutateSummary } = useSWR("getExamSummary", getExamSummary, {
+    refreshInterval: 10000,
+    revalidateIfStale: false,
+  });
+  const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran, {
+    revalidateIfStale: false,
+  });
 
   const users: User[] = usersRes?.data ?? [];
   const summary: ExamSummary | undefined = summaryRes?.data;
