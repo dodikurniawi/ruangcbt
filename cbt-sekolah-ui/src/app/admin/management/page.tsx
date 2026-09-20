@@ -73,6 +73,7 @@ export default function AdminManagement() {
   const photoTargetId = useRef<string>("");
   const [configSaved, setConfigSaved] = useState(false);
   const [configError, setConfigError] = useState("");
+  const [disableExamPin, setDisableExamPin] = useState(false);
   const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "" });
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -297,7 +298,7 @@ export default function AdminManagement() {
   const handleSaveConfig = async () => {
     if (!configFormRef.current) return;
     const fd = new FormData(configFormRef.current);
-    const exam_pin = ((fd.get("exam_pin") as string) || "").trim();
+    const exam_pin = disableExamPin ? "" : ((fd.get("exam_pin") as string) || "").trim();
     const admin_password = (fd.get("admin_password") as string) || "";
     const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
     const rawLimit = ((fd.get("max_violations") as string) || "").trim();
@@ -312,8 +313,13 @@ export default function AdminManagement() {
     }
 
     // PIN dikirim apa adanya sebagai teks: "0001" harus sampai ke server sebagai
-    // "0001". Kosong berarti ujian tanpa PIN — bukan lagi "jangan diubah", karena
-    // kolomnya kini menampilkan PIN yang benar-benar tersimpan.
+    // "0001". PIN kosong hanya sah bila opsi nonaktifkan dipilih, atau memang
+    // sejak awal tidak ada PIN.
+    if (!disableExamPin && exam_pin === "" && examPin !== "") {
+      setConfigSaved(false);
+      setConfigError("PIN harus terdiri dari 4 digit. Jika ingin menonaktifkan PIN, pilih opsi Nonaktifkan PIN ujian.");
+      return;
+    }
     if (exam_pin !== "" && !/^[0-9]{4}$/.test(exam_pin)) {
       setConfigSaved(false);
       setConfigError("PIN ujian harus 4 digit angka, atau dikosongkan untuk menonaktifkan PIN.");
@@ -326,10 +332,11 @@ export default function AdminManagement() {
       updateConfig("admin_wa", admin_wa),
       updateConfig("max_violations", maxViolations),
     ];
-    // Selalu dikirim saat berubah, termasuk saat dikosongkan: mengosongkan kolom
-    // kini berarti menonaktifkan PIN. Dilewati bila tidak berubah supaya menyimpan
-    // pengaturan lain tidak menulis ulang sel PIN tanpa alasan.
-    if (exam_pin !== examPin) tasks.push(updateConfig("exam_pin", exam_pin));
+    // Kosong hanya dikirim untuk aksi nonaktifkan yang eksplisit. Dilewati bila
+    // tidak berubah supaya menyimpan pengaturan lain tidak menulis ulang PIN.
+    if (disableExamPin ? examPin !== "" : exam_pin !== examPin) {
+      tasks.push(updateConfig("exam_pin", exam_pin));
+    }
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
     const results = await Promise.all(tasks);
     setIsSavingConfig(false);
@@ -800,15 +807,23 @@ export default function AdminManagement() {
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
-                  maxLength={4}
-                  pattern="[0-9]{4}"
+                  disabled={disableExamPin}
                   defaultValue={examPin}
-                  placeholder="Kosongkan untuk ujian tanpa PIN"
+                  placeholder="Masukkan 4 digit"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
                 />
                 <p className="mt-1 text-[10px] text-slate-400">
-                  PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian. <strong className="font-bold text-slate-900">PIN wajib 4 digit angka.</strong> Kosongkan untuk menjalankan ujian tanpa PIN.
+                  PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian. <strong className="font-bold text-slate-900">PIN wajib 4 digit angka.</strong>
                 </p>
+                <label className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={disableExamPin}
+                    onChange={(e) => setDisableExamPin(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Nonaktifkan PIN ujian
+                </label>
               </div>
               <div>
                 <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2" htmlFor="max_violations">

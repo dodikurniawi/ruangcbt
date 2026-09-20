@@ -66,7 +66,22 @@ export default function ExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [violationToast, setViolationToast] = useState("");
+  // Visibilitas SPANDUK header saja — bukan counter. `violations` di store
+  // (persisten, dipakai enforcement + ditampilkan di dalam spanduk) tidak
+  // disentuh; ini murni durasi tampil di UI (5 detik per pelanggaran).
+  const [showViolationBanner, setShowViolationBanner] = useState(false);
+  const violationBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [maxViolations, setMaxViolations] = useState(3);
+
+  // Clean up violation banner timer on unmount
+  useEffect(() => {
+    return () => {
+      if (violationBannerTimerRef.current) {
+        clearTimeout(violationBannerTimerRef.current);
+      }
+    };
+  }, []);
+
   const [examName, setExamName] = useState("RuangCBT");
   const [subjectName, setSubjectName] = useState("");
   const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
@@ -141,6 +156,17 @@ export default function ExamPage() {
     setViolations(count);
     setViolationToast(`Peringatan: ${type.replace("_", " ")}. Pelanggaran ke-${count}`);
     setTimeout(() => setViolationToast(""), 4000);
+
+    // Spanduk peringatan pelanggaran muncul sementara selama 5 detik, lalu otomatis hilang.
+    // Jika terjadi pelanggaran baru sebelum 5 detik, timer di-reset 5 detik dari violation terbaru.
+    setShowViolationBanner(true);
+    if (violationBannerTimerRef.current) {
+      clearTimeout(violationBannerTimerRef.current);
+    }
+    violationBannerTimerRef.current = setTimeout(() => {
+      setShowViolationBanner(false);
+    }, 5000);
+
     await reportViolation(user.id_siswa, type);
   }, [user, setViolations]);
 
@@ -552,7 +578,7 @@ export default function ExamPage() {
           </div>
 
           {/* Violation Banner */}
-          {violations > 0 ? (
+          {showViolationBanner && violations > 0 ? (
             <div className="bg-red-600 text-white rounded-lg px-2.5 py-1 lg:px-4 lg:py-1.5 flex items-center gap-2 lg:gap-3 shadow-md border border-red-500 flex-1 max-w-md min-w-0 animate-pulse">
               <span className="material-symbols-outlined text-white text-[18px] lg:text-[20px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
               <div className="flex flex-col min-w-0">
@@ -564,8 +590,8 @@ export default function ExamPage() {
             <div className="flex-1" />
           )}
 
-          {/* Mapel: di ponsel baris 1 tidak muat, jadi ditampilkan di sini. */}
-          {violations === 0 && (
+          {/* Mapel: di ponsel baris 1 tidak muat, jadi ditampilkan di sini saat banner tidak aktif. */}
+          {(!showViolationBanner || violations === 0) && (
             <span className="lg:hidden min-w-0 truncate text-[11px] font-bold text-slate-300 tracking-wide">
               {subjectName || examName} · {user?.kelas || "X"}
             </span>

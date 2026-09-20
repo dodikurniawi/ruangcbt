@@ -151,7 +151,7 @@ test.describe("Halaman ujian — peringatan keamanan di portrait", () => {
 
   // Aturan keamanan tidak boleh dikorbankan demi layout: pelanggaran tetap
   // tercatat dan peringatannya tetap terbaca utuh di layar kecil.
-  test("pelanggaran tab switch tetap terdeteksi dan peringatannya terbaca", async ({ page }) => {
+  test("pelanggaran tab switch terdeteksi, spanduk tampil dan otomatis hilang setelah 5 detik", async ({ page }) => {
     await openExam(page);
 
     await page.evaluate(() => {
@@ -160,9 +160,14 @@ test.describe("Halaman ujian — peringatan keamanan di portrait", () => {
     });
 
     await expect(page.getByText(/Peringatan: tab switch/i)).toBeVisible();
-    await expect(page.getByText(/PELANGGARAN \(1\/3\)/)).toBeVisible();
+    const banner = page.getByText(/PELANGGARAN \(1\/3\)/);
+    await expect(banner).toBeVisible();
     await expect(page.getByText(/Sisa 2 peringatan sebelum ujian ditangguhkan/)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+    // Spanduk otomatis hilang setelah 5 detik
+    await page.waitForTimeout(5500);
+    await expect(banner).toBeHidden();
   });
 });
 

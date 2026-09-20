@@ -50,6 +50,71 @@ function stateWithPin(pin) {
   assert.equal(get(gas, "getExamPinStatus").data.isPinRequired, false);
 }
 
+// ===== PIN ujian: dua arah lewat jalur admin, tetap tertutup di jalur publik =====
+
+{
+  // Dibaca kembali HANYA oleh action ber-role admin. getConfig yang dipakai siswa
+  // tetap hanya membawa turunannya.
+  const gas = loadGas(stateWithPin("1234"));
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "1234", "admin harus bisa membaca PIN");
+  assert.equal("exam_pin" in get(gas, "getConfig").data, false, "jalur publik tetap tanpa PIN");
+}
+
+{
+  // Nol depan bertahan utuh: PIN adalah teks, bukan bilangan.
+  const state = stateWithPin("1234");
+  const gas = loadGas(state);
+  assert.equal(post(gas, "updateConfig", { key: "exam_pin", value: "0001" }).success, true);
+  const row = state.Config.find((r) => r[0] === "exam_pin");
+  assert.equal(row[1], "0001", "nol depan tidak boleh hilang saat ditulis");
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "0001", "nol depan tidak boleh hilang saat dibaca");
+}
+
+{
+  // Sel yang terlanjur tersimpan sebagai angka tetap keluar sebagai teks.
+  const gas = loadGas(stateWithPin(1234));
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "1234");
+}
+
+{
+  // PIN yang tidak sah ditolak dan TIDAK menimpa nilai lama.
+  const state = stateWithPin("1234");
+  const gas = loadGas(state);
+  for (const invalid of ["123", "12345", "abcd", "12ab"]) {
+    const res = post(gas, "updateConfig", { key: "exam_pin", value: invalid });
+    assert.equal(res.success, false, `PIN ${invalid} harus ditolak`);
+  }
+  assert.equal(state.Config.find((r) => r[0] === "exam_pin")[1], "1234", "PIN lama harus utuh");
+}
+
+{
+  // Kosong sah dan berarti "ujian tanpa PIN".
+  const state = stateWithPin("1234");
+  const gas = loadGas(state);
+  assert.equal(post(gas, "updateConfig", { key: "exam_pin", value: "" }).success, true);
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "");
+  assert.equal(get(gas, "getConfig").data.isPinRequired, false);
+}
+
+{
+  // Cache Config dibuang saat menulis: pembacaan berikutnya melihat nilai baru.
+  const gas = loadGas(stateWithPin("1234"));
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "1234");
+  assert.equal(post(gas, "updateConfig", { key: "exam_pin", value: "5678" }).success, true);
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "5678", "cache basi tidak boleh bertahan");
+  assert.equal(get(gas, "getExamPinStatus").data.isPinRequired, true);
+}
+
+{
+  // setExamPin adalah jalur tulis kedua untuk key yang sama: aturannya identik.
+  const state = stateWithPin("1234");
+  const gas = loadGas(state);
+  assert.equal(post(gas, "setExamPin", { pin: "12", adminPassword: "rahasia-admin" }).success, false);
+  assert.equal(state.Config.find((r) => r[0] === "exam_pin")[1], "1234");
+  assert.equal(post(gas, "setExamPin", { pin: "0001", adminPassword: "rahasia-admin" }).success, true);
+  assert.equal(get(gas, "getExamSummary").data.exam_pin, "0001");
+}
+
 // ===== P0-3 — getExamSummary: satu baca Questions, satu baca KumpulanSoal =====
 
 function summaryState() {
@@ -242,6 +307,40 @@ const mutations = [
       'isPinRequired: String(config.exam_pin || "").trim() !== "", exam_pin: config.exam_pin,',
     ),
     run: (gas) => !JSON.stringify(get(gas, "getConfig").data).includes("1234"),
+    state: () => stateWithPin("1234"),
+  },
+  {
+    // Kalau PIN berhenti dikirim ke jalur admin, kolom di UI kembali kosong —
+    // bug yang justru sedang diperbaiki.
+    name: "summary-tanpa-pin",
+    apply: (src) => src.replace(
+      "exam_pin: asConfigText(config.exam_pin),",
+      "",
+    ),
+    run: (gas) => get(gas, "getExamSummary").data.exam_pin === "1234",
+    state: () => stateWithPin("1234"),
+  },
+  {
+    // Kalau PIN diperlakukan sebagai bilangan, "0001" diam-diam menjadi 1.
+    name: "pin-jadi-angka",
+    apply: (src) => src.replace(
+      "return { value: pin };",
+      "return { value: Number(pin) };",
+    ),
+    run: (gas) => {
+      post(gas, "updateConfig", { key: "exam_pin", value: "0001" });
+      return get(gas, "getExamSummary").data.exam_pin === "0001";
+    },
+    state: () => stateWithPin("1234"),
+  },
+  {
+    // Kalau validasi 4 digit hilang, PIN sampah bisa masuk ke Sheets.
+    name: "pin-tanpa-validasi",
+    apply: (src) => src.replace(
+      'return { message: "PIN ujian harus 4 digit angka, atau dikosongkan untuk menonaktifkan PIN." };',
+      "return { value: pin };",
+    ),
+    run: (gas) => post(gas, "updateConfig", { key: "exam_pin", value: "abcd" }).success === false,
     state: () => stateWithPin("1234"),
   },
   {
