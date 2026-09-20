@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useTenantRouter } from "@/hooks/useTenantRouter";
-import { adminLogin, getExamSummary, getMataPelajaran } from "@/lib/api";
+import { adminLogin } from "@/lib/api";
 import { ShieldCheck } from "lucide-react";
-import { mutate } from "swr";
 
 export default function AdminLogin() {
   const router = useTenantRouter();
@@ -26,10 +25,6 @@ export default function AdminLogin() {
     const res = await adminLogin(password);
     if (res.success) {
       sessionStorage.setItem("admin_auth", "true");
-      // Kick off the admin dashboard data fetches immediately after auth so
-      // the dashboard mounts with data already arriving or cached.
-      mutate("getExamSummary", getExamSummary(), { revalidate: false });
-      mutate("getMataPelajaran", getMataPelajaran(), { revalidate: false });
       router.replace("/admin");
     } else {
       setError(res.message ?? "Password salah. Silakan coba lagi.");
