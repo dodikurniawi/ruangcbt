@@ -3083,7 +3083,30 @@ const CONFIG_VALUE_VALIDATORS = {
     }
     return { value: limit };
   },
+
+  // PIN ujian: empat digit, atau kosong yang berarti "ujian tanpa PIN".
+  // Disimpan sebagai STRING supaya "0001" tidak pernah menjadi angka 1.
+  exam_pin: function (value) {
+    const pin = String(value === null || value === undefined ? "" : value).trim();
+    if (pin === "") return { value: "" };
+    if (!/^[0-9]{4}$/.test(pin)) {
+      return { message: "PIN ujian harus 4 digit angka, atau dikosongkan untuk menonaktifkan PIN." };
+    }
+    return { value: pin };
+  },
 };
+
+// Sel yang kontraknya TEKS ditulis dengan format teks lebih dulu. Tanpa ini
+// Sheets menafsirkan "0001" sebagai angka dan menyimpannya sebagai 1, sehingga
+// PIN berubah diam-diam antara tulis dan baca.
+const TEXT_CONFIG_KEYS = ["exam_pin"];
+
+function writeConfigCell(range, key, value) {
+  if (TEXT_CONFIG_KEYS.indexOf(String(key)) !== -1) {
+    range.setNumberFormat("@");
+  }
+  range.setValue(value);
+}
 
 function handleUpdateConfig(params) {
   const sheet = getSheet("Config");
@@ -3103,7 +3126,7 @@ function handleUpdateConfig(params) {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === key) {
-      sheet.getRange(i + 1, 2).setValue(value);
+      writeConfigCell(sheet.getRange(i + 1, 2), key, value);
       cache.remove("config");
       invalidateQuestionCaches();
       return { success: true, message: "Config updated" };
@@ -3111,6 +3134,10 @@ function handleUpdateConfig(params) {
   }
 
   sheet.appendRow([key, value, ""]);
+  // Baris yang baru dibuat juga perlu format teks, bukan hanya yang ditimpa.
+  if (TEXT_CONFIG_KEYS.indexOf(String(key)) !== -1) {
+    sheet.getRange(sheet.getLastRow(), 2).setNumberFormat("@").setValue(value);
+  }
   cache.remove("config");
   invalidateQuestionCaches();
   return { success: true, message: "Config added" };
@@ -3189,6 +3216,10 @@ function handleGetExamSummary() {
       exam_mapel: exam_mapel,
       exam_duration: parseInt(config.exam_duration, 10) || 90,
       exam_status: config.exam_status || "OPEN",
+      // PIN mentah hanya keluar lewat action ber-role admin ini; handleGetConfig
+      // yang dipakai siswa tetap membawa isPinRequired saja. asConfigText menjaga
+      // "0001" tetap teks bila sel terlanjur tersimpan sebagai angka.
+      exam_pin: asConfigText(config.exam_pin),
       question_counts: counts,
       question_count: collectExamQuestionRows(exam_mapel, exam_kumpulan, rows, statusMap).length,
       exam_kumpulan: exam_kumpulan,
@@ -3428,18 +3459,25 @@ function handleSetExamPin(params) {
     return { success: false, message: "Unauthorized" };
   }
 
+  // Jalur tulis kedua untuk key yang sama: aturan 4 digit dan penyimpanan teks
+  // harus identik dengan updateConfig, kalau tidak PIN bisa masuk lewat sini
+  // dalam bentuk yang ditolak di sana.
+  const checked = CONFIG_VALUE_VALIDATORS.exam_pin(pin);
+  if (checked.message) return { success: false, message: checked.message };
+  const safePin = checked.value;
+
   const sheet = getSheet("Config");
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === "exam_pin") {
-      sheet.getRange(i + 1, 2).setValue(pin || "");
+      writeConfigCell(sheet.getRange(i + 1, 2), "exam_pin", safePin);
       cache.remove("config");
       return { success: true, message: "PIN updated" };
     }
   }
 
-  sheet.appendRow(["exam_pin", pin || "", "PIN for exam start"]);
+  sheet.appendRow(["exam_pin", safePin, "PIN for exam start"]);
   cache.remove("config");
   return { success: true, message: "PIN set" };
 }

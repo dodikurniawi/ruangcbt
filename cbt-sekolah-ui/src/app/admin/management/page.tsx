@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
-import { getUsers, getConfig, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, uploadImage, logout } from "@/lib/api";
+import { getUsers, getConfig, getExamSummary, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, uploadImage, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
 import type { ApiResponse, User } from "@/types";
@@ -95,9 +95,14 @@ export default function AdminManagement() {
 
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR("getUsers", getUsers, { refreshInterval: 10000 });
   const { data: configRes, mutate: mutateConfig } = useSWR("getConfig", getConfig);
+  // PIN ujian tidak pernah ikut getConfig yang publik; nilainya hanya dibawa
+  // getExamSummary yang ber-role admin. Kunci SWR-nya sama dengan yang dipakai
+  // layar "Adakan Ujian", jadi keduanya berbagi satu cache, bukan dua permintaan.
+  const { data: summaryRes, mutate: mutateSummary } = useSWR("getExamSummary", getExamSummary);
 
   const users: User[] = usersRes?.data ?? [];
   const config = configRes?.data;
+  const examPin = summaryRes?.data?.exam_pin ?? "";
   const classes = Array.from(new Set(users.map((u) => u.kelas))).filter(Boolean);
 
   const filtered = users.filter((u) => {
@@ -292,7 +297,7 @@ export default function AdminManagement() {
   const handleSaveConfig = async () => {
     if (!configFormRef.current) return;
     const fd = new FormData(configFormRef.current);
-    const exam_pin = (fd.get("exam_pin") as string) || "";
+    const exam_pin = ((fd.get("exam_pin") as string) || "").trim();
     const admin_password = (fd.get("admin_password") as string) || "";
     const admin_wa = (fd.get("admin_wa") as string).replace(/\D/g, ""); // simpan digit saja
     const rawLimit = ((fd.get("max_violations") as string) || "").trim();
@@ -306,13 +311,25 @@ export default function AdminManagement() {
       return;
     }
 
+    // PIN dikirim apa adanya sebagai teks: "0001" harus sampai ke server sebagai
+    // "0001". Kosong berarti ujian tanpa PIN — bukan lagi "jangan diubah", karena
+    // kolomnya kini menampilkan PIN yang benar-benar tersimpan.
+    if (exam_pin !== "" && !/^[0-9]{4}$/.test(exam_pin)) {
+      setConfigSaved(false);
+      setConfigError("PIN ujian harus 4 digit angka, atau dikosongkan untuk menonaktifkan PIN.");
+      return;
+    }
+
     setConfigError("");
     setIsSavingConfig(true);
     const tasks: Promise<ApiResponse>[] = [
       updateConfig("admin_wa", admin_wa),
       updateConfig("max_violations", maxViolations),
     ];
-    if (exam_pin) tasks.push(updateConfig("exam_pin", exam_pin));
+    // Selalu dikirim saat berubah, termasuk saat dikosongkan: mengosongkan kolom
+    // kini berarti menonaktifkan PIN. Dilewati bila tidak berubah supaya menyimpan
+    // pengaturan lain tidak menulis ulang sel PIN tanpa alasan.
+    if (exam_pin !== examPin) tasks.push(updateConfig("exam_pin", exam_pin));
     if (admin_password) tasks.push(updateConfig("admin_password", admin_password));
     const results = await Promise.all(tasks);
     setIsSavingConfig(false);
@@ -322,9 +339,10 @@ export default function AdminManagement() {
       setConfigError(failed.message || "Konfigurasi gagal disimpan. Coba lagi.");
       return;
     }
-    // Angka batas pelanggaran dibaca ulang dari server: yang ditampilkan ke guru
-    // adalah nilai yang benar-benar tersimpan, bukan yang baru saja diketik.
-    await mutateConfig();
+    // Nilai yang ditampilkan ke guru selalu hasil baca ulang dari server, bukan
+    // yang baru saja diketik: batas pelanggaran dari getConfig, PIN dari
+    // getExamSummary. Cache Config di GAS sudah dibuang oleh updateConfig.
+    await Promise.all([mutateConfig(), mutateSummary()]);
     setConfigSaved(true);
     setTimeout(() => setConfigSaved(false), 3000);
   };
@@ -764,7 +782,7 @@ export default function AdminManagement() {
               </div>
             )}
 
-            <form ref={configFormRef} key={`${config?.admin_wa ?? ""}|${config?.max_violations ?? ""}`} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
+            <form ref={configFormRef} key={`${config?.admin_wa ?? ""}|${config?.max_violations ?? ""}|${examPin}`} className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSaveConfig(); }}>
               <div className="bg-blue-50/60 border border-blue-200/70 rounded-xl px-4 py-3 flex items-start gap-2">
                 <span className="material-symbols-outlined text-[18px] text-[#2563EB] shrink-0">info</span>
                 <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
@@ -774,16 +792,22 @@ export default function AdminManagement() {
                 </p>
               </div>
               <div>
-                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">PIN Ujian</label>
+                <label className="font-bold text-xs text-slate-500 uppercase tracking-wider block mb-2">
+                  PIN Ujian <span className="text-slate-900 font-bold lowercase text-xs">(wajib 4 digit)</span>
+                </label>
                 <input
                   name="exam_pin"
                   type="text"
-                  defaultValue=""
-                  placeholder="Kosongkan jika tidak diubah"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  pattern="[0-9]{4}"
+                  defaultValue={examPin}
+                  placeholder="Kosongkan untuk ujian tanpa PIN"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none font-bold text-xs text-slate-600 transition-all font-mono"
                 />
                 <p className="mt-1 text-[10px] text-slate-400">
-                  PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian.
+                  PIN adalah pengingat agar siswa tidak masuk sebelum diizinkan pengawas, bukan pengaman ujian. <strong className="font-bold text-slate-900">PIN wajib 4 digit angka.</strong> Kosongkan untuk menjalankan ujian tanpa PIN.
                 </p>
               </div>
               <div>

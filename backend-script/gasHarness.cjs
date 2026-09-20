@@ -24,6 +24,7 @@ function makeSheet(rows) {
     appendRows: 0,
     setValueCalls: 0,
     setValuesCalls: 0,
+    numberFormats: {},
     getDataRange: () => {
       sheet.reads++;
       // Sheets mengembalikan SALINAN nilai, bukan acuan hidup. Kalau tiruan ini
@@ -66,6 +67,12 @@ function makeSheet(rows) {
             out.push(line);
           }
           return out;
+        },
+        // Sheets menyimpan format per sel; kode yang memaksa format teks agar
+        // "0001" tidak menjadi angka harus bisa dijalankan apa adanya di test.
+        setNumberFormat(format) {
+          sheet.numberFormats[row + ":" + col] = format;
+          return this;
         },
         setValue(value) {
           sheet.setValueCalls++;

@@ -29,6 +29,13 @@ export interface ExamSummary {
     exam_mapel: string;
     exam_duration: number;
     exam_status: 'OPEN' | 'CLOSED';
+    /**
+     * PIN ujian apa adanya, hanya dikirim oleh action `getExamSummary` yang
+     * ber-role admin. Selalu string supaya "0001" tidak kehilangan nol depannya;
+     * "" berarti ujian berjalan tanpa PIN. Tidak pernah ada pada `getConfig`
+     * yang publik — di sana hanya ada turunannya, `isPinRequired`.
+     */
+    exam_pin?: string;
     question_count: number;
     question_counts?: Record<string, number>;
     /** Kumpulan yang dipilih guru. Kosong = semua kumpulan aktif pada mapel itu. */
