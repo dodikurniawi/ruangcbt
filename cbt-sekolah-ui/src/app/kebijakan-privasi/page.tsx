@@ -2,8 +2,8 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Kebijakan Privasi — CBT Sekolah",
-  description: "Kebijakan privasi CBT Sekolah yang transparan, aman, dan mematuhi regulasi UU PDP No. 27 Tahun 2022.",
+  title: "Kebijakan Privasi — RuangCBT",
+  description: "Kebijakan privasi RuangCBT yang transparan, aman, dan mematuhi regulasi UU PDP No. 27 Tahun 2022.",
 };
 
 export default function KebijakanPrivasiPage() {
@@ -11,7 +11,7 @@ export default function KebijakanPrivasiPage() {
     {
       num: "1",
       title: "Pengantar",
-      content: "CBT Sekolah adalah platform inovatif berbasis SaaS untuk penyelenggaraan ujian digital sekolah. Kami sangat menghargai privasi Anda dan berkomitmen penuh untuk melindungi data pribadi seluruh ekosistem pendidikan sekolah Anda.",
+      content: "RuangCBT adalah platform inovatif berbasis SaaS untuk penyelenggaraan ujian digital sekolah. Kami sangat menghargai privasi Anda dan berkomitmen penuh untuk melindungi data pribadi seluruh ekosistem pendidikan sekolah Anda.",
     },
     {
       num: "2",
@@ -93,7 +93,7 @@ export default function KebijakanPrivasiPage() {
         {/* Footnote */}
         <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-6 text-center space-y-4">
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-            Dengan menggunakan platform CBT Sekolah, Anda menyetujui seluruh ketentuan privasi yang telah disepakati bersama ini.
+            Dengan menggunakan platform RuangCBT, Anda menyetujui seluruh ketentuan privasi yang telah disepakati bersama ini.
           </p>
           <a
             href="https://wa.me/6285189536359"

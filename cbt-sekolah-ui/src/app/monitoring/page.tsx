@@ -83,7 +83,7 @@ export default function PublicLiveMonitoring() {
             </div>
             <div className="flex flex-col">
               <span className="font-headline-student font-extrabold text-[#1E3A5F] text-lg tracking-tight group-hover:text-[#0F766E] transition-colors">
-                CBT Sekolah
+                RuangCBT
               </span>
               <div className="flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">

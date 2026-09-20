@@ -2,7 +2,7 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Fitur Admin — CBT Sekolah",
+  title: "Fitur Admin — RuangCBT",
   description: "Kelola seluruh aktivitas ujian sekolah dengan dashboard admin yang komprehensif, kuat, dan mudah digunakan.",
 };
 
@@ -46,50 +46,50 @@ export default function FiturAdminPage() {
     {
       icon: "quiz",
       title: "Manajemen Bank Soal",
-      description: "Buat dan kelola ribuan soal pilihan ganda dengan gambar, rumus matematika, dan kategorisasi mata pelajaran. Soal tersimpan aman di Google Spreadsheet milik sekolah.",
-      tag: "Serverless DB",
+      description: "Buat paket soal Pilihan Tunggal (1 jawaban) atau Pilihan Kompleks (multi jawaban) lengkap dengan gambar, opsi jawaban, kunci jawaban, dan bobot nilai.",
+      tag: "Bank Soal",
     },
     {
       icon: "groups",
-      title: "Manajemen Siswa & Kelas",
-      description: "Import data siswa dari Excel, atur kelas dan rombongan belajar. Setiap siswa mendapat PIN unik otomatis.",
-      tag: "Auto PIN",
+      title: "Manajemen Data Siswa",
+      description: "Daftarkan siswa satu per satu atau impor banyak siswa sekaligus dari file Excel dengan format Nama, Username (NIS), Password, dan Kelas.",
+      tag: "Import Excel",
     },
     {
-      icon: "assignment",
-      title: "Konfigurasi Ujian Fleksibel",
-      description: "Atur durasi, jumlah soal, acak soal, batas pengerjaan, dan jadwal ujian kapan saja.",
-      tag: "Fleksibel",
+      icon: "toggle_on",
+      title: "Buka & Tutup Sesi Ujian",
+      description: "Kontrol pembukaan sesi ujian secara manual di Dashboard agar siswa dapat mulai login, lalu tutup sesi setelah ujian berakhir.",
+      tag: "Kontrol Sesi",
     },
     {
-      icon: "leaderboard",
-      title: "Rekap Nilai Real-time",
-      description: "Pantau hasil ujian siswa secara langsung. Ekspor ke Excel dan PDF dengan satu klik.",
-      tag: "Real-time",
+      icon: "monitoring",
+      title: "Live Student Monitoring",
+      description: "Pantau status siswa real-time (Sedang Ujian, Selesai, Diskualifikasi, Belum Mulai), jumlah pelanggaran, dan reset status login siswa jika terputus.",
+      tag: "Real-Time",
     },
     {
       icon: "print",
-      title: "Cetak Kartu & Hasil Ujian",
-      description: "Cetak kartu ujian peserta dan laporan hasil ujian dengan kop sekolah, tanda tangan kepala sekolah dan guru.",
-      tag: "1-Click PDF",
+      title: "Unduh Rekap Nilai",
+      description: "Ekspor rekapitulasi nilai akhir peserta ke format file Excel (EXPORT XLSX untuk nilai rapor) atau dokumen PDF siap cetak (EXPORT PDF).",
+      tag: "XLSX & PDF",
     },
     {
-      icon: "psychology",
-      title: "Analisis Butir Soal AI",
-      description: "Groq AI menganalisis tingkat kesukaran dan kualitas setiap soal secara otomatis menggunakan model LLM terbaru.",
-      tag: "AI Powered",
+      icon: "lock_reset",
+      title: "Manajemen Password Admin",
+      description: "Kelola dan perbarui password administrator sekolah secara mandiri melalui menu konfigurasi untuk keamanan akses panel admin.",
+      tag: "Keamanan Admin",
     },
     {
       icon: "security",
-      title: "Data Milik Sekolah",
-      description: "Semua data tersimpan di Google Spreadsheet dan Google Drive milik sekolah sendiri. Tidak ada data yang meninggalkan ekosistem Google.",
-      tag: "Zero Vendor Access",
+      title: "Data Tersimpan di Google Workspace",
+      description: "Semua data — bank soal, data siswa, dan nilai — tersimpan aman di Google Drive / Spreadsheet akun Google milik sekolah sendiri.",
+      tag: "Google Workspace",
     },
     {
       icon: "devices",
-      title: "Multi-device",
-      description: "Dapat diakses dari laptop, tablet, maupun HP siswa. Tidak perlu install aplikasi apapun.",
-      tag: "Responsive",
+      title: "Akses Komputer & Laptop",
+      description: "Panel Admin dirancang khusus untuk diakses pengawas / guru melalui komputer atau laptop demi kenyamanan pengelolaan ujian.",
+      tag: "Komputer Guru",
     },
   ];
 

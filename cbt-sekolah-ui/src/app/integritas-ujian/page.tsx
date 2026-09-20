@@ -2,8 +2,8 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Integritas Ujian — CBT Sekolah",
-  description: "Fitur proteksi kejujuran CBT Sekolah untuk mencegah segala tindakan kecurangan ujian siswa secara presisi.",
+  title: "Integritas Ujian — RuangCBT",
+  description: "Fitur proteksi kejujuran RuangCBT untuk mencegah segala tindakan kecurangan ujian siswa secara presisi.",
 };
 
 export default function IntegritasUjianPage() {
@@ -15,29 +15,29 @@ export default function IntegritasUjianPage() {
 
   const features = [
     {
-      icon: "shuffle",
-      title: "Randomisasi Soal & Pilihan",
-      desc: "Urutan soal dan pilihan jawaban diacak secara acak dan berbeda untuk setiap peserta ujian. Dua siswa yang duduk berdampingan akan melihat urutan soal dan opsi yang berbeda.",
+      icon: "block",
+      title: "Deteksi Pelanggaran Ujian",
+      desc: "Sistem mencatat setiap bentuk pelanggaran seperti berpindah tab browser, membuka aplikasi lain, menekan tombol Back, klik kanan, tombol pintasan (Ctrl+C/Ctrl+V), maupun membuka DevTools (F12).",
     },
     {
-      icon: "key",
-      title: "PIN Sekali Pakai",
-      desc: "Setiap PIN ujian unik hanya dapat digunakan satu kali oleh siswa yang bersangkutan. Setelah siswa login ke sistem, PIN tersebut terkunci dan tidak bisa digunakan di perangkat lain.",
+      icon: "gavel",
+      title: "Diskualifikasi Otomatis",
+      desc: "Jika siswa melanggar terlalu banyak kali, sistem akan mengumpulkan ujian secara otomatis dan menandai siswa berstatus Diskualifikasi pada tabel monitoring guru.",
     },
     {
-      icon: "update",
-      title: "Timer Server-side",
-      desc: "Durasi ujian dikontrol secara ketat di sisi server. Menutup tab, mematikan perangkat, ataupun me-refresh halaman browser tidak akan menghentikan atau memperlama waktu pengerjaan.",
+      icon: "devices",
+      title: "Satu Akun Satu Perangkat",
+      desc: "Satu akun siswa hanya dapat dipergunakan di satu perangkat pada waktu yang sama untuk mencegah pembagian akun atau pengerjaan ganda.",
     },
     {
-      icon: "history",
-      title: "Log Aktivitas Presisi",
-      desc: "Setiap klik, perpindahan soal, dan submit jawaban siswa dicatat secara real-time dengan timestamp. Guru pengawas dapat memantau dengan tepat aktivitas siswa di dashboard admin.",
+      icon: "sync",
+      title: "Proteksi Jawaban & Koneksi Terputus",
+      desc: "Jawaban yang sudah diisi tidak akan hilang jika koneksi internet terputus atau halaman di-refresh, karena tersimpan aman di perangkat dan akan otomatis dikirim ulang saat koneksi pulih.",
     },
     {
-      icon: "extension_off",
-      title: "Tanpa Plugin",
-      desc: "Ujian berjalan secara murni menggunakan teknologi modern web browser standar tanpa memerlukan instalasi plugin tambahan atau aplikasi manipulatif yang membahayakan perangkat.",
+      icon: "monitoring",
+      title: "Pemantauan Pelanggaran Real-time",
+      desc: "Guru dapat melihat jumlah pelanggaran dan status pengerjaan setiap siswa secara langsung di tabel Live Student Monitoring tanpa perlu refresh manual.",
     },
   ];
 

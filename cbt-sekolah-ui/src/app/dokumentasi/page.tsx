@@ -2,8 +2,8 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Dokumentasi Webappscript — CBT Sekolah",
-  description: "Panduan teknis, API referensi, dan petunjuk konfigurasi CBT Sekolah berbasis Google Apps Script.",
+  title: "Dokumentasi Webappscript — RuangCBT",
+  description: "Panduan teknis, API referensi, dan petunjuk konfigurasi RuangCBT berbasis Google Apps Script.",
 };
 
 export default function DokumentasiPage() {
@@ -11,7 +11,7 @@ export default function DokumentasiPage() {
     {
       num: "01",
       title: "Setup Awal",
-      desc: "Salin template Google Spreadsheet CBT Sekolah, lalu deploy Google Apps Script (GAS) sebagai Web App dengan hak akses publik.",
+      desc: "Salin template Google Spreadsheet RuangCBT, lalu deploy Google Apps Script (GAS) sebagai Web App dengan hak akses publik.",
     },
     {
       num: "02",
@@ -49,7 +49,7 @@ export default function DokumentasiPage() {
       version: "v2.0.0",
       date: "1 Januari 2026",
       points: [
-        "Rilis perdana CBT Sekolah berbasis arsitektur serverless Google Apps Script.",
+        "Rilis perdana RuangCBT berbasis arsitektur serverless Google Apps Script.",
         "Migrasi total UI dashboard manajemen ujian sekolah menggunakan Material Design 3 Tailwind tokens.",
         "Ekspor laporan rekapitulasi data nilai siswa instan ke format Excel (XLSX) dan PDF.",
       ],

@@ -2,8 +2,8 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Portal Siswa — CBT Sekolah",
-  description: "Antarmuka ujian siswa CBT Sekolah yang bersih, responsif, dan mudah digunakan tanpa login akun rumit.",
+  title: "Portal Siswa — RuangCBT",
+  description: "Antarmuka ujian siswa RuangCBT yang bersih, responsif, dan mudah digunakan tanpa login akun rumit.",
 };
 
 interface CardProps {
@@ -31,29 +31,6 @@ function HighlightCard({ icon, title, description }: CardProps) {
 }
 
 export default function PortalSiswaPage() {
-  const steps = [
-    {
-      num: "01",
-      title: "Buka link ujian",
-      desc: "Siswa membuka URL portal sekolah di browser perangkat masing-masing.",
-    },
-    {
-      num: "02",
-      title: "Masukkan PIN unik",
-      desc: "Siswa memasukkan 6 digit PIN unik yang tercetak di kartu peserta ujian.",
-    },
-    {
-      num: "03",
-      title: "Kerjakan soal",
-      desc: "Mulai menjawab soal ujian dengan antarmuka yang bersih dan bebas distraksi.",
-    },
-    {
-      num: "04",
-      title: "Lihat hasil",
-      desc: "Nilai ujian langsung tersimpan dan dapat ditampilkan kepada siswa jika diinginkan.",
-    },
-  ];
-
   const highlights = [
     {
       icon: "timer",
@@ -78,7 +55,7 @@ export default function PortalSiswaPage() {
     {
       icon: "lock",
       title: "Sesi Aman",
-      description: "Satu PIN unik hanya dapat dipergunakan satu kali per sesi ujian untuk mencegah penyalahgunaan.",
+      description: "Satu akun siswa hanya dapat digunakan di satu perangkat pada waktu yang sama.",
     },
     {
       icon: "visibility_off",
@@ -102,7 +79,7 @@ export default function PortalSiswaPage() {
             </span>
           </div>
           <p className="text-blue-50 text-sm md:text-base font-semibold leading-relaxed max-w-2xl mx-auto">
-            Portal siswa CBT Sekolah dirancang sesederhana mungkin — siswa hanya perlu memasukkan PIN untuk langsung mulai ujian. Tidak ada pembuatan akun mandiri, tidak perlu password rumit, dan sama sekali tidak ada instalasi aplikasi tambahan.
+            Portal siswa RuangCBT dirancang praktis dan ringan — siswa cukup login menggunakan Username (NIS) dan Password yang diberikan guru. Jika diminta, masukkan 4 angka PIN ujian di kelas. Tanpa instalasi aplikasi tambahan.
           </p>
         </section>
 
@@ -117,7 +94,28 @@ export default function PortalSiswaPage() {
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-            {steps.map((s, i) => (
+            {[
+              {
+                num: "01",
+                title: "Buka link ujian",
+                desc: "Buka alamat login ujian di browser HP atau komputer yang diberikan oleh guru.",
+              },
+              {
+                num: "02",
+                title: "Login Akun Siswa",
+                desc: "Isi Username (NIS) dan Password dari guru, lalu klik Masuk Sekarang.",
+              },
+              {
+                num: "03",
+                title: "Masukkan PIN Ujian",
+                desc: "Jika diminta, ketik 4 angka PIN ujian yang diumumkan guru di kelas.",
+              },
+              {
+                num: "04",
+                title: "Kerjakan & Kumpulkan",
+                desc: "Jawab soal dengan tenang, lalu klik SELESAI UJIAN untuk mengumpulkan.",
+              },
+            ].map((s, i) => (
               <div key={i} className="group bg-white border border-slate-200/90 rounded-3xl p-6 flex flex-col gap-4 shadow-sm hover:shadow-xl hover:border-blue-500/40 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-black text-base flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-110 transition-transform select-none">

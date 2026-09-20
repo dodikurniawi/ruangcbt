@@ -2,66 +2,66 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Pusat Bantuan — CBT Sekolah",
-  description: "Temukan panduan, FAQ, dan bantuan teknis seputar platform ujian online CBT Sekolah.",
+  title: "Pusat Bantuan — RuangCBT",
+  description: "Temukan panduan, FAQ, dan bantuan teknis seputar platform ujian online RuangCBT.",
 };
 
 export default function BantuanPage() {
   const faqs = [
     {
       q: "Bagaimana cara mendaftarkan sekolah saya?",
-      a: "Anda dapat menghubungi tim dukungan kami via WhatsApp untuk pendaftaran resmi. Kami akan memandu proses instalasi Google Apps Script dan penyusunan spreadsheet perdana sekolah Anda.",
+      a: "Anda dapat menghubungi tim dukungan kami via WhatsApp untuk pendaftaran resmi. Kami akan memandu proses setup awal dan pengkonfigurasian aplikasi untuk sekolah Anda.",
     },
     {
-      q: "Berapa biaya langganan CBT Sekolah?",
-      a: "CBT Sekolah ditawarkan dengan sistem pembelian lisensi sekali bayar (one-time fee) per sekolah yang sangat terjangkau tanpa biaya tahunan, langganan bulanan, atau biaya tersembunyi lainnya.",
+      q: "Berapa biaya langganan RuangCBT?",
+      a: "RuangCBT ditawarkan dengan sistem pembelian lisensi sekali bayar (one-time fee) per sekolah yang sangat terjangkau tanpa biaya tahunan, langganan bulanan, atau biaya tersembunyi lainnya.",
     },
     {
       q: "Apakah data siswa saya aman?",
-      a: "Sangat aman. Seluruh data sekolah tersimpan di server Google Sheets milik sekolah Anda sendiri. Kami tidak menyimpan database, data personal, atau nilai siswa apa pun di server kami.",
+      a: "Sangat aman. Seluruh data sekolah tersimpan di server Google Workspace/Spreadsheet milik sekolah Anda sendiri. Kami tidak menyimpan database, data personal, atau nilai siswa apa pun di server kami.",
     },
     {
       q: "Bagaimana cara import data siswa dari Excel?",
-      a: "Anda cukup mengunduh format sheet Excel dari tab Manajemen Siswa di panel admin, mengisi data siswa Anda, kemudian menyalinnya langsung ke spreadsheet Google utama sekolah Anda.",
+      a: "Di menu Data Siswa pada panel admin, klik tombol Import, unduh contoh format file yang tersedia, isi data siswa (Nama, Username/NIS, Password, Kelas), lalu unggah file tersebut. Sistem akan otomatis mendaftarkan semua siswa.",
     },
     {
-      q: "Siswa lupa PIN, apa yang harus dilakukan?",
-      a: "Admin sekolah dapat melihat daftar PIN aktif di dashboard kapan saja atau mencetak ulang kartu peserta. Jika diperlukan, admin juga dapat mereset sesi PIN siswa secara langsung di dashboard.",
+      q: "Bagaimana jika siswa tidak bisa login ulang setelah keluar tidak sengaja?",
+      a: "Guru/admin dapat membuka menu Dashboard di panel admin, cari nama siswa pada tabel Live Student Monitoring, lalu klik ikon ↺ (panah melingkar) di kolom Aksi untuk mereset status login siswa.",
     },
     {
       q: "Bisakah ujian diakses dari HP?",
-      a: "Bisa. CBT Sekolah dikembangkan dengan teknologi modern responsif, sehingga siswa dapat mengerjakan soal dengan nyaman menggunakan HP, tablet, Chromebook, maupun laptop.",
+      a: "Bisa. Siswa dapat mengerjakan soal ujian dengan nyaman menggunakan browser HP, tablet, Chromebook, maupun laptop. Namun, Panel Admin khusus dibuka dari komputer atau laptop guru.",
     },
     {
       q: "Berapa maksimal jumlah soal per paket ujian?",
-      a: "Tidak ada batasan teknis. Anda dapat membuat puluhan hingga ratusan nomor soal per paket ujian, termasuk menyisipkan gambar pendukung dan rumus matematika yang kompleks.",
+      a: "Tidak ada batasan teknis. Anda dapat membuat puluhan hingga ratusan soal per paket ujian (pilihan tunggal maupun pilihan kompleks), termasuk menyisipkan gambar pendukung pada pertanyaan.",
     },
     {
-      q: "Apakah bisa digunakan offline?",
-      a: "Tidak bisa. CBT Sekolah memerlukan koneksi internet aktif agar siswa dapat mengunduh soal dan mengirimkan respons jawaban secara real-time ke spreadsheet Google sekolah.",
+      q: "Apa yang terjadi jika koneksi internet siswa terputus saat ujian?",
+      a: "Jawaban yang sudah diisi tidak akan hilang selama browser tidak ditutup dan masih menggunakan perangkat yang sama. Jawaban tersimpan di perangkat dan akan otomatis dikirim ulang saat koneksi pulih.",
     },
     {
-      q: "Bagaimana cara ekspor nilai ke Excel?",
-      a: "Pada tab 'Hasil Ujian' di halaman Cetak Admin, klik tombol 'EXPORT XLSX' untuk mengunduh rekapitulasi data nilai siswa beserta ringkasan ketuntasan dalam format Excel secara instan.",
+      q: "Bagaimana cara mengunduh rekap nilai ujian?",
+      a: "Di panel admin, klik menu Cetak di sebelah kiri. Klik tombol EXPORT XLSX untuk mengunduh rekap nilai dalam format Excel (cocok untuk input nilai rapor) atau EXPORT PDF untuk cetak dokumen.",
     },
     {
-      q: "Apa itu fitur Analisis Butir Soal AI?",
-      a: "Fitur ini memakai provider yang dipilih pada Pengaturan AI untuk mengevaluasi kejelasan, distraktor, kualitas soal, dan menyusun rekomendasi pembelajaran.",
+      q: "Bagaimana cara membuka dan menutup sesi ujian?",
+      a: "Masuk ke panel admin, klik menu Dashboard. Pada bagian Status Ujian, klik tombol 'Buka Ujian' agar status berubah menjadi 'Ujian Sedang Berlangsung' (indikator hijau). Klik 'Tutup Ujian' setelah selesai.",
     },
     {
-      q: "Bagaimana cara mencetak kartu ujian?",
-      a: "Buka tab 'Kartu Ujian' pada menu Cetak di panel admin, pilih kelas, lalu klik 'Cetak Semua' untuk membuka pratinjau kartu ujian terstandarisasi yang siap dicetak ke kertas A4.",
+      q: "Bagaimana jika siswa lupa username atau password?",
+      a: "Guru dapat melihat atau memperbarui username/password siswa di menu Data Siswa pada panel admin dengan mengklik tombol edit (ikon pensil), lalu klik Simpan Perubahan.",
     },
     {
-      q: "CBT Sekolah support browser apa saja?",
-      a: "Sistem kami mendukung penuh browser modern utama seperti Google Chrome, Mozilla Firefox, Safari, Microsoft Edge, dan Opera baik di komputer, tablet, maupun perangkat mobile.",
+      q: "RuangCBT support browser apa saja?",
+      a: "Sistem kami mendukung penuh browser modern utama seperti Google Chrome dan Mozilla Firefox, baik di komputer, tablet, maupun perangkat HP siswa.",
     },
   ];
 
   return (
     <PublicPageLayout
       title="Pusat Bantuan"
-      subtitle="Temukan jawaban dan panduan teknis atas pertanyaan umum mengenai CBT Sekolah"
+      subtitle="Temukan jawaban dan panduan teknis atas pertanyaan umum mengenai RuangCBT"
       icon="help"
     >
       <div className="space-y-10">

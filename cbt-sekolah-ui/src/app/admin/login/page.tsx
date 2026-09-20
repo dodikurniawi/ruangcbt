@@ -64,7 +64,7 @@ export default function AdminLogin() {
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
             <span className="text-gradient-blue">Admin Login</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">CBT Sekolah — Panel Administrasi</p>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">RuangCBT — Panel Administrasi</p>
         </div>
 
         {/* Glassmorphic Card */}

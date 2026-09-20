@@ -36,7 +36,7 @@ export default function StudentStatus() {
         <header className="sticky top-0 z-40 flex justify-between items-center px-lg py-sm bg-white border-b border-outline-variant shadow-sm">
           <div className="flex items-center gap-sm">
             <span className="material-symbols-outlined text-primary text-2xl">school</span>
-            <h1 className="font-headline-student font-extrabold text-primary">CBT Sekolah</h1>
+            <h1 className="font-headline-student font-extrabold text-primary">RuangCBT</h1>
           </div>
           <span className="font-label-bold text-on-surface-variant">Sesi Selesai</span>
         </header>

@@ -24,27 +24,30 @@ export default function Home() {
               school
             </span>
             <span className="font-headline-student text-headline-student font-extrabold text-primary tracking-tight">
-              CBT Sekolah
+              RuangCBT
             </span>
           </div>
-          <div className="hidden md:flex items-center gap-xl">
-            <a className="text-on-surface-variant font-medium hover:text-primary transition-all" href="#fitur">
+          <div className="hidden md:flex items-center gap-lg">
+            <a className="text-on-surface-variant font-medium hover:text-primary transition-all text-sm" href="#fitur">
               Fitur Utama
             </a>
             <a
-              className="text-on-surface-variant font-medium hover:text-primary transition-all"
+              className="text-on-surface-variant font-medium hover:text-primary transition-all text-sm"
               href="https://wa.me/6285189536359"
               target="_blank"
               rel="noopener noreferrer"
             >
               Bantuan
             </a>
-            <Link
-              href="/login"
-              className="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-bold hover:bg-primary-container transition-colors shadow-sm"
+            <a
+              href="https://gurudokai.supathub.my.id/#cbt"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-primary text-on-primary px-5 py-2 rounded-xl font-label-bold text-sm hover:bg-primary-container transition-all shadow-sm whitespace-nowrap inline-flex items-center gap-1.5"
             >
-              Mulai Ujian
-            </Link>
+              <span>Coba Demo</span>
+              <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+            </a>
           </div>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -58,30 +61,33 @@ export default function Home() {
 
         {/* Mobile Navigation Dropdown */}
         {isMenuOpen && (
-          <div className="md:hidden mt-sm py-md border-t border-outline-variant flex flex-col gap-md bg-surface">
+          <div className="md:hidden mt-sm py-md px-md border-t border-outline-variant flex flex-col gap-sm bg-surface rounded-2xl shadow-lg">
             <a
               onClick={() => setIsMenuOpen(false)}
-              className="text-on-surface-variant font-medium hover:text-primary transition-all py-1"
+              className="text-on-surface-variant font-medium hover:text-primary transition-all py-2 px-2"
               href="#fitur"
             >
               Fitur Utama
             </a>
             <a
               onClick={() => setIsMenuOpen(false)}
-              className="text-on-surface-variant font-medium hover:text-primary transition-all py-1"
+              className="text-on-surface-variant font-medium hover:text-primary transition-all py-2 px-2"
               href="https://wa.me/6285189536359"
               target="_blank"
               rel="noopener noreferrer"
             >
               Bantuan
             </a>
-            <Link
-              href="/login"
+            <a
+              href="https://gurudokai.supathub.my.id/#cbt"
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={() => setIsMenuOpen(false)}
-              className="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-bold hover:bg-primary-container transition-colors shadow-sm text-center"
+              className="bg-primary text-on-primary px-lg py-2.5 rounded-xl font-label-bold hover:bg-primary-container transition-colors shadow-sm text-center inline-flex items-center justify-center gap-1.5"
             >
-              Mulai Ujian
-            </Link>
+              <span>Coba Demo</span>
+              <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+            </a>
           </div>
         )}
       </header>
@@ -163,29 +169,33 @@ export default function Home() {
                 <span className="text-primary">Asesmen Digital</span> Indonesia.
               </h1>
               <p className="font-body-student text-on-surface-variant max-w-2xl">
-                Platform Computer Based Test (CBT) yang dirancang khusus untuk
+                RuangCBT adalah platform Computer Based Test (CBT) yang dirancang khusus untuk
                 kurikulum K-12. Menghadirkan integritas ujian tinggi dengan
                 antarmuka yang tenang dan bebas gangguan bagi siswa.
               </p>
-              <div className="flex flex-col sm:flex-row gap-md justify-center md:justify-start pt-md">
-                <Link
-                  href="/login"
-                  className="inline-flex items-center justify-center gap-sm bg-primary text-on-primary px-xl py-4 rounded-xl font-headline-admin hover:scale-[1.02] hover:bg-primary-container transition-all shadow-lg"
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-md pt-md">
+                <a
+                  href="https://gurudokai.supathub.my.id/#cbt"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3.5 rounded-xl font-headline-admin hover:scale-[1.02] hover:bg-primary-container transition-all shadow-lg shadow-primary/20 whitespace-nowrap cursor-pointer"
                 >
-                  Mulai Ujian
-                  <span className="material-symbols-outlined" data-icon="arrow_forward">
-                    arrow_forward
+                  <span>Coba Demo</span>
+                  <span className="material-symbols-outlined text-[20px]" data-icon="open_in_new">
+                    open_in_new
                   </span>
-                </Link>
-                <Link
-                  href="/admin"
-                  className="inline-flex items-center justify-center gap-sm bg-transparent border-2 border-outline-variant text-on-surface px-xl py-4 rounded-xl font-headline-admin hover:bg-surface-container-low transition-colors"
+                </a>
+                <a
+                  href="https://cbt.supathub.my.id/s/sdn-demo/admin/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-white border border-outline-variant text-on-surface px-6 py-3.5 rounded-xl font-headline-admin hover:bg-surface-container-low transition-all whitespace-nowrap shadow-2xs cursor-pointer"
                 >
-                  Admin / Pengawas
-                  <span className="material-symbols-outlined" data-icon="admin_panel_settings">
+                  <span>Admin / Pengawas</span>
+                  <span className="material-symbols-outlined text-[20px]" data-icon="admin_panel_settings">
                     admin_panel_settings
                   </span>
-                </Link>
+                </a>
               </div>
             </div>
             <div className="flex-1 relative w-full">
@@ -267,7 +277,7 @@ export default function Home() {
                 <h3 className="font-headline-admin text-headline-admin text-on-surface mb-md">
                   Easy to Use
                 </h3>
-                <p className="font-body-admin text-slate-600 dark:text-slate-300 leading-relaxed">
+                <p className="font-body-admin text-on-surface-variant">
                   Antarmuka intuitif yang meminimalisir &apos;test anxiety&apos;. Setup ujian hanya
                   dalam hitungan menit untuk administrator.
                 </p>
@@ -319,7 +329,7 @@ export default function Home() {
                 school
               </span>
               <span className="font-headline-admin text-headline-admin font-bold text-on-primary-fixed-variant">
-                CBT Sekolah
+                RuangCBT
               </span>
             </div>
             <p className="font-caption text-outline-variant leading-relaxed">
@@ -422,7 +432,7 @@ export default function Home() {
           </div>
         </div>
         <div className="max-w-container-max-width mx-auto px-lg flex flex-col md:flex-row justify-between items-center gap-md font-caption text-outline-variant">
-          <p>© 2026 CBT Sekolah. Hak Cipta Dilindungi Undang-Undang.</p>
+          <p>© 2026 RuangCBT. Hak Cipta Dilindungi Undang-Undang.</p>
           <div className="flex gap-xl">
             <Link className="hover:text-white" href="/kebijakan-privasi">
               Kebijakan Privasi

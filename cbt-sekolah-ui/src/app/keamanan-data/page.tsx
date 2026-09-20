@@ -2,15 +2,15 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Keamanan Data — CBT Sekolah",
-  description: "Arsitektur keamanan data CBT Sekolah berbasis Google Apps Script yang menjamin kerahasiaan data sekolah Anda.",
+  title: "Keamanan Data — RuangCBT",
+  description: "Arsitektur keamanan data RuangCBT berbasis Google Apps Script yang menjamin kerahasiaan data sekolah Anda.",
 };
 
 export default function KeamananDataPage() {
   const securitySections = [
     {
       title: "Arsitektur Zero-Data Access",
-      desc: "CBT Sekolah menggunakan Google Apps Script dan Google Spreadsheet sebagai backend. Ini berarti semua data — soal, nilai, data siswa — tersimpan langsung di Google Drive akun Google sekolah Anda. Kami sebagai vendor tidak memiliki akses ke data tersebut.",
+      desc: "RuangCBT menggunakan Google Apps Script dan Google Spreadsheet sebagai backend. Ini berarti semua data — soal, nilai, data siswa — tersimpan langsung di Google Drive akun Google sekolah Anda. Kami sebagai vendor tidak memiliki akses ke data tersebut.",
       icon: "cloud_off",
     },
     {
@@ -32,7 +32,7 @@ export default function KeamananDataPage() {
 
   const faqs = [
     {
-      q: "Apakah vendor CBT Sekolah bisa melihat isi soal ujian kami?",
+      q: "Apakah vendor RuangCBT bisa melihat isi soal ujian kami?",
       a: "Sama sekali tidak. Seluruh berkas bank soal di-host langsung di Google Drive sekolah Anda sendiri. Arsitektur kami berjalan secara client-side dan serverless menggunakan Google Apps Script Anda.",
     },
     {

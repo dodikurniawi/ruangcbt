@@ -74,7 +74,7 @@ export default function LiveLeaderboard() {
       <header className="sticky top-0 z-40 flex justify-between items-center w-full px-lg py-sm bg-white border-b border-outline-variant shadow-sm">
         <Link href={tenantPath("/")} className="flex items-center gap-sm cursor-pointer">
           <span className="material-symbols-outlined text-primary text-3xl">school</span>
-          <h1 className="font-headline-student font-extrabold text-primary">CBT Sekolah</h1>
+          <h1 className="font-headline-student font-extrabold text-primary">RuangCBT</h1>
         </Link>
         <div className="flex items-center gap-sm bg-surface-container-high px-md py-xs rounded-full">
           <span className="material-symbols-outlined text-tertiary">timer</span>

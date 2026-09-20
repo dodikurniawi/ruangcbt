@@ -29,6 +29,7 @@ export default function StatusPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate server health after mount.
     checkHealth();
     const interval = setInterval(() => {
       checkHealth();
@@ -40,7 +41,7 @@ export default function StatusPage() {
   return (
     <PublicPageLayout
       title="Status Server"
-      subtitle="Pemantauan kesehatan infrastruktur dan layanan aplikasi CBT Sekolah secara real-time"
+      subtitle="Pemantauan kesehatan infrastruktur dan layanan aplikasi RuangCBT secara real-time"
       icon="monitoring"
     >
       <div className="space-y-12">

@@ -23,7 +23,7 @@ export default function PublicPageLayout({
             <span className="material-symbols-outlined text-2xl select-none">school</span>
           </div>
           <span className="text-xl font-black text-slate-900 tracking-tight">
-            CBT <span className="text-blue-600">Sekolah</span>
+            Ruang<span className="text-blue-600">CBT</span>
           </span>
         </Link>
         <Link
@@ -60,7 +60,7 @@ export default function PublicPageLayout({
 
       {/* Simple Footer */}
       <footer className="py-8 border-t border-slate-200 text-center text-slate-500 text-xs font-bold uppercase tracking-widest mt-12 bg-white">
-        <div>© 2026 CBT Sekolah. Semua Hak Dilindungi.</div>
+        <div>© 2026 RuangCBT. Semua Hak Dilindungi.</div>
       </footer>
     </div>
   );

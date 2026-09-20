@@ -59,7 +59,7 @@ export default function PinVerification() {
       <header className="fixed top-0 left-0 w-full flex justify-between items-center px-lg py-sm bg-white dark:bg-surface border-b border-outline-variant shadow-sm z-50">
         <div className="flex items-center gap-sm">
           <span className="material-symbols-outlined text-primary text-[28px]">school</span>
-          <span className="font-headline-student text-headline-student font-extrabold text-primary">CBT Sekolah</span>
+          <span className="font-headline-student text-headline-student font-extrabold text-primary">RuangCBT</span>
         </div>
         <div className="flex items-center gap-md">
           <span className="font-label-bold text-label-bold text-on-surface-variant">Portal Ujian</span>

@@ -2,8 +2,8 @@ import PublicPageLayout from "@/components/public/PublicPageLayout";
 import React from "react";
 
 export const metadata = {
-  title: "Syarat & Ketentuan — CBT Sekolah",
-  description: "Syarat dan ketentuan resmi penggunaan platform SaaS ujian online CBT Sekolah.",
+  title: "Syarat & Ketentuan — RuangCBT",
+  description: "Syarat dan ketentuan resmi penggunaan platform SaaS ujian online RuangCBT.",
 };
 
 export default function SyaratKetentuanPage() {
@@ -11,12 +11,12 @@ export default function SyaratKetentuanPage() {
     {
       num: "1",
       title: "Penerimaan Syarat",
-      content: "Dengan mengakses, mengunduh template, atau menggunakan platform CBT Sekolah, sekolah Anda menyatakan setuju untuk mematuhi dan terikat secara hukum oleh seluruh syarat dan ketentuan penggunaan yang tercantum di halaman ini.",
+      content: "Dengan mengakses, mengunduh template, atau menggunakan platform RuangCBT, sekolah Anda menyatakan setuju untuk mematuhi dan terikat secara hukum oleh seluruh syarat dan ketentuan penggunaan yang tercantum di halaman ini.",
     },
     {
       num: "2",
       title: "Deskripsi Layanan",
-      content: "CBT Sekolah menyediakan perangkat lunak berbasis Software as a Service (SaaS) yang terintegrasi langsung dengan ekosistem Google Workspace milik masing-masing sekolah. Layanan kami mencakup portal pengerjaan soal siswa, panel manajemen ujian admin, serta integrasi AI.",
+      content: "RuangCBT menyediakan perangkat lunak berbasis Software as a Service (SaaS) yang terintegrasi langsung dengan ekosistem Google Workspace milik masing-masing sekolah. Layanan kami mencakup portal pengerjaan soal siswa, panel manajemen ujian admin, serta integrasi AI.",
     },
     {
       num: "3",
@@ -83,7 +83,7 @@ export default function SyaratKetentuanPage() {
         {/* Footnote */}
         <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-6 text-center space-y-4">
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-            Terima kasih atas kerja sama Anda dalam menjaga kenyamanan dan kejujuran berjalannya ujian sekolah digital bersama CBT Sekolah.
+            Terima kasih atas kerja sama Anda dalam menjaga kenyamanan dan kejujuran berjalannya ujian sekolah digital bersama RuangCBT.
           </p>
           <a
             href="https://wa.me/6285189536359"

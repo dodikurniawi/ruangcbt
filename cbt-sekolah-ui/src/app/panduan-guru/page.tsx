@@ -56,11 +56,10 @@ export default function PanduanGuruPage() {
               </h4>
               <ul className="space-y-4">
                 {[
-                  "Tambah data siswa di menu Manajemen → Data Siswa",
-                  "Buat soal di menu Bank Soal sesuai mata pelajaran",
-                  "Atur konfigurasi ujian (durasi, jumlah soal, jadwal)",
-                  "Cetak kartu ujian untuk semua peserta",
-                  "Bagikan link ujian ke siswa",
+                  "Tambah data siswa di menu Data Siswa (satu per satu atau impor dari file Excel).",
+                  "Buat soal di menu Bank Soal (Pilihan Tunggal atau Pilihan Kompleks, opsi jawaban, gambar, dan bobot nilai).",
+                  "Buka menu Dashboard di panel admin, klik tombol Buka Ujian hingga status berubah menjadi Ujian Sedang Berlangsung (hijau).",
+                  "Bagikan alamat link login ujian beserta Username (NIS), Password, dan PIN ujian kepada siswa.",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className="material-symbols-outlined text-emerald-500 shrink-0 select-none">
@@ -82,10 +81,10 @@ export default function PanduanGuruPage() {
               </h4>
               <ul className="space-y-4">
                 {[
-                  "Buka dashboard Admin → halaman utama untuk melihat progress real-time pengerjaan siswa.",
-                  "Refresh halaman pengawas setiap beberapa menit untuk memperbarui status dan skor sementara.",
-                  "Siswa yang belum memasukkan PIN ke portal ujian akan otomatis terdeteksi dengan status 'Belum Mulai'.",
-                  "Jika terjadi kendala teknis (perangkat mati/koneksi putus), admin sekolah dapat mereset PIN siswa dari dashboard.",
+                  "Buka menu Dashboard di panel admin untuk melihat tabel Live Student Monitoring secara langsung.",
+                  "Pantau status pengerjaan siswa: Sedang Ujian, Selesai, Diskualifikasi, atau Belum Mulai (data diperbarui otomatis setiap beberapa detik).",
+                  "Jika siswa terputus atau tidak bisa login ulang, cari nama siswa di tabel dan klik ikon ↺ (panah melingkar) di kolom Aksi untuk mereset status login.",
+                  "Pantau jumlah pelanggaran yang tercatat jika siswa mencoba pindah tab, membuka aplikasi lain, atau menekan shortcut terlarang.",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className="material-symbols-outlined text-amber-500 shrink-0 select-none">
@@ -107,11 +106,10 @@ export default function PanduanGuruPage() {
               </h4>
               <ul className="space-y-4">
                 {[
-                  "Download rekap nilai akhir siswa dari menu Rekap Hasil di dashboard.",
-                  "Export data rekap tersebut ke berkas Excel (XLSX) untuk penginputan nilai raport sekolah.",
-                  "Gunakan fitur canggih Analisis Butir Soal bertenaga AI untuk mengevaluasi efektivitas pertanyaan.",
-                  "Cetak laporan hasil ujian yang ditandatangani oleh bapak/ibu guru beserta kepala sekolah.",
-                  "Arsipkan soal pilihan ganda di Bank Soal agar dapat digunakan kembali untuk ujian berikutnya.",
+                  "Klik tombol Tutup Ujian di halaman Dashboard setelah semua siswa selesai atau waktu habis.",
+                  "Buka menu Cetak di sebelah kiri untuk melihat rekapitulasi nilai akhir seluruh siswa.",
+                  "Klik tombol EXPORT XLSX untuk mengunduh rekap nilai format Excel (cocok untuk penginputan nilai rapor).",
+                  "Klik tombol EXPORT PDF untuk mengunduh rekap dokumen PDF siap cetak.",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className="material-symbols-outlined text-[#2563EB] shrink-0 select-none">

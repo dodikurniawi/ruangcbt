@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CBT Sekolah - Platform Ujian Berbasis Komputer Modern",
-  description: "Platform Computer Based Test (CBT) yang dirancang khusus untuk kurikulum K-12. Menghadirkan integritas ujian tinggi dengan antarmuka yang tenang dan bebas gangguan bagi siswa.",
+  title: "RuangCBT — Platform Ujian Berbasis Komputer Modern",
+  description: "RuangCBT adalah platform Computer Based Test (CBT) yang dirancang khusus untuk kurikulum K-12. Menghadirkan integritas ujian tinggi dengan antarmuka yang tenang dan bebas gangguan bagi siswa.",
 };
 
 export default function RootLayout({
