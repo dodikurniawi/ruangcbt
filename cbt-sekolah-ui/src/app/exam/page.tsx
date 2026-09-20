@@ -16,6 +16,10 @@ import { isAnswered, countAnswered } from "@/lib/answerSemantics";
 import { updateTrueFalseAnswer } from "@/lib/trueFalse";
 import { updateMatchingAnswer } from "@/lib/matching";
 import {
+  School, Clock3, Type, TriangleAlert, CircleAlert, X, Grid2X2,
+  CircleHelp, ChevronLeft, ChevronRight, LoaderCircle, Maximize,
+} from "lucide-react";
+import {
   fillInPetunjuk,
   matchingColumns,
   questionRenderKind,
@@ -396,7 +400,7 @@ export default function ExamPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background font-body-student">
         <div className="flex flex-col items-center gap-lg">
-          <span className="material-symbols-outlined text-primary text-[48px] animate-spin">progress_activity</span>
+          <LoaderCircle aria-hidden="true" className="h-12 w-12 text-primary motion-safe:animate-spin" />
           <p className="font-headline-student text-on-surface">Memuat soal ujian...</p>
         </div>
       </div>
@@ -407,7 +411,7 @@ export default function ExamPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background font-body-student p-lg">
         <div className="max-w-md text-center">
-          <span className="material-symbols-outlined text-error text-[48px]">error</span>
+          <CircleAlert aria-hidden="true" className="h-12 w-12 text-error" />
           <p className="font-headline-student text-on-surface mt-md">{loadError}</p>
           <button onClick={() => window.location.reload()} className="mt-xl px-xl py-sm bg-primary text-on-primary rounded-lg font-label-bold cursor-pointer">
             Refresh
@@ -422,7 +426,7 @@ export default function ExamPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 font-body-student p-lg">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-xl text-center">
-          <span className="material-symbols-outlined text-[#2563EB] text-[48px]">fullscreen</span>
+          <Maximize aria-hidden="true" className="h-12 w-12 text-[#2563EB]" />
           <h1 className="font-headline-student text-lg font-extrabold text-slate-800 mt-2">Siap mengerjakan ujian?</h1>
           <p className="font-body-student text-sm text-slate-500 leading-relaxed mt-2">
             {fsSupported
@@ -494,7 +498,7 @@ export default function ExamPage() {
         <div className="bg-[#0f172a] h-14 px-3 gap-2 lg:h-[72px] lg:px-6 flex justify-between items-center border-b border-slate-800">
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="material-symbols-outlined text-sky-400 text-2xl lg:text-3xl">school</span>
+            <School aria-hidden="true" className="h-6 w-6 text-sky-400 lg:h-7 lg:w-7" />
             <span className="hidden sm:inline font-extrabold text-lg lg:text-xl tracking-wider text-white">
               CBT<span className="text-sky-400">SEKOLAH</span>
             </span>
@@ -516,11 +520,11 @@ export default function ExamPage() {
               <span className="hidden sm:inline text-[9px] text-slate-400 font-extrabold uppercase tracking-widest leading-none mb-1">
                 SISA WAKTU
               </span>
-              <span className={`text-lg lg:text-2xl font-black leading-none tracking-wider font-mono ${isTimeWarning ? "text-red-400 animate-pulse" : "text-white"}`}>
+              <span className={`text-lg lg:text-2xl font-black leading-none tracking-wider font-mono ${isTimeWarning ? "text-red-400 motion-safe:animate-pulse" : "text-white"}`}>
                 {formatTime(timeRemaining)}
               </span>
             </div>
-            <span className="material-symbols-outlined text-sky-400 text-xl lg:text-2xl">schedule</span>
+            <Clock3 aria-hidden="true" className="h-5 w-5 text-sky-400 lg:h-6 lg:w-6" />
           </div>
 
           {/* Sync Status Indicator */}
@@ -555,7 +559,7 @@ export default function ExamPage() {
           {/* Font Size controls */}
           <div className="flex items-center gap-2 lg:gap-4 shrink-0">
             <div className="hidden lg:flex items-center gap-1.5 text-slate-400">
-              <span className="material-symbols-outlined text-sm">format_size</span>
+              <Type aria-hidden="true" className="h-4 w-4" />
               <span className="text-[10px] font-extrabold uppercase tracking-widest">T FONT SIZE</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -579,8 +583,8 @@ export default function ExamPage() {
 
           {/* Violation Banner */}
           {showViolationBanner && violations > 0 ? (
-            <div className="bg-red-600 text-white rounded-lg px-2.5 py-1 lg:px-4 lg:py-1.5 flex items-center gap-2 lg:gap-3 shadow-md border border-red-500 flex-1 max-w-md min-w-0 animate-pulse">
-              <span className="material-symbols-outlined text-white text-[18px] lg:text-[20px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+            <div className="bg-red-600 text-white rounded-lg px-2.5 py-1 lg:px-4 lg:py-1.5 flex items-center gap-2 lg:gap-3 shadow-md border border-red-500 flex-1 max-w-md min-w-0 motion-safe:animate-pulse">
+              <TriangleAlert aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white lg:h-5 lg:w-5" />
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] lg:text-xs font-extrabold uppercase tracking-wider leading-none">PELANGGARAN ({violations}/{maxViolations})</span>
                 <span className="text-[9px] lg:text-[10px] text-red-100 mt-0.5 font-medium leading-tight">Sisa {maxViolations - violations} peringatan sebelum ujian ditangguhkan.</span>
@@ -612,8 +616,8 @@ export default function ExamPage() {
 
       {/* Floating Violation Toast */}
       {violationToast && (
-        <div className="fixed top-[108px] lg:top-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm lg:w-auto bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-bounce">
-          <span className="material-symbols-outlined text-red-500">warning</span>
+        <div className="fixed top-[108px] lg:top-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm lg:w-auto bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 motion-safe:animate-bounce">
+          <TriangleAlert aria-hidden="true" className="h-5 w-5 shrink-0 text-red-500" />
           <span className="font-bold text-xs uppercase tracking-wide">{violationToast}</span>
         </div>
       )}
@@ -629,9 +633,14 @@ export default function ExamPage() {
                 <div data-testid="question-number" className="w-9 h-9 lg:w-10 lg:h-10 shrink-0 rounded-full bg-[#2563EB] text-white font-extrabold text-sm flex items-center justify-center shadow-md shadow-blue-500/10">
                   {currentQuestion.nomor_urut}
                 </div>
-                <span className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">
-                  PERTANYAAN
-                </span>
+                <div className="min-w-0">
+                  <span className="block text-slate-600 font-extrabold text-xs uppercase tracking-widest">
+                    SOAL {currentQuestion.nomor_urut} DARI {totalQuestions}
+                  </span>
+                  <span className="block text-slate-500 text-[11px] mt-0.5">
+                    Pertanyaan
+                  </span>
+                </div>
                 {currentQuestion.tipe === "COMPLEX" && (
                   <span className="ml-auto max-lg:ml-0 font-extrabold text-[10px] uppercase tracking-wider bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
                     PILIHAN GANDA KOMPLEKS (LEBIH DARI SATU)
@@ -853,7 +862,7 @@ export default function ExamPage() {
               aria-label="Tutup navigasi soal"
               className="lg:hidden ml-auto -mr-1 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-white cursor-pointer"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <X aria-hidden="true" className="h-5 w-5" />
             </button>
           </div>
 
@@ -919,7 +928,7 @@ export default function ExamPage() {
             </div>
             {questions.length - answeredCount > 0 && (
               <div className="text-amber-600 text-[10px] font-bold mt-1.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">warning</span>
+                <TriangleAlert aria-hidden="true" className="h-3 w-3" />
                 <span>Sisa {questions.length - answeredCount} soal belum dijawab</span>
               </div>
             )}
@@ -948,7 +957,7 @@ export default function ExamPage() {
           aria-label="Soal sebelumnya"
           className="border border-slate-300 text-slate-600 rounded-xl px-2 lg:px-6 h-10 lg:h-11 font-bold text-xs uppercase hover:bg-slate-50 transition-all disabled:opacity-40 flex items-center gap-1 lg:gap-2 cursor-pointer shrink-0"
         >
-          <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none">chevron_left</span>
+          <ChevronLeft aria-hidden="true" className="h-4 w-4 shrink-0" />
           <span className="hidden lg:inline">Sebelumnya</span>
         </button>
 
@@ -961,8 +970,8 @@ export default function ExamPage() {
           aria-controls="question-nav-panel"
           className="lg:hidden flex items-center gap-1 border border-slate-300 text-slate-700 rounded-xl px-2 h-10 font-bold text-xs cursor-pointer shrink-0 min-w-0"
         >
-          <span className="material-symbols-outlined text-[18px] w-4.5 h-4.5 overflow-hidden inline-block shrink-0 leading-none">grid_view</span>
-          <span className="tabular-nums">{currentQuestionIndex + 1}/{totalQuestions}</span>
+          <Grid2X2 aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+          <span className="tabular-nums">Soal {currentQuestionIndex + 1}/{totalQuestions}</span>
         </button>
 
         {/* Ragu-Ragu Toggle */}
@@ -977,7 +986,7 @@ export default function ExamPage() {
                 : "border-orange-300 text-orange-500 hover:bg-orange-50/50"
             }`}
           >
-            <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none" style={{ fontVariationSettings: raguraguSet.has(currentQuestion.id_soal) ? "'FILL' 1" : undefined }}>help_outline</span>
+            <CircleHelp aria-hidden="true" className="h-4 w-4 shrink-0" />
             <span className="hidden lg:inline">Ragu-Ragu</span>
           </button>
         )}
@@ -991,14 +1000,14 @@ export default function ExamPage() {
           className="bg-[#2563EB] text-white rounded-xl px-2 lg:px-6 h-10 lg:h-11 font-bold text-xs uppercase hover:opacity-95 transition-all disabled:opacity-40 flex items-center gap-1 lg:gap-2 cursor-pointer shrink-0"
         >
           <span className="hidden lg:inline">Berikutnya</span>
-          <span className="material-symbols-outlined text-[16px] w-4 h-4 overflow-hidden inline-block shrink-0 leading-none">chevron_right</span>
+          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
         </button>
       </div>
 
       {/* Ajakan kembali ke layar penuh; ujian tetap bisa dikerjakan. */}
       {fullscreenGranted && !isFullscreenOn && !isSubmitting && (
         <div className="fixed bottom-20 lg:bottom-24 left-1/2 -translate-x-1/2 z-[90] w-[calc(100vw-2rem)] max-w-sm lg:w-auto bg-white border border-amber-300 shadow-lg rounded-xl px-4 lg:px-5 py-3 flex flex-wrap items-center justify-center gap-2 lg:gap-3">
-          <span className="material-symbols-outlined text-amber-500">warning</span>
+          <TriangleAlert aria-hidden="true" className="h-5 w-5 text-amber-500" />
           <span className="font-body-student text-xs text-slate-600">Mode layar penuh telah ditutup.</span>
           <button
             onClick={handleReenterFullscreen}

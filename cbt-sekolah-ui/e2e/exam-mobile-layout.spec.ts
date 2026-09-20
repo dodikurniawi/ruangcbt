@@ -7,6 +7,9 @@ import { test, expect, type Page } from "@playwright/test";
 // dipakai aplikasi). Yang diuji di sini murni layout, bukan integrasi backend.
 
 const PORTRAIT = { width: 360, height: 800 };
+const NARROW = { width: 320, height: 640 };
+const LANDSCAPE = { width: 800, height: 500 };
+const TABLET = { width: 768, height: 1024 };
 const DESKTOP = { width: 1440, height: 900 };
 
 const CONFIG = {
@@ -168,6 +171,44 @@ test.describe("Halaman ujian — peringatan keamanan di portrait", () => {
     // Spanduk otomatis hilang setelah 5 detik
     await page.waitForTimeout(5500);
     await expect(banner).toBeHidden();
+  });
+});
+
+test.describe("Halaman ujian — viewport sempit dan landscape", () => {
+  test("viewport sempit tetap terbaca dan navigasi tidak keluar layar", async ({ page }) => {
+    await page.setViewportSize(NARROW);
+    await openExam(page);
+
+    await expect(page.getByText("Soal 1/40", { exact: true })).toBeVisible();
+    const questionText = page.locator("[data-testid='question-text']");
+    expect((await questionText.boundingBox())!.width).toBeGreaterThan(NARROW.width * 0.7);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+    for (const id of ["nav-prev", "nav-next", "toggle-question-nav"]) {
+      const box = (await page.locator(`[data-testid='${id}']`).boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(NARROW.width + 1);
+    }
+  });
+
+  test("landscape tetap memakai navigasi mobile tanpa overflow", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
+    await openExam(page);
+
+    await expect(page.locator("[data-testid='question-nav-panel']")).toBeHidden();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+    const option = page.locator("[data-testid='option-a']");
+    const box = (await option.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(LANDSCAPE.width + 1);
+  });
+
+  test("tablet portrait tetap memakai drawer dan tidak overflow", async ({ page }) => {
+    await page.setViewportSize(TABLET);
+    await openExam(page);
+
+    await expect(page.locator("[data-testid='question-nav-panel']")).toBeHidden();
+    await expect(page.locator("[data-testid='toggle-question-nav']")).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
   });
 });
 
