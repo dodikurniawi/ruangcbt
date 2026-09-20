@@ -324,38 +324,40 @@ export default function Home() {
       <footer className="bg-inverse-surface text-on-primary-fixed-variant pt-2xl pb-xl">
         <div className="max-w-container-max-width mx-auto px-lg grid grid-cols-1 md:grid-cols-4 gap-2xl border-b border-outline/30 pb-2xl mb-xl">
           <div className="space-y-md">
-            <div className="flex items-center gap-sm">
-              <span className="material-symbols-outlined text-inverse-primary text-2xl" data-icon="school">
-                school
-              </span>
-              <span className="font-headline-admin text-headline-admin font-bold text-on-primary-fixed-variant">
-                RuangCBT
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <span className="material-symbols-outlined text-2xl select-none" data-icon="school">
+                  school
+                </span>
+              </div>
+              <span className="font-headline-student text-2xl font-extrabold text-white tracking-tight">
+                Ruang<span className="text-blue-400">CBT</span>
               </span>
             </div>
-            <p className="font-caption text-outline-variant leading-relaxed">
+            <p className="font-caption text-slate-300 leading-relaxed">
               Solusi Asesmen Digital Terpadu untuk Sekolah Dasar hingga Menengah Atas di seluruh Nusantara.
             </p>
           </div>
           <div>
             <h4 className="font-label-bold text-white mb-lg">Produk</h4>
-            <ul className="space-y-sm font-body-admin text-outline-variant">
+            <ul className="space-y-sm font-body-admin text-slate-300">
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/fitur-admin">
+                <Link className="hover:text-blue-400 transition-colors" href="/fitur-admin">
                   Fitur Admin
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/portal-siswa">
+                <Link className="hover:text-blue-400 transition-colors" href="/portal-siswa">
                   Portal Siswa
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/keamanan-data">
+                <Link className="hover:text-blue-400 transition-colors" href="/keamanan-data">
                   Keamanan Data
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/integritas-ujian">
+                <Link className="hover:text-blue-400 transition-colors" href="/integritas-ujian">
                   Integritas Ujian
                 </Link>
               </li>
@@ -363,24 +365,24 @@ export default function Home() {
           </div>
           <div>
             <h4 className="font-label-bold text-white mb-lg">Dukungan</h4>
-            <ul className="space-y-sm font-body-admin text-outline-variant">
+            <ul className="space-y-sm font-body-admin text-slate-300">
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/bantuan">
+                <Link className="hover:text-blue-400 transition-colors" href="/bantuan">
                   Pusat Bantuan
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/dokumentasi">
+                <Link className="hover:text-blue-400 transition-colors" href="/dokumentasi">
                   Dokumentasi Webappscript
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/panduan-guru">
+                <Link className="hover:text-blue-400 transition-colors" href="/panduan-guru">
                   Panduan Guru
                 </Link>
               </li>
               <li>
-                <Link className="hover:text-inverse-primary transition-colors" href="/status">
+                <Link className="hover:text-blue-400 transition-colors" href="/status">
                   Status Server
                 </Link>
               </li>
