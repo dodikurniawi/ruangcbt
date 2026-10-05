@@ -103,6 +103,10 @@ export default function ExamPage() {
 
   // Gerbang mulai: fullscreen wajib berasal dari klik siswa, bukan dari effect.
   const [hasStarted, setHasStarted] = useState(false);
+  // Titik awal penghitung pelanggaran, dibaca pada saat siswa menekan "Mulai" —
+  // setelah rehidrasi sessionStorage selesai, jadi pelanggaran attempt ini yang
+  // tercatat sebelum halaman dimuat ulang tidak hilang dari hitungan.
+  const [initialViolations, setInitialViolations] = useState(0);
   const [fullscreenGranted, setFullscreenGranted] = useState(false);
   const [isFullscreenOn, setIsFullscreenOn] = useState(false);
 
@@ -193,17 +197,12 @@ export default function ExamPage() {
     doSubmit(true);
   }, [doSubmit]);
 
-  // Dibaca SEKALI saat gerbang mulai dilewati: pelanggaran yang sudah tercatat
-  // untuk attempt ini (sessionStorage bertahan melewati reload) menjadi titik awal
-  // penghitung, bukan nol.
-  const initialViolationsRef = useRef(violations);
-
   useExamSecurity({
     maxViolations,
     onViolation: handleViolation,
     onMaxViolations: handleMaxViolations,
     enabled: hasStarted && !isLoading && !isSubmitting,
-    initialViolations: initialViolationsRef.current,
+    initialViolations,
   });
 
   // Status fullscreen dipantau untuk menampilkan ajakan kembali; pelanggaran
@@ -218,6 +217,7 @@ export default function ExamPage() {
   // Dipanggil langsung dari klik siswa: gesture masih hidup saat request.
   const handleStartExam = useCallback(() => {
     requestExamFullscreen(document, document.documentElement).then(setFullscreenGranted);
+    setInitialViolations(useExamStore.getState().violations);
     setHasStarted(true);
   }, []);
 

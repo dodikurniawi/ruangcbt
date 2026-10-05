@@ -162,7 +162,9 @@ test.describe("Halaman ujian — peringatan keamanan di portrait", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
 
-    await expect(page.getByText(/Peringatan: tab switch/i)).toBeVisible();
+    // Toast menyebut hitungan dan tindakan siswa, bukan nama event ("tab switch").
+    await expect(page.getByText(/Peringatan 1 dari 3/i)).toBeVisible();
+    await expect(page.getByText(/meninggalkan halaman ujian/i)).toBeVisible();
     const banner = page.getByText(/PELANGGARAN \(1\/3\)/);
     await expect(banner).toBeVisible();
     await expect(page.getByText(/Sisa 2 peringatan sebelum ujian ditangguhkan/)).toBeVisible();
