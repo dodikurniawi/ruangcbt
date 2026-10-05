@@ -8,8 +8,10 @@ import useSWR from "swr";
 import { getUsers, getConfig, getExamSummary, deleteStudent, createStudent, updateStudent, resetUserLogin, updateConfig, importStudents, deleteAllStudents, uploadImage, logout } from "@/lib/api";
 import { downloadTemplate, parseWorkbook, buildPreview } from "@/lib/importSiswa";
 import type { ImportPreview } from "@/lib/importSiswa";
+import type { ResetMode } from "@/lib/api";
 import type { ApiResponse, User } from "@/types";
 import AISettingsPanel from "@/components/admin/AISettingsPanel";
+import ResetExamDialog from "@/components/admin/ResetExamDialog";
 
 function StatusBadge({ status }: { status: User["status_ujian"] }) {
   const map = {
@@ -62,6 +64,7 @@ export default function AdminManagement() {
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   // Foto siswa: id siswa yang sedang diunggah, dan pesan gagal per siswa.
   const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
@@ -210,11 +213,17 @@ export default function AdminManagement() {
     }
   };
 
-  const handleResetLogin = async (id: string) => {
+  const handleResetLogin = async (id: string, mode: ResetMode) => {
     setResettingId(id);
-    await resetUserLogin(id);
+    const res = await resetUserLogin(id, mode);
     await mutateUsers();
     setResettingId(null);
+    setResetTarget(null);
+    setImportResult(res.success
+      ? (mode === "access"
+        ? "Akses ujian dibuka. Siswa dapat masuk kembali ke ujian yang sama."
+        : "Siswa siap memulai ujian berikutnya. Hasil ujian sebelumnya tetap tersimpan.")
+      : (res.message || "Reset gagal. Coba lagi."));
   };
 
   const openEdit = (u: User) => {
@@ -727,9 +736,9 @@ export default function AdminManagement() {
                       </td>
                       <td className="px-6 py-4 text-right flex items-center justify-end gap-2 h-[61px]">
                         <button
-                          onClick={() => handleResetLogin(u.id_siswa)}
+                          onClick={() => setResetTarget(u)}
                           disabled={resettingId === u.id_siswa}
-                          title="Reset login siswa"
+                          title="Pilih jenis reset untuk siswa ini"
                           className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-[#2563EB] text-slate-500 hover:text-white flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-40"
                         >
                           <span className="material-symbols-outlined text-[16px] font-bold">
@@ -954,6 +963,15 @@ export default function AdminManagement() {
       )}
 
       {/* Edit Student Modal */}
+      {resetTarget && (
+        <ResetExamDialog
+          student={resetTarget}
+          busy={resettingId === resetTarget.id_siswa}
+          onCancel={() => setResetTarget(null)}
+          onConfirm={(mode) => handleResetLogin(resetTarget.id_siswa, mode)}
+        />
+      )}
+
       {showEditModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
           <div className="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-200/80">

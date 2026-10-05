@@ -91,7 +91,7 @@ export default function PublicLiveMonitoring() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0F766E]"></span>
                 </span>
                 <span className="font-label-bold text-[#0F766E] uppercase tracking-widest text-[10px]">
-                  Pemantauan Ujian Live
+                  Papan Skor Ujian
                 </span>
               </div>
             </div>
@@ -114,13 +114,16 @@ export default function PublicLiveMonitoring() {
             <div className="space-y-2 max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0F766E]/30 border border-[#0F766E]/40 text-teal-100 text-xs font-semibold tracking-wider uppercase">
                 <span className="material-symbols-outlined text-sm text-teal-300">insights</span>
-                <span>Pemantauan Ujian Live</span>
+                <span>Papan Skor Ujian</span>
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                Pemantauan Ujian Secara Langsung
+                Pemantauan Ujian
               </h1>
+              {/* Halaman ini mengambil data lewat polling 5 detik, bukan saluran
+                  realtime. Kata "live/real-time" diganti jam pembaruan yang
+                  sebenarnya supaya tidak ada yang mengira angkanya seketika. */}
               <p className="text-slate-200 text-sm leading-relaxed">
-                Pantau aktivitas dan progres siswa secara real-time.
+                Progres dan nilai peserta, diperbarui otomatis setiap 5 detik.
               </p>
             </div>
 
@@ -128,7 +131,9 @@ export default function PublicLiveMonitoring() {
             <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-xs text-slate-100 shadow-inner self-start md:self-auto">
               <span className="material-symbols-outlined text-[#0F766E] bg-white rounded-full p-0.5 text-base animate-spin" style={{ animationDuration: '6s' }}>sync</span>
               <div>
-                <p className="font-semibold text-white">Sistem Aktif</p>
+                <p className="font-semibold text-white">
+                  {lastUpdate ? `Diperbarui ${lastUpdate}` : "Menghubungkan..."}
+                </p>
                 <p className="text-[11px] text-slate-300">Pembaruan tiap 5 detik</p>
               </div>
             </div>
@@ -233,7 +238,7 @@ export default function PublicLiveMonitoring() {
                 <span className="material-symbols-outlined text-xl">fact_check</span>
               </div>
               <div>
-                <h2 className="font-bold text-[#0F172A] text-base">Live Score Siswa</h2>
+                <h2 className="font-bold text-[#0F172A] text-base">Nilai Siswa</h2>
                 <p className="text-xs text-[#64748B]">Status pengerjaan dan hasil nilai peserta</p>
               </div>
             </div>
@@ -276,7 +281,7 @@ export default function PublicLiveMonitoring() {
                         </div>
                         <h3 className="font-bold text-[#0F172A] text-base">Belum Ada Data Peserta</h3>
                         <p className="text-xs text-[#64748B] leading-relaxed">
-                          Ujian belum dimulai atau belum ada siswa yang mengirimkan jawaban. Data status dan nilai akan diperbarui secara otomatis.
+                          Belum ada siswa yang menyelesaikan ujian. Tabel ini menampilkan nilai peserta yang sudah selesai; status peserta yang sedang mengerjakan ada di halaman guru.
                         </p>
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[#64748B] text-xs font-medium">
                           <span className="w-2 h-2 rounded-full bg-[#0F766E] animate-pulse"></span>
@@ -336,7 +341,7 @@ export default function PublicLiveMonitoring() {
       <footer className="fixed bottom-0 left-0 w-full bg-[#1E3A5F] text-white py-2.5 px-4 md:px-8 flex justify-between items-center z-40 shadow-xl border-t border-slate-700">
         <div className="flex items-center gap-2 text-xs font-medium text-slate-200">
           <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-          <span>Live · {lastUpdate ? `Diperbarui ${lastUpdate} WIB` : "Menghubungkan..."}</span>
+          <span>{lastUpdate ? `Terakhir diperbarui ${lastUpdate} WIB` : "Menghubungkan..."}</span>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
