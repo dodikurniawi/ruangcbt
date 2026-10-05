@@ -38,8 +38,8 @@ function StatusBadge({ status }: { status: User["status_ujian"] }) {
   );
 }
 
-interface StudentForm { username: string; password: string; nama_lengkap: string; kelas: string; }
-interface EditForm { id_siswa: string; username: string; password: string; nama_lengkap: string; kelas: string; }
+interface StudentForm { username: string; password: string; nama_lengkap: string; kelas: string; tempat_lahir: string; tanggal_lahir: string; }
+interface EditForm { id_siswa: string; username: string; password: string; nama_lengkap: string; kelas: string; tempat_lahir: string; tanggal_lahir: string; }
 
 export default function AdminManagement() {
   const router = useTenantRouter();
@@ -77,10 +77,10 @@ export default function AdminManagement() {
   const [configSaved, setConfigSaved] = useState(false);
   const [configError, setConfigError] = useState("");
   const [disableExamPin, setDisableExamPin] = useState(false);
-  const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "" });
+  const [studentForm, setStudentForm] = useState<StudentForm>({ username: "", password: "", nama_lengkap: "", kelas: "", tempat_lahir: "", tanggal_lahir: "" });
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [editForm, setEditForm] = useState<EditForm>({ id_siswa: "", username: "", password: "", nama_lengkap: "", kelas: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ id_siswa: "", username: "", password: "", nama_lengkap: "", kelas: "", tempat_lahir: "", tanggal_lahir: "" });
 
   // Import siswa
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,7 +125,7 @@ export default function AdminManagement() {
     if (res.success) {
       await mutateUsers();
       setShowAddModal(false);
-      setStudentForm({ username: "", password: "", nama_lengkap: "", kelas: "" });
+      setStudentForm({ username: "", password: "", nama_lengkap: "", kelas: "", tempat_lahir: "", tanggal_lahir: "" });
     } else {
       setFormError(res.message || "Gagal menambah siswa.");
     }
@@ -227,7 +227,11 @@ export default function AdminManagement() {
   };
 
   const openEdit = (u: User) => {
-    setEditForm({ id_siswa: u.id_siswa, username: u.username, password: "", nama_lengkap: u.nama_lengkap, kelas: u.kelas });
+    setEditForm({
+      id_siswa: u.id_siswa, username: u.username, password: "",
+      nama_lengkap: u.nama_lengkap, kelas: u.kelas,
+      tempat_lahir: u.tempat_lahir || "", tanggal_lahir: u.tanggal_lahir || "",
+    });
     setFormError("");
     setShowEditModal(true);
   };
@@ -241,6 +245,10 @@ export default function AdminManagement() {
       nama_lengkap: editForm.nama_lengkap,
       username: editForm.username,
       kelas: editForm.kelas,
+      // Form sudah terisi nilai TTL siswa ini, jadi mengirimnya kembali adalah
+      // penyimpanan ulang nilai yang sama — bukan penghapusan.
+      tempat_lahir: editForm.tempat_lahir.trim(),
+      tanggal_lahir: editForm.tanggal_lahir,
       ...(editForm.password ? { password: editForm.password } : {}),
     });
     if (res.success) {
@@ -986,6 +994,8 @@ export default function AdminManagement() {
               {([
                 { label: "Nama Lengkap", key: "nama_lengkap", type: "text", placeholder: "Nama siswa" },
                 { label: "Username / NIS", key: "username", type: "text", placeholder: "Username login" },
+                { label: "Tempat Lahir", key: "tempat_lahir", type: "text", placeholder: "Contoh: Tangerang (boleh dikosongkan)" },
+                { label: "Tanggal Lahir", key: "tanggal_lahir", type: "date", placeholder: "" },
                 { label: "Password Baru", key: "password", type: "password", placeholder: "Kosongkan jika tidak diubah" },
                 { label: "Kelas", key: "kelas", type: "text", placeholder: "Contoh: 6A" },
               ] as const).map(({ label, key, type, placeholder }) => (
@@ -1034,6 +1044,8 @@ export default function AdminManagement() {
               {([
                 { label: "Nama Lengkap", key: "nama_lengkap", type: "text", placeholder: "Nama siswa" },
                 { label: "Username / NIS", key: "username", type: "text", placeholder: "Username login" },
+                { label: "Tempat Lahir", key: "tempat_lahir", type: "text", placeholder: "Contoh: Tangerang (boleh dikosongkan)" },
+                { label: "Tanggal Lahir", key: "tanggal_lahir", type: "date", placeholder: "" },
                 { label: "Password", key: "password", type: "password", placeholder: "Password awal" },
                 { label: "Kelas", key: "kelas", type: "text", placeholder: "Contoh: XII MIPA 1" },
               ] as const).map(({ label, key, type, placeholder }) => (

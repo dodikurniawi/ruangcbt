@@ -85,6 +85,13 @@ export interface User {
     mapel_diujikan?: string; // id_mapel yang diujikan saat submit, diisi GAS
     /** Rujukan foto siswa di Drive (Users kolom 16); kosong = belum ada foto. */
     foto_url?: string;
+    /**
+     * Tempat & tanggal lahir siswa (Users kolom 17-18), untuk kartu peserta.
+     * Keduanya opsional: siswa lama tidak punya data ini dan tidak boleh dikarang.
+     * `tanggal_lahir` berformat ISO "YYYY-MM-DD", bukan format tampilan.
+     */
+    tempat_lahir?: string;
+    tanggal_lahir?: string;
     saved_answers?: AnswersRecord | null; // recovered answers from server (col 14)
 }
 

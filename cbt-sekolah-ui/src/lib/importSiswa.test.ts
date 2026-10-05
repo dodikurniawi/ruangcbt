@@ -116,3 +116,48 @@ const noExisting = new Set<string>();
 }
 
 console.log("importSiswa: 8/8 skenario PASS");
+
+// 9. Kolom TTL baru terbaca, termasuk variasi penulisan header dan sel bertanggal.
+{
+  const rows = parseWorkbook(xlsxBuffer([
+    ["Nama Lengkap", "Username", "Password", "Kelas", "Tempat Lahir", "Tgl Lahir"],
+    ["Ahmad", "ahmad", "p1", "6A", " Tangerang ", "2015-05-12"],
+    ["Budi", "budi", "p2", "6A", "Jakarta", "20/06/2014"],
+    ["Citra", "citra", "p3", "6B", "", ""],
+  ]));
+  const { valid, problems } = buildPreview(rows, noExisting);
+  assert.equal(problems.length, 0);
+  assert.equal(valid[0].tempat_lahir, "Tangerang", "tempat lahir di-trim");
+  assert.equal(valid[0].tanggal_lahir, "2015-05-12");
+  assert.equal(valid[1].tanggal_lahir, "2014-06-20", "12/05/2015 dibaca hari-dulu");
+  assert.equal(valid[2].tempat_lahir, undefined, "TTL kosong tidak dikirim, bukan string palsu");
+  assert.equal(valid[2].tanggal_lahir, undefined);
+  assert.notEqual(valid[0].tanggal_lahir, valid[1].tanggal_lahir, "TTL tidak tertukar antar siswa");
+}
+
+// 10. Backward compatible: file lama tanpa kolom TTL tetap berhasil diimpor.
+{
+  const rows = parseWorkbook(xlsxBuffer([
+    ["Nama Lengkap", "Username", "Password", "Kelas"],
+    ["Ahmad", "ahmad", "p1", "6A"],
+  ]));
+  const { valid, problems } = buildPreview(rows, noExisting);
+  assert.equal(problems.length, 0);
+  assert.equal(valid.length, 1);
+  assert.equal(valid[0].nama_lengkap, "Ahmad");
+  assert.ok(!("tanggal_lahir" in valid[0]));
+}
+
+// 11. Tanggal tidak terbaca tidak menggagalkan siswanya — hanya TTL yang kosong.
+{
+  const rows = parseWorkbook(xlsxBuffer([
+    [...TEMPLATE_HEADERS],
+    ["Ahmad", "ahmad", "p1", "6A", "Tangerang", "entah kapan"],
+  ]));
+  const { valid, problems } = buildPreview(rows, noExisting);
+  assert.equal(problems.length, 0, "baris tetap sah");
+  assert.equal(valid[0].tempat_lahir, "Tangerang");
+  assert.equal(valid[0].tanggal_lahir, undefined);
+}
+
+console.log("importSiswa: 3 skenario TTL PASS");

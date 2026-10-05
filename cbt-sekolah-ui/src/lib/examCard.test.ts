@@ -46,3 +46,35 @@ assert.equal(escapeCardHtml("p@ss<script>"), "p@ss&lt;script&gt;");
 assert.equal(escapeCardHtml("biasa123"), "biasa123");
 
 console.log("examCard: kredensial kartu peserta per siswa + escaping PASS");
+
+// ── Tempat/tanggal lahir di kartu ──────────────────────────────────────────
+import { studentCardBirth } from "./examCard.ts";
+
+// Tiap kartu memakai TTL baris siswanya sendiri, tidak satu nilai untuk semua.
+const siswaTtl = [
+    { id_siswa: "A", tempat_lahir: "Tangerang", tanggal_lahir: "2015-05-12" },
+    { id_siswa: "B", tempat_lahir: "Jakarta", tanggal_lahir: "2014-06-20" },
+];
+const ttl = siswaTtl.map((s) => studentCardBirth(s));
+assert.deepEqual(ttl, ["Tangerang, 12 Mei 2015", "Jakarta, 20 Juni 2014"]);
+assert.notEqual(ttl[0], ttl[1], "TTL tidak tertukar antar siswa");
+
+// Siswa lama tanpa TTL: kartu tetap tercetak dengan placeholder.
+assert.equal(studentCardBirth({}), "-");
+assert.equal(studentCardBirth({ tempat_lahir: "", tanggal_lahir: "" }), "-");
+assert.equal(studentCardBirth({ tempat_lahir: null, tanggal_lahir: null }), "-");
+assert.equal(studentCardBirth({ tempat_lahir: "  ", tanggal_lahir: "   " }), "-");
+
+// Sebagian terisi tetap informatif, tanpa koma menggantung.
+assert.equal(studentCardBirth({ tempat_lahir: "Bogor" }), "Bogor");
+assert.equal(studentCardBirth({ tanggal_lahir: "2013-08-17" }), "17 Agustus 2013");
+assert.equal(studentCardBirth({ tempat_lahir: " Depok " , tanggal_lahir: "2013-08-17" }), "Depok, 17 Agustus 2013");
+
+// Tanggal rusak tidak pernah menjadi "Invalid Date"/"NaN"/"undefined" di kartu.
+for (const buruk of ["0000-00-00", "bukan tanggal", "2015-02-31", undefined]) {
+    const hasil = studentCardBirth({ tempat_lahir: "Serang", tanggal_lahir: buruk });
+    assert.equal(hasil, "Serang");
+    assert.ok(!/Invalid|NaN|undefined|null/.test(hasil));
+}
+
+console.log("examCard.test.ts OK");

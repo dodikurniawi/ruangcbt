@@ -1,8 +1,11 @@
 import * as XLSX from "xlsx";
 import type { StudentInput } from "@/lib/api";
+import { toIsoBirthDate } from "./birthDate.ts";
 
 // Kolom template yang diunduh guru.
-export const TEMPLATE_HEADERS = ["Nama Lengkap", "Username", "Password", "Kelas"] as const;
+export const TEMPLATE_HEADERS = [
+  "Nama Lengkap", "Username", "Password", "Kelas", "Tempat Lahir", "Tanggal Lahir",
+] as const;
 
 // Header di file guru → field internal. Toleran terhadap variasi penulisan.
 const HEADER_ALIASES: Record<string, keyof StudentInput> = {
@@ -10,6 +13,8 @@ const HEADER_ALIASES: Record<string, keyof StudentInput> = {
   username: "username", nis: "username", "username/nis": "username", user: "username",
   password: "password", sandi: "password", kata_sandi: "password",
   kelas: "kelas", rombel: "kelas", rombongan_belajar: "kelas",
+  tempat_lahir: "tempat_lahir", tempat: "tempat_lahir", tempat_kelahiran: "tempat_lahir",
+  tanggal_lahir: "tanggal_lahir", tgl_lahir: "tanggal_lahir", tanggal_kelahiran: "tanggal_lahir",
 };
 
 function normalizeHeader(h: unknown): string {
@@ -21,12 +26,14 @@ export interface ImportPreview { valid: StudentInput[]; problems: ImportProblem[
 
 // Buat file .xlsx template dan picu unduhan di browser.
 export function downloadTemplate(): void {
+  // Tanggal lahir ditulis sebagai teks ISO agar guru menyalin bentuk yang benar;
+  // parser tetap menerima 12/05/2015 dan sel bertanggal asli Excel.
   const example = [
-    ["Ahmad Fauzi", "ahmadfauzi", "siswa123", "6A"],
-    ["Siti Nurhaliza", "sitinurhaliza", "siswa123", "6A"],
+    ["Ahmad Fauzi", "ahmadfauzi", "siswa123", "6A", "Tangerang", "2015-05-12"],
+    ["Siti Nurhaliza", "sitinurhaliza", "siswa123", "6A", "", ""],
   ];
   const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS], ...example]);
-  ws["!cols"] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 10 }];
+  ws["!cols"] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 14 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Data Siswa");
   XLSX.writeFile(wb, "Template_Import_Siswa_RuangCBT.xlsx");
@@ -68,9 +75,16 @@ export function buildPreview(rows: unknown[][], existingUsernames: Set<string>):
     const username = cell(colOf.username);
     const password = cell(colOf.password);
     const kelas = cell(colOf.kelas);
+    const tempatLahir = cell(colOf.tempat_lahir);
+    // Sel tanggal Excel bisa berupa serial number; baca nilai mentahnya, bukan
+    // teks hasil cell(), supaya konversi tidak kehilangan informasi.
+    const rawTanggal = colOf.tanggal_lahir === undefined
+      ? ""
+      : (r as unknown[])[colOf.tanggal_lahir];
+    const tanggalLahir = toIsoBirthDate(rawTanggal);
 
     // Baris kosong (mis. di akhir file) — abaikan, bukan siswa.
-    if (!nama && !username && !password && !kelas) return;
+    if (!nama && !username && !password && !kelas && !tempatLahir && !tanggalLahir) return;
 
     if (!nama) { problems.push({ row: rowNum, nama: username || "—", reason: "Nama belum diisi" }); return; }
     if (!username) { problems.push({ row: rowNum, nama, reason: "Username belum diisi" }); return; }
@@ -87,7 +101,13 @@ export function buildPreview(rows: unknown[][], existingUsernames: Set<string>):
     }
 
     seenInFile.add(uKey);
-    valid.push({ nama_lengkap: nama, username, password, kelas });
+    // TTL yang tidak terbaca masuk sebagai kosong, tidak menggagalkan barisnya:
+    // file import lama tanpa kolom TTL harus tetap berhasil.
+    valid.push({
+      nama_lengkap: nama, username, password, kelas,
+      ...(tempatLahir ? { tempat_lahir: tempatLahir } : {}),
+      ...(tanggalLahir ? { tanggal_lahir: tanggalLahir } : {}),
+    });
   });
 
   return { valid, problems };

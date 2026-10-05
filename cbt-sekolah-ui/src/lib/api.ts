@@ -315,6 +315,9 @@ export interface StudentInput {
     password: string;
     nama_lengkap: string;
     kelas: string;
+    // Opsional: siswa lama tanpa TTL tetap sah. tanggal_lahir berformat ISO.
+    tempat_lahir?: string;
+    tanggal_lahir?: string;
 }
 
 export async function createStudent(data: StudentInput): Promise<ApiResponse> {
@@ -325,7 +328,12 @@ export async function updateStudent(
     id_siswa: string,
     // foto_url: kosongkan dengan "" untuk menghapus foto; server hanya menerima
     // URL yang memang dihasilkan uploadImage.
-    data: { nama_lengkap?: string; username?: string; password?: string; kelas?: string; foto_url?: string }
+    // tempat_lahir/tanggal_lahir: field yang tidak dikirim tidak diubah server,
+    // sehingga menyimpan nama/kelas/password tidak menghapus TTL yang sudah ada.
+    data: {
+        nama_lengkap?: string; username?: string; password?: string; kelas?: string;
+        foto_url?: string; tempat_lahir?: string; tanggal_lahir?: string;
+    }
 ): Promise<ApiResponse> {
     return fetchApi('updateStudent', 'POST', { id_siswa, ...data });
 }

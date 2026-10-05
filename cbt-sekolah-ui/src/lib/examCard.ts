@@ -1,3 +1,5 @@
+import { formatBirthDateId } from "./birthDate.ts";
+
 // Kredensial yang dicetak di kartu peserta. Sumbernya satu: baris siswa dari
 // getUsers (admin-only), sehingga kartu tidak pernah memakai state siswa lain.
 
@@ -35,4 +37,21 @@ export function escapeCardHtml(value: string): string {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+/**
+ * Baris "Tempat/Tanggal Lahir" di kartu peserta, dirakit dari baris siswa ini saja.
+ * Siswa lama tanpa TTL mendapat placeholder, bukan "undefined"/"Invalid Date",
+ * dan kartunya tetap tercetak.
+ */
+export function studentCardBirth(
+    student: { tempat_lahir?: unknown; tanggal_lahir?: unknown },
+): string {
+    const tempat = student.tempat_lahir === null || student.tempat_lahir === undefined
+        ? ""
+        : String(student.tempat_lahir).trim();
+    const tanggal = formatBirthDateId(student.tanggal_lahir);
+
+    if (tempat && tanggal) return `${tempat}, ${tanggal}`;
+    return tempat || tanggal || EMPTY;
 }

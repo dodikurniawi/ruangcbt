@@ -368,6 +368,24 @@ const USER_PHOTO_COL = 16;
 // Hanya URL yang memang dihasilkan handleUploadImage yang boleh tersimpan: guru
 // tidak pernah mengetik URL, jadi apa pun bentuk lain berarti request buatan.
 const DRIVE_PHOTO_URL = /^https:\/\/drive\.google\.com\/thumbnail\?id=[A-Za-z0-9_-]+(&sz=w\d+)?$/;
+// Kolom 17-18 = tempat & tanggal lahir siswa (append-only, seperti foto_url).
+// Keduanya boleh kosong: siswa lama tidak punya data ini dan tidak boleh dikarang.
+const USER_BIRTHPLACE_COL = 17;
+const USER_BIRTHDATE_COL = 18;
+// Tanggal lahir disimpan sebagai teks ISO "YYYY-MM-DD". Sheets kadang mengubah
+// sel bertanggal menjadi objek Date sendiri, jadi pembacaan menormalkan keduanya
+// memakai getter lokal — bukan toISOString(), yang menggeser tanggal satu hari
+// untuk zona waktu Indonesia.
+function normalizeBirthDate(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    if (isNaN(value.getTime())) return "";
+    const m = value.getMonth() + 1, d = value.getDate();
+    return value.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (d < 10 ? "0" + d : d);
+  }
+  const text = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
 // Re-entry (RC-6): status_login hanya dianggap "perangkat lain" selama last_seen
 // masih segar. Tab yang ditutup kedaluwarsa sendiri, tanpa reset admin.
 // ponytail: satu ambang waktu global sudah cukup; naikkan ke device token bila
@@ -1494,6 +1512,8 @@ function handleGetUsers(params) {
       last_seen_ms: row[11] ? new Date(row[11]).getTime() : null,
       mapel_diujikan: row[12] || "",
       foto_url: row[USER_PHOTO_COL - 1] || "",
+      tempat_lahir: row[USER_BIRTHPLACE_COL - 1] ? String(row[USER_BIRTHPLACE_COL - 1]).trim() : "",
+      tanggal_lahir: normalizeBirthDate(row[USER_BIRTHDATE_COL - 1]),
     });
   }
 
@@ -3644,7 +3664,7 @@ function handleSetExamStatus(params) {
 // ===== KELOLA SISWA =====
 
 function handleCreateStudent(params) {
-  const { id_siswa, username, password, nama_lengkap, kelas } = params;
+  const { id_siswa, username, password, nama_lengkap, kelas, tempat_lahir, tanggal_lahir } = params;
 
   if (!username || !password || !nama_lengkap || !kelas) {
     return { success: false, message: "username, password, nama_lengkap, dan kelas wajib diisi" };
@@ -3663,18 +3683,36 @@ function handleCreateStudent(params) {
     ? id_siswa.trim()
     : "S" + String(Date.now()).slice(-6);
 
+  const birthPlace = tempat_lahir === undefined || tempat_lahir === null ? "" : String(tempat_lahir).trim();
+  const birthDate = normalizeBirthDate(tanggal_lahir);
+  if (tanggal_lahir && !birthDate) {
+    return { success: false, message: "Tanggal lahir tidak valid. Gunakan format YYYY-MM-DD." };
+  }
+
+  // Kolom 14-16 (saved_answers, exam_binding, foto_url) sengaja ditulis kosong
+  // agar tempat/tanggal lahir mendarat tepat di kolom 17-18, bukan menggeser.
   sheet.appendRow([
     studentId, username, password, nama_lengkap, kelas,
     false, "", "", "", 0, "BELUM", "", "",
+    "", "", "", birthPlace, birthDate,
   ]);
 
   return { success: true, message: "Siswa berhasil ditambahkan" };
 }
 
 function handleUpdateStudent(params) {
-  const { id_siswa, nama_lengkap, username, password, kelas, foto_url } = params;
+  const { id_siswa, nama_lengkap, username, password, kelas, foto_url, tempat_lahir, tanggal_lahir } = params;
 
   if (!id_siswa) return { success: false, message: "id_siswa diperlukan" };
+
+  // TTL opsional. Field yang tidak dikirim tidak disentuh, sehingga menyimpan
+  // perubahan nama/kelas/password tidak pernah menghapus TTL yang sudah ada.
+  const birthPlaceGiven = tempat_lahir !== undefined && tempat_lahir !== null;
+  const birthDateGiven = tanggal_lahir !== undefined && tanggal_lahir !== null;
+  const birthDate = birthDateGiven ? normalizeBirthDate(tanggal_lahir) : "";
+  if (birthDateGiven && String(tanggal_lahir).trim() !== "" && !birthDate) {
+    return { success: false, message: "Tanggal lahir tidak valid. Gunakan format YYYY-MM-DD." };
+  }
 
   // foto_url opsional. String kosong berarti guru menghapus fotonya.
   const photoGiven = foto_url !== undefined && foto_url !== null;
@@ -3706,6 +3744,8 @@ function handleUpdateStudent(params) {
       if (password)     sheet.getRange(i + 1, 3).setValue(password);
       if (kelas)        sheet.getRange(i + 1, 5).setValue(kelas);
       if (photoGiven)   sheet.getRange(i + 1, USER_PHOTO_COL).setValue(photo);
+      if (birthPlaceGiven) sheet.getRange(i + 1, USER_BIRTHPLACE_COL).setValue(String(tempat_lahir).trim());
+      if (birthDateGiven)  sheet.getRange(i + 1, USER_BIRTHDATE_COL).setValue(birthDate);
       return { success: true, message: "Data siswa diperbarui" };
     }
   }
@@ -3768,6 +3808,9 @@ function handleImportStudents(params) {
     sheet.appendRow([
       studentId, student.username, student.password, student.nama_lengkap,
       student.kelas || "", false, "", "", "", 0, "BELUM", "", "",
+      "", "", "",
+      student.tempat_lahir ? String(student.tempat_lahir).trim() : "",
+      normalizeBirthDate(student.tanggal_lahir),
     ]);
 
     existingUsernames.add(student.username.toLowerCase());

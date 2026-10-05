@@ -280,12 +280,15 @@ for (const status of ["SELESAI", "DISKUALIFIKASI"]) {
   assert.equal(col14!.value, "", "saved_answers dikosongkan");
 }
 
-// --- BR#12: siswa baru dibuat dengan 13 kolom, kolom 14 tetap kosong ---
+// --- BR#12: siswa baru dibuat tanpa jawaban tersimpan (kolom 14 kosong) ---
+// Baris boleh memanjang ke kolom 17-18 (tempat/tanggal lahir); yang dijaga di
+// sini adalah kolom 14 ke bawah tidak pernah berisi jawaban warisan.
 {
   const { gas, appended } = loadGas({ Users: [USERS_HEADER], Config: CONFIG, Questions: QUESTIONS });
   gas.handleCreateStudent({ username: "baru", password: "p", nama_lengkap: "Baru", kelas: "6A" });
   const row = appended.Users![0];
-  assert.equal(row.length, 13, "appendRow tetap 13 kolom — kolom 14 dibiarkan kosong");
+  assert.equal(row[13] ?? "", "", "kolom 14 (saved_answers) dibiarkan kosong");
+  assert.equal(row[14] ?? "", "", "kolom 15 (exam_binding) dibiarkan kosong");
   assert.equal(row[10], "BELUM");
 }
 

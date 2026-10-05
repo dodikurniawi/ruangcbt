@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { getUsers, getConfig, getPrintSettings, savePrintSettings, getMataPelajaran, logout, getClassStats, type PrintSettings } from "@/lib/api";
 import type { MataPelajaran } from "@/types";
 import type { User } from "@/types";
-import { studentCardCredentials, escapeCardHtml } from "@/lib/examCard";
+import { studentCardCredentials, studentCardBirth, escapeCardHtml } from "@/lib/examCard";
 import { CLASS_SCHEMA, CLASS_SYSTEM_INSTRUCTION, isPassingScore, resolveKkm, restoreLabels, validateClassAnalysis } from "@/lib/learningAnalysis";
 import { generateAIJson } from "@/lib/aiProvider";
 import { getProviderApiKey, getSelectedProvider } from "@/lib/aiSettings";
@@ -539,7 +539,7 @@ export default function AdminCetak() {
           <tr>
             <td>Tempat/Tanggal Lahir</td>
             <td>:</td>
-            <td>${settings?.school_city || "Kota"}, 10 Januari 2011</td>
+            <td>${escapeCardHtml(studentCardBirth(student))}</td>
           </tr>
           <tr>
             <td>Sekolah Asal</td>
@@ -1457,7 +1457,7 @@ export default function AdminCetak() {
                       </div>
                       <div className="flex gap-2 text-[11px]">
                         <span className="text-slate-900 w-36 shrink-0 font-bold">Tempat/Tanggal Lahir</span>
-                        <span className="font-extrabold text-slate-900 uppercase">: {settings?.school_city || "Kota"}, 10 Januari 2011</span>
+                        <span className="font-extrabold text-slate-900">: {studentCardBirth(student)}</span>
                       </div>
                       <div className="flex gap-2 text-[11px]">
                         <span className="text-slate-900 w-36 shrink-0 font-bold">Sekolah Asal</span>
