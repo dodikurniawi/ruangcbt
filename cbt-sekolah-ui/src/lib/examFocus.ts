@@ -55,6 +55,22 @@ export async function exitExamFullscreen(doc: FullscreenDocLike): Promise<void> 
 export const LEAVE_VIOLATIONS = ["tab_switch", "blur", "exit_fullscreen"] as const;
 export const LEAVE_COOLDOWN_MS = 1500;
 
+/**
+ * Berapa lama jendela harus TETAP kehilangan fokus sebelum blur dihitung sebagai
+ * meninggalkan ujian.
+ *
+ * `blur` di ponsel berbunyi untuk hal-hal yang bukan kecurangan dan sering tidak
+ * disadari siswa: notifikasi masuk, bilah status ditarik, papan ketik muncul,
+ * layar berputar. Semuanya mengembalikan fokus dalam waktu di bawah satu detik.
+ * Berpindah aplikasi atau alt+tab yang sungguhan tidak: fokus tetap hilang
+ * selama siswa berada di tempat lain.
+ *
+ * Yang hilang karena jeda ini hanyalah blur sekejap. Berpindah tab, me-minimize,
+ * mengunci layar, dan keluar layar penuh tetap tercatat lewat `visibilitychange`
+ * dan `fullscreenchange` tanpa jeda apa pun.
+ */
+export const BLUR_SUSTAIN_MS = 1200;
+
 export function createViolationDeduper(cooldownMs: number = LEAVE_COOLDOWN_MS) {
     const lastAt = new Map<string, number>();
     return function shouldReport(type: string, now: number): boolean {
@@ -64,4 +80,24 @@ export function createViolationDeduper(cooldownMs: number = LEAVE_COOLDOWN_MS) {
         lastAt.set(key, now);
         return true;
     };
+}
+
+/**
+ * Kalimat yang dibaca SISWA untuk setiap jenis pelanggaran. Nama event
+ * ("visibilitychange", "tab_switch") tidak pernah sampai ke layar: siswa harus
+ * tahu apa yang harus ia lakukan, bukan nama teknis pemicunya.
+ */
+const VIOLATION_MESSAGES: Record<string, string> = {
+    tab_switch: "Anda meninggalkan halaman ujian. Tetap berada di halaman ini selama mengerjakan — layar yang mati atau berpindah aplikasi juga terbaca sebagai meninggalkan halaman.",
+    blur: "Jendela ujian kehilangan fokus. Jangan membuka aplikasi atau jendela lain selama mengerjakan.",
+    exit_fullscreen: "Anda keluar dari mode layar penuh. Tekan “Kembali ke Layar Penuh” untuk melanjutkan.",
+    copy: "Menyalin teks soal tidak diizinkan.",
+    paste: "Menempel teks ke lembar jawaban tidak diizinkan.",
+    contextmenu: "Menu klik kanan dinonaktifkan selama ujian.",
+    devtools: "Membuka alat pengembang tidak diizinkan selama ujian.",
+    keyboard_shortcut: "Kombinasi tombol tersebut dinonaktifkan selama ujian.",
+};
+
+export function violationMessage(type: string): string {
+    return VIOLATION_MESSAGES[type] ?? "Terdeteksi aktivitas yang tidak diizinkan selama ujian.";
 }

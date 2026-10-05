@@ -153,6 +153,15 @@ export async function submitExam(
     return fetchApi('submitExam', 'POST', { id_siswa, answers, forced });
 }
 
+/**
+ * Tanda hadir: hanya memperbarui last_seen di server, tidak menulis jawaban.
+ * Dipakai saat jawaban belum berubah, supaya layar guru dapat membedakan "sedang
+ * mengerjakan" dari "terputus" — satu panggilan per menit per siswa.
+ */
+export async function sendHeartbeat(id_siswa: string): Promise<ApiResponse> {
+    return fetchApi('syncAnswers', 'POST', { id_siswa, heartbeat: true });
+}
+
 export async function reportViolation(
     id_siswa: string,
     type: string
@@ -172,8 +181,23 @@ export async function getUsers(): Promise<ApiResponse<User[]>> {
     return fetchApi<User[]>('getUsers');
 }
 
-export async function resetUserLogin(id_siswa: string): Promise<ApiResponse> {
-    return fetchApi('resetUserLogin', 'POST', { id_siswa });
+/**
+ * Dua operasi yang konsekuensinya berbeda, jadi modenya wajib disebut:
+ *
+ *   "access"  — membuka kunci sesi saja. Siswa masuk kembali ke ujian yang SAMA;
+ *               jawaban, timer, skor, dan pelanggaran tidak disentuh.
+ *   "attempt" — menyiapkan ujian BERIKUTNYA. State ujian berjalan di baris siswa
+ *               dikosongkan; hasil yang sudah selesai tetap tersimpan di sheet
+ *               Responses (append-only), dan jawaban yang belum disubmit
+ *               diarsipkan ke sana lebih dulu oleh server.
+ */
+export type ResetMode = 'access' | 'attempt';
+
+export async function resetUserLogin(
+    id_siswa: string,
+    mode: ResetMode,
+): Promise<ApiResponse> {
+    return fetchApi('resetUserLogin', 'POST', { id_siswa, mode });
 }
 
 export async function createQuestion(data: Partial<QuestionWritePayload> & { kunci_jawaban: string }): Promise<ApiResponse> {

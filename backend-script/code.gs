@@ -1488,6 +1488,10 @@ function handleGetUsers(params) {
       violation_count: row[9] || 0,
       status_ujian: row[10] || "BELUM",
       last_seen: row[11] ? new Date(row[11]).toLocaleString("id-ID") : null,
+      // Teks lokal di atas untuk dibaca manusia; epoch ini untuk DIHITUNG. Layar
+      // guru harus bisa menjawab "berapa lama siswa ini tidak terlihat", dan
+      // "05/10/2026 10.21.35" tidak dapat diparse ulang dengan andal di browser.
+      last_seen_ms: row[11] ? new Date(row[11]).getTime() : null,
       mapel_diujikan: row[12] || "",
       foto_url: row[USER_PHOTO_COL - 1] || "",
     });
@@ -1688,7 +1692,16 @@ function loginWithRow(sheet, rowNumber, row) {
   const statusUjian = row[10];
 
   if (statusUjian === "SELESAI" || statusUjian === "DISKUALIFIKASI") {
-    return { success: false, message: "Kamu sudah menyelesaikan ujian." };
+    // Pesan menyebutkan langkah berikutnya, bukan hanya penolakan: satu baris
+    // Users hanya memuat satu attempt, jadi mapel kedua memang baru bisa dimulai
+    // setelah pengawas menyiapkannya. Tanpa kalimat ini siswa menebak-nebak
+    // tombol mana yang harus ia tekan.
+    return {
+      success: false,
+      message: statusUjian === "DISKUALIFIKASI"
+        ? "Ujianmu dihentikan karena pelanggaran. Hubungi pengawas untuk meminta reset."
+        : "Ujian ini sudah kamu selesaikan. Untuk ujian mapel berikutnya, minta pengawas menyiapkan ujian berikutnya untuk akunmu.",
+    };
   }
 
   // RC-6: flag status_login yang tertinggal karena tab ditutup tidak boleh
@@ -1707,10 +1720,13 @@ function loginWithRow(sheet, rowNumber, row) {
   // tidak pernah ditulis ulang, jadi login kembali tidak memperpanjang waktu.
   const waktuMulai = row[6] || new Date();
   sheet.getRange(rowNumber, 6).setValue(true);
-  if (!row[6]) {
-    sheet.getRange(rowNumber, 7).setValue(waktuMulai);
-    sheet.getRange(rowNumber, 11).setValue("SEDANG");
-  }
+  if (!row[6]) sheet.getRange(rowNumber, 7).setValue(waktuMulai);
+  // Status ditulis pada SETIAP masuk, bukan hanya pada attempt baru. Baris yang
+  // statusnya sempat tertimpa "BELUM" — reset guru yang beradu dengan login siswa —
+  // kalau tidak akan terus terbaca "belum mengerjakan" di layar guru sepanjang
+  // ujian walau siswanya sedang bekerja. SELESAI/DISKUALIFIKASI tidak mungkin
+  // sampai ke sini (ditolak di atas), jadi "SEDANG" selalu status yang benar.
+  if (row[10] !== "SEDANG") sheet.getRange(rowNumber, 11).setValue("SEDANG");
   sheet.getRange(rowNumber, 12).setValue(new Date());
 
   // Snapshot dibekukan sekali per attempt. Attempt lama dari sebelum Task 5.1
@@ -1799,6 +1815,14 @@ function handleSyncAnswers(params) {
 
   if (found) {
     var userRow = found.values;
+    // Heartbeat: HANYA memperbarui last_seen. Dipakai klien ketika jawaban belum
+    // berubah, supaya layar guru dapat membedakan "sedang mengerjakan" dari
+    // "terputus" tanpa menulis ulang satu jawaban pun — dan tanpa menimpa
+    // saved_answers dengan objek kosong milik siswa yang baru membaca soal.
+    if (params.heartbeat === true) {
+      sheet.getRange(found.rowNumber, 12).setValue(new Date());
+      return { success: true, message: "Heartbeat" };
+    }
     {
       // ponytail: server-side guard — reject sync after submit to close autosave race
       var status = userRow[10] || "BELUM";
@@ -3398,28 +3422,120 @@ function markCollectionsUsed(ids) {
 
 // ===== USER HANDLERS =====
 
-function handleResetUserLogin(params) {
-  const { id_siswa } = params;
-  const sheet = getSheet("Users");
-  const data = sheet.getDataRange().getValues();
+// Reset punya DUA arti yang konsekuensinya berbeda, jadi dipisah menjadi dua mode
+// dan bukan satu tombol:
+//
+//   "access"  — hanya melepas kunci sesi (status_login). waktu_mulai, jawaban,
+//               skor, pelanggaran, dan binding TIDAK disentuh: siswa masuk kembali
+//               ke attempt yang sama, timernya tetap berjalan dari waktu semula.
+//   "attempt" — memulai attempt BARU, jadi state attempt berjalan di baris Users
+//               memang dikosongkan. Baris Responses tidak pernah ikut dihapus —
+//               hasil final hidup di sana secara append-only — dan jawaban yang
+//               belum pernah disubmit diarsipkan dulu ke Responses.
+//
+// Layar guru SELALU mengirim mode secara eksplisit (dua tombol, dua kalimat
+// konsekuensi). Default "attempt" hanya ada untuk klien lama yang belum mengenal
+// parameter ini: itulah arti tombol Reset sebelumnya, jadi mengubah defaultnya
+// akan diam-diam mematahkan alur pergantian mapel pada versi UI yang belum
+// diperbarui. Yang membuat mode ini aman bukan defaultnya, melainkan lock,
+// tulisan batch, dan pengarsipan jawaban di bawah.
+const RESET_MODES = Object.freeze({ access: true, attempt: true });
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === id_siswa) {
-      const row = i + 1;
-      sheet.getRange(row, 6).setValue(false);   // status_login = false
-      sheet.getRange(row, 7).setValue("");       // waktu_mulai = kosong
-      sheet.getRange(row, 8).setValue("");       // waktu_selesai = kosong
-      sheet.getRange(row, 9).setValue("");       // skor_akhir = kosong
-      sheet.getRange(row, 10).setValue(0);       // violation_count = 0
-      sheet.getRange(row, 11).setValue("BELUM"); // status_ujian = BELUM
-      sheet.getRange(row, 13).setValue("");      // mapel_diujikan = kosong
-      sheet.getRange(row, 14).setValue("");      // saved_answers = kosong
-      sheet.getRange(row, USER_BINDING_COL).setValue(""); // exam_binding = kosong
-      return { success: true, message: "Login reset successful" };
-    }
+function handleResetUserLogin(params) {
+  const id_siswa = params ? params.id_siswa : "";
+  const mode = params && params.mode ? String(params.mode) : "attempt";
+  if (!RESET_MODES[mode]) return { success: false, message: "Mode reset tidak dikenal" };
+  if (!id_siswa) return { success: false, message: "id_siswa diperlukan" };
+
+  // Lock sama seperti submit: reset menulis baris yang bisa sedang dipakai login,
+  // autosave, atau submit siswa itu sendiri.
+  var resetLock = LockService.getScriptLock();
+  if (!resetLock.tryLock(10000)) {
+    return { success: false, message: "Server sedang sibuk, coba lagi sebentar." };
+  }
+  try {
+    return resetUserLoginLocked(id_siswa, mode);
+  } finally {
+    resetLock.releaseLock();
+  }
+}
+
+function resetUserLoginLocked(id_siswa, mode) {
+  const sheet = getSheet("Users");
+  const found = readUserRow(sheet, id_siswa);
+  if (!found) return { success: false, message: "User not found" };
+  const row = found.values;
+
+  if (mode === "access") {
+    sheet.getRange(found.rowNumber, 6).setValue(false);
+    return { success: true, mode: mode, message: "Akses ujian dibuka kembali" };
   }
 
-  return { success: false, message: "User not found" };
+  const archived = archiveUnsubmittedAttempt(row);
+
+  // SATU tulisan batch untuk kolom 6..14. Versi sebelumnya memakai delapan
+  // setValue berurutan: login siswa yang masuk di tengah rentetan itu menghasilkan
+  // baris setengah-reset (waktu_mulai baru, tapi status "BELUM") yang di layar guru
+  // terbaca "belum mengerjakan" padahal siswa sedang mengerjakan.
+  //
+  // last_seen (kolom 12) sengaja DIPERTAHANKAN: ia bukan milik attempt, melainkan
+  // jejak "kapan siswa ini terakhir terlihat" yang dipakai layar guru untuk
+  // membedakan "belum mulai" dari "status belum diperbarui".
+  sheet.getRange(found.rowNumber, 6, 1, 9).setValues([[
+    false,      // 6  status_login
+    "",         // 7  waktu_mulai
+    "",         // 8  waktu_selesai
+    "",         // 9  skor_akhir
+    0,          // 10 violation_count
+    "BELUM",    // 11 status_ujian
+    row[11],    // 12 last_seen (tidak diubah)
+    "",         // 13 mapel_diujikan
+    "",         // 14 saved_answers
+  ]]);
+  sheet.getRange(found.rowNumber, USER_BINDING_COL).setValue("");
+  // Jawaban attempt lama juga hidup di cache; tanpa dibuang, attempt baru bisa
+  // menerimanya kembali lewat jalur pemulihan.
+  cache.remove("answers_" + id_siswa);
+
+  return {
+    success: true,
+    mode: mode,
+    archived: archived,
+    message: "Siswa siap memulai ujian berikutnya",
+  };
+}
+
+/**
+ * Jawaban yang belum pernah disubmit HANYA hidup di kolom 14 baris Users. Memulai
+ * attempt baru harus mengosongkannya (kalau tidak, attempt berikutnya memulihkan
+ * jawaban mapel sebelumnya), jadi disalin dulu ke Responses sebagai baris
+ * append-only yang bertanda belum disubmit. Skor dibiarkan kosong: baris ini
+ * jejak data, bukan hasil ujian.
+ *
+ * Attempt yang sudah SELESAI/DISKUALIFIKASI tidak perlu diarsipkan di sini —
+ * commitSubmit sudah menuliskan baris Responses-nya.
+ */
+function archiveUnsubmittedAttempt(row) {
+  const status = row[10];
+  if (status === "SELESAI" || status === "DISKUALIFIKASI") return false;
+  const raw = row[13] ? String(row[13]) : "";
+  if (!raw) return false;
+  let answers = null;
+  try { answers = JSON.parse(raw); } catch (err) { answers = null; }
+  if (!isPlainQuestionObject(answers) || Object.keys(answers).length === 0) return false;
+
+  const rSheet = getSheet("Responses");
+  if (!rSheet) return false;
+  const binding = parseExamBinding(row);
+  const durasiMenit = row[6]
+    ? Math.max(0, Math.round((new Date() - new Date(row[6])) / 60000))
+    : 0;
+  rSheet.appendRow([
+    new Date(), row[0], row[3], row[4], raw, "", durasiMenit,
+    "RESET - JAWABAN BELUM DISUBMIT", "",
+    binding ? binding.exam_id : "", binding ? binding.exam_mapel : "",
+  ]);
+  return true;
 }
 
 // ===== PIN HANDLERS =====

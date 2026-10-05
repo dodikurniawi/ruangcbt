@@ -65,3 +65,15 @@ assert.equal(dedupe("copy", t0 + LEAVE_COOLDOWN_MS + 20), false);
 assert.equal(dedupe("paste", t0 + LEAVE_COOLDOWN_MS + 20), true);
 
 console.log("examFocus: fullscreen fallback + dedup pelanggaran PASS");
+
+// --- pesan pelanggaran: kalimat untuk siswa, bukan nama event ---
+{
+    const { violationMessage } = await import("./examFocus.ts");
+    for (const type of ["tab_switch", "blur", "exit_fullscreen", "copy", "paste", "keyboard_shortcut"]) {
+        const text = violationMessage(type);
+        assert.ok(text.length > 20, `pesan ${type} terlalu pendek untuk dimengerti siswa`);
+        assert.doesNotMatch(text, /visibilitychange|fullscreenchange|tab_switch|_/, `pesan ${type} masih teknis`);
+    }
+    // Jenis yang belum dikenal tetap menghasilkan kalimat, bukan "undefined".
+    assert.match(violationMessage("jenis_baru"), /tidak diizinkan/);
+}

@@ -399,8 +399,8 @@ function mutate(find, replaceWith, label) {
 
   // E. Re-entry menulis ulang waktu_mulai.
   const reentryMutation = mutate(
-    "  if (!row[6]) {\n    sheet.getRange(rowNumber, 7).setValue(waktuMulai);",
-    "  if (true) {\n    sheet.getRange(rowNumber, 7).setValue(new Date());",
+    "  if (!row[6]) sheet.getRange(rowNumber, 7).setValue(waktuMulai);",
+    "  if (true) sheet.getRange(rowNumber, 7).setValue(new Date());",
     "E",
   );
   const fixture = runningState(10);

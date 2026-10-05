@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useRef } from 'react';
-import { createViolationDeduper, isFullscreenActive } from '@/lib/examFocus';
+import { BLUR_SUSTAIN_MS, createViolationDeduper, isFullscreenActive } from '@/lib/examFocus';
 import type { ViolationType } from '@/types';
 
 interface UseExamSecurityOptions {
@@ -9,6 +9,13 @@ interface UseExamSecurityOptions {
     onViolation: (type: ViolationType, count: number) => void;
     onMaxViolations: () => void;
     enabled?: boolean;
+    /**
+     * Pelanggaran yang SUDAH tercatat untuk attempt ini. Tanpa ini penghitung
+     * mulai dari nol setiap kali halaman dimuat ulang, sementara server terus
+     * menghitung: siswa melihat "1 dari 3" padahal server sudah di angka 4 dan
+     * akan mendiskualifikasinya tanpa peringatan yang pernah terlihat.
+     */
+    initialViolations?: number;
 }
 
 export function useExamSecurity({
@@ -16,8 +23,9 @@ export function useExamSecurity({
     onViolation,
     onMaxViolations,
     enabled = true,
+    initialViolations = 0,
 }: UseExamSecurityOptions): void {
-    const violationsRef = useRef(0);
+    const violationsRef = useRef(initialViolations);
     const isBlockedRef = useRef(false);
     // Satu tindakan siswa memicu beberapa event; deduper menahan duplikatnya.
     const shouldReportRef = useRef(createViolationDeduper());
@@ -57,10 +65,26 @@ export function useExamSecurity({
             }
         };
 
-        // Window blur (click outside)
-        const handleBlur = () => {
-            handleViolation('blur');
+        // Window blur. Hanya blur yang BERTAHAN dihitung — lihat BLUR_SUSTAIN_MS.
+        // Notifikasi, papan ketik, dan rotasi layar di ponsel mengembalikan fokus
+        // jauh sebelum tenggat ini; berpindah aplikasi tidak.
+        let blurTimer: ReturnType<typeof setTimeout> | null = null;
+        const cancelBlurTimer = () => {
+            if (blurTimer === null) return;
+            clearTimeout(blurTimer);
+            blurTimer = null;
         };
+        const handleBlur = () => {
+            cancelBlurTimer();
+            blurTimer = setTimeout(() => {
+                blurTimer = null;
+                // Tab yang disembunyikan sudah dicatat oleh visibilitychange;
+                // mencatatnya lagi di sini hanya menggandakan satu tindakan.
+                if (document.hidden) return;
+                handleViolation('blur');
+            }, BLUR_SUSTAIN_MS);
+        };
+        const handleFocus = () => cancelBlurTimer();
 
         // Context menu (right click)
         const handleContextMenu = (e: MouseEvent) => {
@@ -106,6 +130,7 @@ export function useExamSecurity({
         document.addEventListener('visibilitychange', handleVisibilityChange);
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('copy', handleCopy);
@@ -119,6 +144,8 @@ export function useExamSecurity({
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
             window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
+            cancelBlurTimer();
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('copy', handleCopy);

@@ -70,6 +70,12 @@ export interface User {
     violation_count?: number;
     status_ujian: 'BELUM' | 'SEDANG' | 'SELESAI' | 'DISKUALIFIKASI';
     last_seen?: string;
+    /**
+     * Epoch ms komunikasi terakhir siswa. `last_seen` di atas sudah diformat untuk
+     * dibaca manusia dan tidak dapat diparse ulang dengan andal; angka ini yang
+     * dipakai layar guru untuk menghitung kesegaran status.
+     */
+    last_seen_ms?: number | null;
     // Nilai beku milik attempt, dikirim GAS saat login/re-entry. exam_duration di
     // sini adalah durasi attempt, bukan Config terbaru: perubahan Config setelah
     // siswa mulai tidak boleh menggeser deadline-nya.

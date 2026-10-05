@@ -5,10 +5,10 @@ import { useTenantRouter } from "@/hooks/useTenantRouter";
 import { useExamStore } from "@/store/examStore";
 import {
   getQuestions, getConfig, resolvePinRequired,
-  syncAnswers, submitExam, reportViolation,
+  syncAnswers, submitExam, reportViolation, sendHeartbeat,
 } from "@/lib/api";
 import { useExamSecurity } from "@/hooks/useExamSecurity";
-import { requestExamFullscreen, exitExamFullscreen, isFullscreenActive, isFullscreenSupported } from "@/lib/examFocus";
+import { requestExamFullscreen, exitExamFullscreen, isFullscreenActive, isFullscreenSupported, violationMessage } from "@/lib/examFocus";
 import { calculateExamDeadline, remainingExamSeconds } from "@/lib/examTimer";
 import { sanitizeQuestionHtml } from "@/lib/questionSanitize";
 import { nextSyncRevision } from "@/lib/syncRevision";
@@ -41,6 +41,12 @@ function getOptionText(opt: string, q: ImplementedStudentQuestion): string {
 }
 
 const OPTIONS = ["a", "b", "c", "d", "e"] as const;
+
+// Tanda hadir dikirim paling cepat sekali per menit, dan HANYA ketika autosave
+// tidak punya apa pun untuk dikirim. Satu panggilan per siswa per menit: jauh di
+// bawah autosave (sampai 6 per menit) dan cukup rapat untuk layar guru, yang
+// menyebut sebuah baris terputus setelah 150 detik tanpa kabar.
+const HEARTBEAT_INTERVAL_MS = 60_000;
 
 // Status koneksi dibaca lewat useSyncExternalStore: React memang menyediakan API ini
 // untuk berlangganan state di luar React, sehingga tidak perlu setState di badan effect.
@@ -123,6 +129,7 @@ export default function ExamPage() {
   // jawaban tidak berubah sejak sync terakhir yang sukses (hemat GAS quota).
   const syncInFlightRef = useRef(false);
   const lastSyncedAnswersRef = useRef("");
+  const lastHeartbeatRef = useRef(0);
 
   const doSubmit = useCallback(async (forced: boolean) => {
     if (!user || hasSubmittedRef.current) return;
@@ -159,8 +166,8 @@ export default function ExamPage() {
     // store tidak pernah ikut naik. Penegakan sendiri tetap di useExamSecurity
     // dan di server; angka ini hanya yang dilihat siswa.
     setViolations(count);
-    setViolationToast(`Peringatan: ${type.replace("_", " ")}. Pelanggaran ke-${count}`);
-    setTimeout(() => setViolationToast(""), 4000);
+    setViolationToast(`Peringatan ${count} dari ${maxViolations}. ${violationMessage(type)}`);
+    setTimeout(() => setViolationToast(""), 6000);
 
     // Spanduk peringatan pelanggaran muncul sementara selama 5 detik, lalu otomatis hilang.
     // Jika terjadi pelanggaran baru sebelum 5 detik, timer di-reset 5 detik dari violation terbaru.
@@ -172,18 +179,31 @@ export default function ExamPage() {
       setShowViolationBanner(false);
     }, 5000);
 
-    await reportViolation(user.id_siswa, type);
-  }, [user, setViolations]);
+    // Server adalah penghitung yang berwenang: ia menyimpan angkanya di baris
+    // siswa dan tidak lupa saat halaman dimuat ulang. Angkanya dipakai menimpa
+    // hitungan klien supaya siswa tidak pernah melihat "1 dari 3" sementara
+    // server sudah akan menghentikan ujiannya.
+    const res = await reportViolation(user.id_siswa, type);
+    if (res.success && typeof res.violations === "number") {
+      setViolations(res.violations);
+    }
+  }, [user, maxViolations, setViolations]);
 
   const handleMaxViolations = useCallback(() => {
     doSubmit(true);
   }, [doSubmit]);
+
+  // Dibaca SEKALI saat gerbang mulai dilewati: pelanggaran yang sudah tercatat
+  // untuk attempt ini (sessionStorage bertahan melewati reload) menjadi titik awal
+  // penghitung, bukan nol.
+  const initialViolationsRef = useRef(violations);
 
   useExamSecurity({
     maxViolations,
     onViolation: handleViolation,
     onMaxViolations: handleMaxViolations,
     enabled: hasStarted && !isLoading && !isSubmitting,
+    initialViolations: initialViolationsRef.current,
   });
 
   // Status fullscreen dipantau untuk menampilkan ajakan kembali; pelanggaran
@@ -362,11 +382,25 @@ export default function ExamPage() {
       // concurrent, dan request lama yang selesai belakangan menimpa jawaban baru.
       if (syncInFlightRef.current) return;
       const currentAnswers = useExamStore.getState().answers;
-      if (Object.keys(currentAnswers).length === 0) return;
       // Dirty tracking: skip jika jawaban tidak berubah sejak sync terakhir sukses.
       // lastSyncedAnswersRef hanya di-update setelah server confirm success.
       const serialized = JSON.stringify(currentAnswers);
-      if (serialized === lastSyncedAnswersRef.current) return;
+      const nothingToSave = Object.keys(currentAnswers).length === 0
+        || serialized === lastSyncedAnswersRef.current;
+      if (nothingToSave) {
+        // Tidak ada jawaban baru, tetapi siswa TETAP berada di halaman ini. Tanpa
+        // satu tanda hadir, siswa yang masih membaca soal pertama tidak mengirim
+        // apa pun sejak login, dan layar guru tidak punya cara membedakannya dari
+        // ponsel yang mati — persis status yang menyesatkan guru.
+        if (Date.now() - lastHeartbeatRef.current < HEARTBEAT_INTERVAL_MS) return;
+        lastHeartbeatRef.current = Date.now();
+        sendHeartbeat(user.id_siswa).catch(() => {
+          // Tanda hadir yang gagal tidak mengubah apa pun pada ujian siswa;
+          // dicoba lagi pada siklus autosave berikutnya.
+          lastHeartbeatRef.current = 0;
+        });
+        return;
+      }
       syncInFlightRef.current = true;
       setSyncStatus('saving');
       setIsSyncing(true);
@@ -376,6 +410,9 @@ export default function ExamPage() {
         const res = await syncAnswers(user.id_siswa, currentAnswers, nextSyncRevision());
         if (res.success) {
           lastSyncedAnswersRef.current = serialized;
+          // Autosave juga memperbarui last_seen di server, jadi ia menghitung
+          // sebagai tanda hadir — tidak perlu mengirim satu lagi semenit ini.
+          lastHeartbeatRef.current = Date.now();
           setLastSync(new Date());
           setSyncStatus('saved');
         } else {
