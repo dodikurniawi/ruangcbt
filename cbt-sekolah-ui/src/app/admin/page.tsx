@@ -6,28 +6,45 @@ import { usePathname } from "next/navigation";
 import { useTenantRouter, useTenantPath } from "@/hooks/useTenantRouter";
 import useSWR from "swr";
 import { getUsers, getExamSummary, getMataPelajaran, saveExamConfig, setExamStatus, resetUserLogin, logout } from "@/lib/api";
+import type { ResetMode } from "@/lib/api";
+import { resolveMonitorStatus, type MonitorState } from "@/lib/monitorStatus";
+import ResetExamDialog from "@/components/admin/ResetExamDialog";
 import type { User, ExamSummary, MataPelajaran } from "@/types";
 
-function StatusBadge({ status }: { status: User["status_ujian"] }) {
-  const map = {
-    SELESAI: "bg-emerald-50 text-emerald-800 border border-emerald-300/60 font-bold",
-    SEDANG: "bg-blue-50 text-blue-800 border border-blue-300/60 font-bold",
-    DISKUALIFIKASI: "bg-rose-50 text-rose-800 border border-rose-300/60 font-bold",
-    BELUM: "bg-slate-100 text-slate-700 border border-slate-300/60 font-semibold",
-  };
-  const label = {
-    SELESAI: "Selesai",
-    SEDANG: "Sedang Ujian",
-    DISKUALIFIKASI: "Diskualifikasi",
-    BELUM: "Belum Mulai",
-  };
+// Badge dibangun dari status TURUNAN (status server + kesegaran last_seen), bukan
+// dari status_ujian saja: "SEDANG" yang sudah dua menit tidak berkabar dan "BELUM"
+// yang ternyata punya jejak aktivitas adalah dua keadaan yang menuntut tindakan
+// berbeda dari guru, dan keduanya tidak terlihat dari kolom status saja.
+const MONITOR_BADGE: Record<MonitorState, string> = {
+  SELESAI: "bg-emerald-50 text-emerald-800 border-emerald-300/60 font-bold",
+  SEDANG: "bg-blue-50 text-blue-800 border-blue-300/60 font-bold",
+  TERPUTUS: "bg-amber-50 text-amber-900 border-amber-300/70 font-bold",
+  TIDAK_PASTI: "bg-amber-50 text-amber-900 border-amber-300/70 font-bold",
+  DIHENTIKAN: "bg-rose-50 text-rose-800 border-rose-300/60 font-bold",
+  BELUM: "bg-slate-100 text-slate-700 border-slate-300/60 font-semibold",
+};
+
+const MONITOR_ICON: Partial<Record<MonitorState, string>> = {
+  TERPUTUS: "wifi_off",
+  TIDAK_PASTI: "help",
+  DIHENTIKAN: "warning",
+};
+
+function StatusBadge({ user, now }: { user: User; now: number }) {
+  const status = resolveMonitorStatus(user, now);
+  const icon = MONITOR_ICON[status.state];
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs shadow-2xs ${map[status]}`}>
-      {status === "SEDANG" && <span className="w-2 h-2 bg-blue-700 rounded-full animate-ping"></span>}
-      {status === "SELESAI" && <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>}
-      {status === "DISKUALIFIKASI" && <span className="material-symbols-outlined text-[14px]">warning</span>}
-      {label[status]}
-    </span>
+    <div className="flex flex-col gap-1 items-start">
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs shadow-2xs ${MONITOR_BADGE[status.state]}`}>
+        {status.state === "SEDANG" && <span className="w-2 h-2 bg-blue-700 rounded-full animate-ping"></span>}
+        {status.state === "SELESAI" && <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>}
+        {icon ? <span className="material-symbols-outlined text-[14px]">{icon}</span> : null}
+        {status.label}
+      </span>
+      {status.detail ? (
+        <span className="text-[11px] text-slate-500 font-medium">{status.detail}</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -46,6 +63,14 @@ export default function AdminDashboard() {
   const [filterClass, setFilterClass] = useState("All Classes");
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  // Reset tidak pernah berjalan dari satu klik: guru memilih dulu operasi mana
+  // yang ia maksud, karena konsekuensinya berbeda.
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
+  const [lastUpdate, setLastUpdate] = useState("");
+  // "Terakhir aktif" dihitung relatif terhadap jam ini, yang maju setiap kali
+  // data baru tiba. Inisialisasi lazy aman: badge hanya dirender setelah data
+  // SWR (klien) ada, jadi tidak ada nilai server yang bisa berbeda.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   // Draft "Adakan Ujian". null = belum disentuh guru, jadi ikut nilai tersimpan.
   const [draft, setDraft] = useState<{ exam_name: string; exam_mapel: string; exam_duration: string; exam_kumpulan: string[] } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -60,7 +85,16 @@ export default function AdminDashboard() {
   }, [router]);
 
   const { data: usersRes, mutate: mutateUsers, isLoading: usersLoading } = useSWR(
-    "getUsers", getUsers, { refreshInterval: 5000 }
+    "getUsers", getUsers, {
+      refreshInterval: 5000,
+      // Jam ditulis dari callback "data baru tiba", bukan dibaca saat render:
+      // membacanya saat render akan berbeda antara server dan browser.
+      onSuccess: () => {
+        const at = new Date();
+        setNowMs(at.getTime());
+        setLastUpdate(at.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      },
+    }
   );
   const { data: summaryRes, mutate: mutateSummary } = useSWR("getExamSummary", getExamSummary, { refreshInterval: 10000 });
   const { data: mapelRes } = useSWR("getMataPelajaran", getMataPelajaran);
@@ -178,6 +212,10 @@ export default function AdminDashboard() {
     return matchSearch && matchClass;
   });
 
+  // Jumlah baris yang menuntut keputusan guru: terputus, status tidak pasti, atau
+  // dihentikan karena pelanggaran.
+  const needsActionCount = users.filter((u) => resolveMonitorStatus(u, nowMs).needsAction).length;
+
   const stats = {
     total: users.length,
     sedang: users.filter((u) => u.status_ujian === "SEDANG").length,
@@ -185,11 +223,17 @@ export default function AdminDashboard() {
     diskualifikasi: users.filter((u) => u.status_ujian === "DISKUALIFIKASI").length,
   };
 
-  const handleResetLogin = async (id_siswa: string) => {
+  const handleResetLogin = async (id_siswa: string, mode: ResetMode) => {
     setResettingId(id_siswa);
-    await resetUserLogin(id_siswa);
+    const res = await resetUserLogin(id_siswa, mode);
     await mutateUsers();
     setResettingId(null);
+    setResetTarget(null);
+    setNotice(res.success
+      ? (mode === "access"
+        ? "Akses ujian dibuka. Siswa dapat masuk kembali ke ujian yang sama."
+        : "Siswa siap memulai ujian berikutnya. Hasil ujian sebelumnya tetap tersimpan.")
+      : (res.message || "Reset gagal. Coba lagi."));
   };
 
   return (
@@ -599,8 +643,14 @@ export default function AdminDashboard() {
         <section className="bg-white border border-slate-200/90 rounded-3xl shadow-xs overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
-              <h3 className="font-black text-lg text-slate-900">Live Student Monitoring</h3>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">Pemantauan Aktivitas Real-time Siswa</p>
+              <h3 className="font-black text-lg text-slate-900">Pemantauan Siswa</h3>
+              {/* Data berasal dari polling 5 detik, bukan saluran realtime. Jam
+                  pembaruan dikatakan apa adanya supaya guru tahu seberapa baru
+                  yang ia lihat, alih-alih mempercayai kata "realtime". */}
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                {lastUpdate ? `Terakhir diperbarui ${lastUpdate}` : "Memuat data..."}
+                {needsActionCount > 0 ? ` · ${needsActionCount} perlu diperiksa` : ""}
+              </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               {/* Search */}
@@ -657,7 +707,7 @@ export default function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4 font-bold text-xs text-slate-600 uppercase">{u.kelas}</td>
-                      <td className="px-6 py-4"><StatusBadge status={u.status_ujian} /></td>
+                      <td className="px-6 py-4"><StatusBadge user={u} now={nowMs} /></td>
                       <td className="px-6 py-4 font-black text-sm text-[#1D4ED8]">
                         {u.skor_akhir != null ? `${u.skor_akhir}` : "—"}
                       </td>
@@ -673,9 +723,9 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
-                          onClick={() => handleResetLogin(u.id_siswa)}
+                          onClick={() => setResetTarget(u)}
                           disabled={resettingId === u.id_siswa}
-                          title="Reset status & sesi login siswa"
+                          title="Pilih jenis reset untuk siswa ini"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#1D4ED8] text-slate-700 hover:text-white font-extrabold text-xs transition-all cursor-pointer disabled:opacity-40 shadow-2xs"
                         >
                           <span className="material-symbols-outlined text-[16px]">
@@ -698,6 +748,15 @@ export default function AdminDashboard() {
           </div>
         </section>
       </main>
+
+      {resetTarget && (
+        <ResetExamDialog
+          student={resetTarget}
+          busy={resettingId === resetTarget.id_siswa}
+          onCancel={() => setResetTarget(null)}
+          onConfirm={(mode) => handleResetLogin(resetTarget.id_siswa, mode)}
+        />
+      )}
 
       {/* Konfirmasi sebelum ujian benar-benar dibuka */}
       {showConfirm && (

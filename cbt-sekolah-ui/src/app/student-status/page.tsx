@@ -48,6 +48,13 @@ export default function StudentStatus() {
               </div>
               <h2 className="font-display-exam text-display-exam text-on-surface mb-sm">Ujian Selesai!</h2>
               <p className="font-body-student text-on-surface-variant">Terima kasih telah menyelesaikan ujian dengan jujur.</p>
+              {/* Satu baris Users hanya memuat satu ujian berjalan, jadi mapel
+                  berikutnya memang perlu disiapkan pengawas. Dikatakan di sini,
+                  di layar yang pasti dilihat siswa setelah submit. */}
+              <p className="font-caption text-on-surface-variant mt-sm">
+                Jika masih ada ujian mata pelajaran lain, tekan <strong>Selesai</strong> lalu tunggu
+                pengawas menyiapkan ujian berikutnya sebelum kamu login kembali.
+              </p>
             </div>
             <div className="bg-surface-container-low rounded-xl p-lg mb-xl border border-outline-variant">
               <span className="font-label-bold text-primary uppercase tracking-wider mb-xs block">Skor Akhir</span>
