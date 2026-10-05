@@ -30,9 +30,11 @@ const gemini = await generateAIJson<{ ok: boolean }>({ prompt: "data", schema: {
   },
 });
 assert.equal(gemini.ok, true);
-// Gemini: key ada di URL query param, BUKAN di header (menghindari blokir CORS preflight).
-assert.ok(seenUrl.includes(`key=${geminiKey}`), "key Gemini harus masuk query param");
-assert.equal(seenHeaders["x-goog-api-key"], undefined);
+// Gemini: key dikirim lewat header x-goog-api-key (jalur resmi SDK), dan TIDAK
+// pernah lewat URL. URL ikut tercatat di log server/proxy dan riwayat browser,
+// header tidak.
+assert.equal(seenHeaders["x-goog-api-key"], geminiKey, "key Gemini harus masuk header");
+assert.equal(seenUrl.includes(geminiKey), false, "key tidak boleh muncul di URL");
 assert.equal(seenHeaders.Authorization, undefined);
 assert.equal(seenBody.includes(geminiKey), false);
 assert.equal(JSON.stringify(gemini).includes(geminiKey), false);
@@ -84,8 +86,8 @@ const rejectedByProvider = await generateAIText({ prompt: "x" }, {
     return new Response(JSON.stringify({ error: { message: "API key not valid" } }), { status: 401 });
   },
 });
-assert.ok(oddUrl.includes(`key=${oddKey}`), "key non-AIza wajib tetap dicoba");
-assert.equal(oddHeaders["x-goog-api-key"], undefined, "key Gemini hanya lewat query param");
+assert.equal(oddHeaders["x-goog-api-key"], oddKey, "key non-AIza wajib tetap dicoba");
+assert.equal(oddUrl.includes(oddKey), false, "key Gemini hanya lewat header");
 assert.equal(rejectedByProvider.ok, false);
 if (!rejectedByProvider.ok) {
   assert.equal(rejectedByProvider.failure, "invalid_key");

@@ -5,7 +5,9 @@ import { detectGeminiModel } from "@/lib/aiProvider";
 import {
   deleteProviderApiKey,
   getProviderApiKey,
+  getProviderApiKeys,
   getProviderModel,
+  saveGeminiApiKeys,
   saveProviderModel,
   getSelectedProvider,
   isNonEmptyApiKey,
@@ -21,8 +23,18 @@ const PROVIDERS: Array<{
   label: string;
   placeholder: string;
   url: string;
+  /** Petunjuk daftar key; hanya Gemini yang mendukung lebih dari satu. */
+  hint?: string;
 }> = [
-  { id: "gemini", label: "Gemini", placeholder: "Masukkan Gemini API Key Anda", url: "https://aistudio.google.com/app/apikey" },
+  {
+    id: "gemini",
+    label: "Gemini",
+    placeholder: "Tempel Gemini API Key Anda",
+    url: "https://aistudio.google.com/app/apikey",
+    // Gunanya bukan kenyamanan: ketika satu key kena batas kuota, pembuatan
+    // soal berpindah sendiri ke key berikutnya tanpa guru melakukan apa pun.
+    hint: "Boleh menambahkan lebih dari satu key. Jika satu key sedang penuh, sistem otomatis memakai key berikutnya sesuai urutan.",
+  },
   { id: "groq", label: "Groq", placeholder: "Masukkan Groq API Key Anda", url: "https://console.groq.com/keys" },
 ];
 
@@ -34,7 +46,10 @@ export default function AISettingsPanel() {
   const [visible, setVisible] = useState<Record<AIProvider, boolean>>({ gemini: false, groq: false });
   const [messages, setMessages] = useState<Record<AIProvider, string>>({ gemini: "", groq: "" });
   const [models, setModels] = useState<Record<AIProvider, string>>({ gemini: "", groq: "" });
-  const [testing, setTesting] = useState<AIProvider | null>(null);
+  // Hanya versi tersamar yang masuk state React; key asli dibaca ulang dari
+  // storage saat dibutuhkan (tes/hapus) dan tidak pernah dirender.
+  const [geminiMasked, setGeminiMasked] = useState<string[]>([]);
+  const [testing, setTesting] = useState<string | null>(null);
 
   const refresh = () => {
     migrateLegacyGroqKey();
@@ -43,6 +58,7 @@ export default function AISettingsPanel() {
     setConfigured({ gemini: Boolean(gemini), groq: Boolean(groq) });
     setMasked({ gemini: maskApiKey(gemini), groq: maskApiKey(groq) });
     setModels({ gemini: getProviderModel("gemini"), groq: getProviderModel("groq") });
+    setGeminiMasked(getProviderApiKeys("gemini").map(maskApiKey));
     setSelected(getSelectedProvider());
   };
 
@@ -59,13 +75,19 @@ export default function AISettingsPanel() {
       setMessages((p) => ({ ...p, [provider]: "Masukkan API key terlebih dahulu." }));
       return;
     }
-    if (!saveProviderApiKey(provider, key)) {
+    // Gemini: TAMBAH ke daftar (key lama tetap). Groq: ganti seperti semula.
+    const before = getProviderApiKeys("gemini").length;
+    const ok = provider === "gemini"
+      ? saveGeminiApiKeys([...getProviderApiKeys("gemini"), key])
+      : saveProviderApiKey(provider, key);
+    if (!ok) {
       setMessages((p) => ({ ...p, [provider]: "Key gagal disimpan oleh browser." }));
       return;
     }
     setInputs((p) => ({ ...p, [provider]: "" }));
     setVisible((p) => ({ ...p, [provider]: false }));
-    setMessages((p) => ({ ...p, [provider]: "API key tersimpan." }));
+    const duplicate = provider === "gemini" && getProviderApiKeys("gemini").length === before;
+    setMessages((p) => ({ ...p, [provider]: duplicate ? "Key ini sudah ada di daftar." : "API key tersimpan." }));
     refresh();
   };
 
@@ -76,32 +98,40 @@ export default function AISettingsPanel() {
     refresh();
   };
 
-  // Tes koneksi menanyakan ke API model apa yang tersedia untuk key ini, lalu
-  // menyimpan pilihannya. Ini yang menghentikan 404 "model tidak ditemukan":
-  // model tidak lagi ditebak dari daftar hardcode.
-  const testConnection = async (provider: AIProvider) => {
-    if (provider !== "gemini") {
-      setMessages((p) => ({ ...p, [provider]: "Tes koneksi baru tersedia untuk Gemini." }));
+  const removeGeminiKey = (index: number) => {
+    const keys = getProviderApiKeys("gemini");
+    if (!saveGeminiApiKeys(keys.filter((_, i) => i !== index))) {
+      setMessages((p) => ({ ...p, gemini: "Key gagal dihapus oleh browser." }));
       return;
     }
-    const key = getProviderApiKey(provider);
-    if (!key) {
-      setMessages((p) => ({ ...p, [provider]: "Simpan API key terlebih dahulu." }));
-      return;
-    }
-    setTesting(provider);
-    setMessages((p) => ({ ...p, [provider]: "Menguji koneksi..." }));
+    setMessages((p) => ({ ...p, gemini: `API key ${index + 1} dihapus dari browser ini.` }));
+    refresh();
+  };
+
+  // Tes koneksi SATU key: tanya API model apa yang tersedia untuk key itu, lalu
+  // simpan pilihannya. Satu request, tidak pernah semua key sekaligus.
+  const testGeminiKey = async (index: number) => {
+    const key = getProviderApiKeys("gemini")[index];
+    if (!key) return;
+    const label = `API key ${index + 1}`;
+    setTesting(`gemini-${index}`);
+    setMessages((p) => ({ ...p, gemini: `Menguji ${label}...` }));
 
     const result = await detectGeminiModel(key);
+    setTesting(null);
     if (!result.ok) {
-      setMessages((p) => ({ ...p, [provider]: result.message }));
-      setTesting(null);
+      // result.message statis (tanpa key/isi error penyedia). Kata "gagal" = merah.
+      setMessages((p) => ({ ...p, gemini: `${label} gagal diuji. ${result.message}` }));
       return;
     }
-    saveProviderModel(provider, result.data);
-    setMessages((p) => ({ ...p, [provider]: "Koneksi berhasil. Model dipakai: " + result.data }));
-    setTesting(null);
+    saveProviderModel("gemini", result.data);
+    setMessages((p) => ({ ...p, gemini: `${label}: koneksi berhasil. Model dipakai: ${result.data}` }));
     refresh();
+  };
+
+  // Gemini diuji per key dari daftar; Groq belum punya tes (perilaku lama).
+  const testConnection = (provider: AIProvider) => {
+    setMessages((p) => ({ ...p, [provider]: "Tes koneksi baru tersedia untuk Gemini." }));
   };
 
   const choose = (provider: AIProvider) => {
@@ -133,6 +163,7 @@ export default function AISettingsPanel() {
         <div className="space-y-6">
           {PROVIDERS.map((provider) => {
             const saved = configured[provider.id];
+            const isGemini = provider.id === "gemini";
             return (
               <div key={provider.id} className="border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
@@ -140,7 +171,7 @@ export default function AISettingsPanel() {
                     <h4 className="font-black text-sm text-slate-800">{provider.label}</h4>
                     <p className={`text-[11px] font-bold mt-0.5 ${saved ? "text-emerald-600" : "text-slate-400"}`}>
                       {saved
-                        ? `✓ Siap digunakan • ${masked[provider.id]}${models[provider.id] ? ` • model ${models[provider.id]}` : ""}`
+                        ? `✓ ${isGemini ? `${geminiMasked.length} API key tersimpan` : `Siap digunakan • ${masked[provider.id]}`}${models[provider.id] ? ` • model ${models[provider.id]}` : ""}`
                         : "Belum dikonfigurasi"}
                     </p>
                   </div>
@@ -149,8 +180,25 @@ export default function AISettingsPanel() {
                   </a>
                 </div>
 
+                {isGemini && geminiMasked.length > 0 && (
+                  <ul className="mb-3 space-y-2">
+                    {geminiMasked.map((maskedKey, index) => (
+                      <li key={`${index}-${maskedKey}`} className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">API key {index + 1}</span>
+                        <span className="font-mono text-xs text-slate-700 truncate flex-1">{maskedKey}</span>
+                        <button type="button" onClick={() => void testGeminiKey(index)} disabled={testing !== null} className="h-8 px-3 border border-purple-200 text-purple-700 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer">
+                          {testing === `gemini-${index}` ? "Menguji..." : "Tes koneksi"}
+                        </button>
+                        <button type="button" onClick={() => removeGeminiKey(index)} disabled={testing !== null} aria-label={`Hapus API key ${index + 1}`} className="h-8 px-3 border border-red-200 text-red-600 rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer">
+                          Hapus
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  {saved ? "Ganti API key" : "API key"}
+                  {isGemini ? (saved ? "Tambah API key" : "API key") : saved ? "Ganti API key" : "API key"}
                 </label>
                 <div className="relative">
                   <input
@@ -176,21 +224,28 @@ export default function AISettingsPanel() {
                     </span>
                   </button>
                 </div>
+                {provider.hint && (
+                  <p className="mt-2 text-[11px] font-medium text-slate-500 leading-relaxed">{provider.hint}</p>
+                )}
                 {messages[provider.id] && (
-                  <p className={`mt-2 text-[11px] font-bold ${messages[provider.id].includes("gagal") || messages[provider.id].includes("harus") ? "text-red-600" : "text-emerald-600"}`}>
+                  <p role="status" className={`mt-2 text-[11px] font-bold ${messages[provider.id].includes("gagal") || messages[provider.id].includes("harus") ? "text-red-600" : "text-emerald-600"}`}>
                     {messages[provider.id]}
                   </p>
                 )}
                 <div className="flex gap-2 mt-3">
                   <button type="button" onClick={() => save(provider.id)} disabled={!inputs[provider.id].trim()} className="h-9 px-4 bg-purple-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
-                    Simpan
+                    {isGemini ? "+ Tambah API Key" : "Simpan"}
                   </button>
-                  <button type="button" onClick={() => testConnection(provider.id)} disabled={!saved || testing !== null} className="h-9 px-4 border border-purple-200 text-purple-700 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
-                    {testing === provider.id ? "Menguji..." : "Tes koneksi"}
-                  </button>
-                  <button type="button" onClick={() => remove(provider.id)} disabled={!saved} className="h-9 px-4 border border-red-200 text-red-600 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
-                    Hapus
-                  </button>
+                  {!isGemini && (
+                    <>
+                      <button type="button" onClick={() => testConnection(provider.id)} disabled={!saved || testing !== null} className="h-9 px-4 border border-purple-200 text-purple-700 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
+                        Tes koneksi
+                      </button>
+                      <button type="button" onClick={() => remove(provider.id)} disabled={!saved} className="h-9 px-4 border border-red-200 text-red-600 rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer">
+                        Hapus
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

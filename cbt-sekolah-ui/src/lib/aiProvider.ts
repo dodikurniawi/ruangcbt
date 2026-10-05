@@ -1,5 +1,5 @@
 import {
-  getProviderApiKey,
+  getProviderApiKeys,
   getProviderModel,
   getSelectedProvider,
   missingProviderKeyMessage,
@@ -63,9 +63,24 @@ export type AIFailure =
   | "malformed_response"
   | "model_not_found";
 
+/**
+ * Jejak key yang dipakai, untuk diagnosis tanpa pernah menyebut credential:
+ * hanya label anonim ("gemini-key-2") dan apakah rotasi sempat terjadi.
+ *
+ * Tidak ada logger di proyek ini, dan aiSecurity.test.ts sengaja melarang
+ * console.* di berkas ini supaya credential tidak pernah sampai ke log. Jadi
+ * informasi ini dibawa di hasil, bukan dicetak. Layar guru tidak pernah
+ * menampilkannya (lihat Pengalaman Pengguna di catatan rotasi di bawah).
+ */
+export interface AIKeyTrace {
+  keyLabel: string;
+  rotated: boolean;
+  keysTried: number;
+}
+
 export type AIResult<T> =
-  | { ok: true; data: T; provider: AIProvider; model: string }
-  | { ok: false; failure: AIFailure; message: string; provider: AIProvider };
+  | { ok: true; data: T; provider: AIProvider; model: string; keyTrace?: AIKeyTrace }
+  | { ok: false; failure: AIFailure; message: string; provider: AIProvider; keyTrace?: AIKeyTrace };
 
 function failure(provider: AIProvider, kind: AIFailure): AIResult<never> {
   const label = provider === "gemini" ? "Gemini" : "Groq";
@@ -134,8 +149,8 @@ export async function detectGeminiModel(
   fetchImpl: typeof fetch = fetch,
 ): Promise<AIResult<string>> {
   const response = await requestWithTimeout(
-    `${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}&pageSize=200`,
-    { method: "GET" },
+    `${GEMINI_ENDPOINT}?pageSize=200`,
+    { method: "GET", headers: { "x-goog-api-key": apiKey } },
     fetchImpl,
   );
   if (!response) return failure("gemini", "timeout");
@@ -208,11 +223,11 @@ async function attemptGemini(
   let sawModelNotFound = false;
 
   for (const model of candidates) {
-    // Kirim key lewat query parameter — Google merekomendasikan ini untuk browser client.
-    // CORS preflight untuk custom header kadang diblokir sehingga menghasilkan 404.
-    const response = await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    // Key lewat header x-goog-api-key (didukung CORS Gemini, dipakai SDK resmi
+    // di browser) — tidak pernah di URL, jadi tidak tercatat di riwayat/log URL.
+    const response = await requestWithTimeout(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         ...(request.systemInstruction
           ? { systemInstruction: { parts: [{ text: request.systemInstruction }] } }
@@ -231,8 +246,21 @@ async function attemptGemini(
     if (!response) return failure("gemini", "timeout");
     // Sah atau tidaknya key hanya ditentukan di sini, bukan dari bentuk stringnya.
     // Gemini membalas 400 API_KEY_INVALID untuk key salah dan 403 untuk key tanpa akses.
-    if (response.status === 401 || response.status === 403 || response.status === 400) {
+    if (response.status === 401 || response.status === 403) {
       return failure("gemini", "invalid_key");
+    }
+    // Gemini memakai 400 untuk DUA hal yang berbeda, dan bedanya menentukan
+    // apakah key lain patut dicoba:
+    //   API_KEY_INVALID  -> milik satu key, key berikutnya masih mungkin berhasil.
+    //   INVALID_ARGUMENT -> payload/permintaan kita yang salah, dan akan gagal
+    //                       persis sama di setiap key. Jangan membuang kuota key lain.
+    // Badan yang tidak terbaca jatuh ke invalid_key: itu kasus yang jauh lebih
+    // sering, dan konsekuensinya terbatas (maksimal satu percobaan per key).
+    if (response.status === 400) {
+      const detail = await response.text().catch(() => "");
+      return detail.includes("INVALID_ARGUMENT") && !detail.includes("API_KEY_INVALID")
+        ? failure("gemini", "client_error")
+        : failure("gemini", "invalid_key");
     }
     if (response.status === 429) return failure("gemini", "rate_limited");
     if (response.status === 404) {
@@ -260,6 +288,72 @@ async function attemptGemini(
 
   if (sawServerError) return failure("gemini", "server_error");
   return failure("gemini", sawModelNotFound ? "model_not_found" : "server_error");
+}
+
+// ===== ROTASI API KEY GEMINI =====
+// Satu key yang kena kuota tidak boleh menghentikan guru selama masih ada key
+// lain. Strateginya yang paling sederhana dan cukup: SEQUENTIAL dengan fallback —
+// coba key pertama, pindah ke berikutnya hanya untuk kegagalan yang memang milik
+// key itu, dan berhenti begitu ada yang berhasil.
+//
+// Yang sengaja TIDAK dibangun: indeks key persisten (butuh penyimpanan yang tidak
+// ada gunanya di sini), penjadwalan ulang, dan cooldown lintas request. Pengecualian
+// dalam satu request sudah cukup: setiap key dicoba paling banyak SEKALI, jadi
+// jumlah request tidak pernah melebihi jumlah key.
+// ponytail: tanpa cooldown, key yang sedang 429 tetap dicoba lebih dulu di request
+// berikutnya (biaya: +1 request 429 murah per aksi). Urutan jadi deterministic.
+// Upgrade bila perlu: Map<key, until> in-memory di modul ini, urutkan key dingin ke belakang.
+//
+// Pengalaman guru tidak berubah: tombolnya tetap "Sedang membuat soal...", dan
+// label key tidak pernah ditampilkan maupun dicetak ke log.
+
+/**
+ * Kegagalan yang MILIK SATU KEY — key berikutnya punya peluang berhasil:
+ *   rate_limited  429 / kuota habis / batas per menit
+ *   invalid_key   key dicabut, salah, atau tanpa akses
+ *   timeout       permintaan tidak dijawab tepat waktu
+ *   server_error  gangguan atau kelebihan beban sementara (5xx)
+ *
+ * Yang TIDAK pernah memicu rotasi, karena hasilnya identik untuk setiap key:
+ *   client_error        permintaan/payload kita yang salah
+ *   model_not_found     model tidak ada untuk API ini
+ *   empty_response      model menjawab kosong
+ *   malformed_response  jawaban model tidak dapat diproses
+ *   missing_key         tidak ada key sama sekali
+ */
+const KEY_SPECIFIC_FAILURES: ReadonlySet<AIFailure> = new Set<AIFailure>([
+  "rate_limited", "invalid_key", "timeout", "server_error",
+]);
+
+/** Label anonim; sengaja tidak pernah memuat sebagian pun dari API key. */
+function keyLabel(index: number): string {
+  return `gemini-key-${index + 1}`;
+}
+
+async function callGeminiWithKeys(
+  apiKeys: readonly string[],
+  request: AIRequest,
+  fetchImpl: typeof fetch,
+  storage?: StorageLike | null,
+): Promise<AIResult<string>> {
+  let last: AIResult<string> = failure("gemini", "missing_key");
+
+  for (let index = 0; index < apiKeys.length; index++) {
+    const result = await callGemini(apiKeys[index], request, fetchImpl, storage);
+    const trace: AIKeyTrace = {
+      keyLabel: keyLabel(index),
+      rotated: index > 0,
+      keysTried: index + 1,
+    };
+
+    if (result.ok) return { ...result, keyTrace: trace };
+    last = { ...result, keyTrace: trace };
+    // Kegagalan yang bukan milik key ini berhenti di sini: mencoba key lain
+    // hanya membuang kuota mereka untuk kegagalan yang sudah pasti terulang.
+    if (!KEY_SPECIFIC_FAILURES.has(result.failure)) return last;
+  }
+
+  return last;
 }
 
 async function callGroq(
@@ -352,8 +446,9 @@ export async function generateAIText(
   } = {},
 ): Promise<AIResult<string>> {
   const provider = options.provider ?? getSelectedProvider(options.storage);
-  const apiKey = getProviderApiKey(provider, options.storage);
-  if (!apiKey) return failure(provider, "missing_key");
+  // Gemini boleh punya beberapa key; Groq tetap memakai satu key seperti semula.
+  const apiKeys = getProviderApiKeys(provider, options.storage);
+  if (apiKeys.length === 0) return failure(provider, "missing_key");
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const key = requestKey(provider, request);
@@ -363,8 +458,8 @@ export async function generateAIText(
   // Provider yang dipilih guru dipakai apa adanya: tidak ada fallback diam-diam
   // Gemini → Groq, termasuk saat 429. Guru yang memilih provider di Pengaturan AI.
   const pending = (provider === "gemini"
-    ? callGemini(apiKey, request, fetchImpl, options.storage)
-    : callGroq(apiKey, request, fetchImpl)
+    ? callGeminiWithKeys(apiKeys, request, fetchImpl, options.storage)
+    : callGroq(apiKeys[0], request, fetchImpl)
   ).finally(() => { inFlight.delete(key); });
 
   inFlight.set(key, pending);

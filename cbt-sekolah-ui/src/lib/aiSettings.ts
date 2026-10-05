@@ -46,31 +46,76 @@ export function migrateLegacyGroqKey(storage: StorageLike | null = browserStorag
   }
 }
 
+/**
+ * Satu kolom boleh memuat beberapa key: dipisah baris baru, koma, atau titik koma.
+ *
+ * ponytail: multi-key Gemini = isi key localStorage yang SAMA, dipisah newline.
+ * Data single-key lama otomatis jadi list 1 elemen — tanpa migrasi/versi skema.
+ */
+function splitApiKeys(raw: string | null | undefined): string[] {
+  return [...new Set(String(raw ?? "").split(/[\n\r,;]+/).map((part) => part.trim()).filter(Boolean))];
+}
+
+const GEMINI_LEGACY_STORAGE_KEYS = [
+  "smartguru_gemini_keys", "edugen_gemini_api_key", "geminiApiKey", "geminiApiKeys",
+] as const;
+
+/**
+ * SELURUH key yang tersedia untuk satu provider, dalam urutan pemakaian.
+ *
+ * BYOK: key HANYA datang dari browser guru. Tidak ada GEMINI_API_KEY(S) dari
+ * environment server — itu akan menggantikan key milik guru dengan key RuangCBT.
+ * Groq tetap satu key (baris pertama), persis seperti sebelum multi-key.
+ */
+export function getProviderApiKeys(
+  provider: AIProvider,
+  storage: StorageLike | null = browserStorage(),
+): string[] {
+  if (!storage) return [];
+  try {
+    if (provider === "groq") {
+      migrateLegacyGroqKey(storage);
+      const first = (storage.getItem(AI_STORAGE_KEYS.groq) ?? "")
+        .split(/\r?\n/).map((l) => l.trim()).find((l) => l !== "");
+      return first ? [first] : [];
+    }
+    // Key utama menang; legacy hanya dibaca bila key utama kosong (perilaku lama).
+    for (const name of [AI_STORAGE_KEYS.gemini, ...GEMINI_LEGACY_STORAGE_KEYS]) {
+      const keys = splitApiKeys(storage.getItem(name));
+      if (keys.length) return keys;
+    }
+  } catch { /* browser memblokir storage */ }
+  return [];
+}
+
+/** Simpan seluruh daftar key Gemini (urutan = urutan rotasi). Kosong = hapus. */
+export function saveGeminiApiKeys(
+  keys: readonly string[],
+  storage: StorageLike | null = browserStorage(),
+): boolean {
+  if (!storage) return false;
+  const value = splitApiKeys(keys.join("\n")).join("\n");
+  try {
+    if (!value) storage.removeItem(AI_STORAGE_KEYS.gemini);
+    else storage.setItem(AI_STORAGE_KEYS.gemini, value);
+    const saved = (storage.getItem(AI_STORAGE_KEYS.gemini) ?? "") === value;
+    if (saved) emitChanged();
+    return saved;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Key pertama yang dipakai. Dipertahankan karena layar guru memakainya hanya
+ * untuk menjawab "sudah ada key atau belum"; pemanggilan provider sendiri
+ * memakai getProviderApiKeys() supaya dapat berpindah key.
+ */
 export function getProviderApiKey(
   provider: AIProvider,
   storage: StorageLike | null = browserStorage(),
 ): string {
-  if (!storage) return "";
-  try {
-    if (provider === "groq") migrateLegacyGroqKey(storage);
-    const raw = storage.getItem(AI_STORAGE_KEYS[provider]);
-    if (raw) {
-      const firstLine = raw.split(/\r?\n/).map((l) => l.trim()).find((l) => l !== "");
-      if (firstLine) return firstLine;
-    }
-    if (provider === "gemini") {
-      for (const legacyKey of ["smartguru_gemini_keys", "edugen_gemini_api_key", "geminiApiKey", "geminiApiKeys"]) {
-        const legacyVal = storage.getItem(legacyKey);
-        if (legacyVal) {
-          const firstLine = legacyVal.split(/\r?\n/).map((l) => l.trim()).find((l) => l !== "");
-          if (firstLine) return firstLine;
-        }
-      }
-    }
-    return "";
-  } catch {
-    return "";
-  }
+  return getProviderApiKeys(provider, storage)[0] ?? "";
 }
 
 export function getSelectedProvider(storage: StorageLike | null = browserStorage()): AIProvider {
