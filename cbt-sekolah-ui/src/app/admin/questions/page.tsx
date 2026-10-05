@@ -35,6 +35,7 @@ import {
 import type { ImplementedAdminQuestion, MataPelajaran, QuestionCollection } from "@/types";
 import { KUMPULAN_BAWAAN_ID } from "@/types";
 import { generateAIText } from "@/lib/aiProvider";
+import { buildQuestionRequest, toQuestionDraft } from "@/lib/aiQuestionDraft";
 import { getProviderApiKey, getSelectedProvider, missingProviderKeyMessage } from "@/lib/aiSettings";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -631,35 +632,24 @@ export default function QuestionBankPage() {
     setShowWikiPicker(false);
 
     const mapelName = mapelList.find(m => m.id_mapel === form.id_mapel)?.nama_mapel ?? "umum";
-    const prompt = `Buat 1 soal pilihan ganda untuk siswa kelas ${aiKelas} Indonesia tentang topik "${aiTopic}" pada mata pelajaran ${mapelName}. Kembalikan HANYA JSON valid tanpa komentar atau teks lain:
-{
-  "pertanyaan": "teks pertanyaan",
-  "opsi_a": "teks opsi A",
-  "opsi_b": "teks opsi B",
-  "opsi_c": "teks opsi C",
-  "opsi_d": "teks opsi D",
-  "kunci_jawaban": "A",
-  "wikipedia_search_term": "english keyword for Wikimedia Commons image search"
-}`;
+    // Permintaan mengikuti JENIS SOAL yang sedang dipilih guru: tiap tipe punya
+    // bentuk jawaban sendiri, jadi prompt dan responseSchema-nya ikut berbeda.
+    const { prompt, schema, maxOutputTokens } = buildQuestionRequest(form.tipe, {
+      topik: aiTopic,
+      kelas: aiKelas,
+      mapel: mapelName,
+    });
 
     try {
-      const response = await generateAIText({ prompt, temperature: 0.7, maxOutputTokens: 1024 }, { provider });
+      const response = await generateAIText({ prompt, schema, temperature: 0.7, maxOutputTokens }, { provider });
       if (!response.ok) throw new Error(response.message);
       const raw = response.data;
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error("AI tidak menghasilkan JSON yang valid.");
-      const parsed = JSON.parse(match[0]);
-      setForm(p => ({
-        ...p,
-        pertanyaan: parsed.pertanyaan ?? p.pertanyaan,
-        opsi_a: parsed.opsi_a ?? "",
-        opsi_b: parsed.opsi_b ?? "",
-        opsi_c: parsed.opsi_c ?? "",
-        opsi_d: parsed.opsi_d ?? "",
-        opsi_e: "",
-        kunci_jawaban: parsed.kunci_jawaban ?? "",
-      }));
-      if (parsed.wikipedia_search_term) await searchWikimedia(parsed.wikipedia_search_term);
+      const draft = toQuestionDraft(form.tipe, JSON.parse(match[0]));
+      if (!draft.ok) throw new Error(draft.message);
+      setForm(p => ({ ...p, ...draft.patch }));
+      if (draft.wikipediaSearchTerm) await searchWikimedia(draft.wikipediaSearchTerm);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Terjadi kesalahan saat generate soal.");
     } finally {
