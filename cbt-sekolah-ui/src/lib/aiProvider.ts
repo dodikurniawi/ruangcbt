@@ -312,7 +312,6 @@ async function attemptGemini(
  *   rate_limited  429 / kuota habis / batas per menit
  *   invalid_key   key dicabut, salah, atau tanpa akses
  *   timeout       permintaan tidak dijawab tepat waktu
- *   server_error  gangguan atau kelebihan beban sementara (5xx)
  *
  * Yang TIDAK pernah memicu rotasi, karena hasilnya identik untuk setiap key:
  *   client_error        permintaan/payload kita yang salah
@@ -320,9 +319,16 @@ async function attemptGemini(
  *   empty_response      model menjawab kosong
  *   malformed_response  jawaban model tidak dapat diproses
  *   missing_key         tidak ada key sama sekali
+ *   server_error        5xx milik LAYANAN, bukan milik key. "The model is
+ *                       overloaded" (503) menjawab sama untuk setiap key, jadi
+ *                       memutar key hanya melipatgandakan request ke endpoint
+ *                       yang justru sedang kelebihan beban: dengan N key dan 2
+ *                       kandidat model, satu klik berubah menjadi 2xN request
+ *                       503 dan membakar kuota SEMUA key sekaligus. Satu
+ *                       percobaan (2 model) sudah cukup; guru mencoba lagi.
  */
 const KEY_SPECIFIC_FAILURES: ReadonlySet<AIFailure> = new Set<AIFailure>([
-  "rate_limited", "invalid_key", "timeout", "server_error",
+  "rate_limited", "invalid_key", "timeout",
 ]);
 
 /** Label anonim; sengaja tidak pernah memuat sebagian pun dari API key. */

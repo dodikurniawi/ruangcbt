@@ -144,18 +144,20 @@ const overloaded = () => new Response("{}", { status: 503 });
   assert.deepEqual(seen, [K1, K2]);
 }
 
-// Gangguan sementara (5xx) juga memicu pindah key, lalu berhasil.
-// Catatan: 5xx lebih dulu mencoba kandidat model lain pada key yang SAMA
-// (perilaku lama yang tidak diubah), jadi yang diperiksa di sini adalah urutan
-// KEY-nya, bukan jumlah requestnya.
+// Gangguan layanan (5xx) TIDAK memicu pindah key: "The model is overloaded"
+// dijawab sama untuk setiap key, jadi memutar key hanya melipatgandakan request
+// ke endpoint yang sedang kelebihan beban (2 model x N key) dan membakar kuota
+// semua key sekaligus. Satu key dicoba (dua kandidat model), lalu berhenti.
 {
   const seen: string[] = [];
   const result = await generateAIText({ prompt: "buat soal 5b" }, {
     storage: storeWith(`${K1},${K2}`),
     fetchImpl: fetchByKey({ [K1]: overloaded, [K2]: ok }, seen),
   });
-  assert.equal(result.ok, true);
-  assert.deepEqual([...new Set(seen)], [K1, K2]);
+  assert.equal(result.ok, false, "5xx berhenti di key pertama");
+  if (!result.ok) assert.equal(result.failure, "server_error");
+  assert.deepEqual([...new Set(seen)], [K1], "key kedua tidak ikut dibakar oleh 5xx");
+  assert.equal(seen.length, 2, "hanya dua kandidat model pada satu key");
 }
 
 // ── TEST 6: permintaan/payload salah → JANGAN coba semua key ───────────────

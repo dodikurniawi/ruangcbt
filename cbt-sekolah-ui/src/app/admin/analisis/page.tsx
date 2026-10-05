@@ -8,7 +8,7 @@ import useSWR from "swr";
 import { getAdminQuestions, getMataPelajaran, logout } from "@/lib/api";
 import type { ImplementedAdminQuestion, MataPelajaran } from "@/types";
 import HasilBelajarPanel from "@/components/admin/HasilBelajarPanel";
-import { generateAIText, type AIFailure } from "@/lib/aiProvider";
+import { generateAIText, type AIFailure, type AISchema } from "@/lib/aiProvider";
 import {
   AI_SETTINGS_CHANGED_EVENT,
   getProviderApiKey,
@@ -91,6 +91,23 @@ const JENIS_SOAL_LABEL: Record<string, string> = {
   TRUE_FALSE: "Benar/Salah per pernyataan",
   MATCHING: "Menjodohkan",
   FILL_IN: "Isian singkat",
+};
+
+// Bentuk jawaban yang DIMINTA prompt di bawah, dinyatakan sebagai responseSchema
+// Gemini. Sebelumnya di sini hanya ada { type: "object" } — objek tanpa satu pun
+// properti, sehingga structured output tidak mengikat apa pun dan kontraknya cuma
+// hidup di dalam teks prompt. Bentuknya mengikuti STUDENT_SCHEMA/CLASS_SCHEMA.
+const ANALYSIS_SCHEMA: AISchema = {
+  type: "object",
+  properties: {
+    rating: { type: "string", enum: ["Baik", "Cukup", "Perlu Revisi"] },
+    skor_kejelasan: { type: "integer" },
+    skor_distraktor: { type: "integer" },
+    catatan: { type: "string" },
+    saran: { type: "array", items: { type: "string" } },
+  },
+  required: ["rating", "skor_kejelasan", "skor_distraktor", "catatan", "saran"],
+  propertyOrdering: ["rating", "skor_kejelasan", "skor_distraktor", "catatan", "saran"],
 };
 
 function buildPrompts(q: ImplementedAdminQuestion, mapelNama: string): { system: string; user: string } {
@@ -256,7 +273,7 @@ export default function AnalisisButirSoalPage() {
     const res = await generateAIText({
       systemInstruction: system,
       prompt: user,
-      schema: { type: "object" },
+      schema: ANALYSIS_SCHEMA,
       temperature: 0.2,
     }, { provider });
 
